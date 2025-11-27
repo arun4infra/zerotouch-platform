@@ -51,7 +51,7 @@ echo ""
 echo "🏢 Critical Namespaces:"
 echo "------------------------------------------"
 
-CRITICAL_NAMESPACES=("argocd" "kagent" "intelligence" "external-secrets" "crossplane-system" "keda")
+CRITICAL_NAMESPACES=("argocd" "kagent" "intelligence-platform" "external-secrets" "crossplane-system" "keda")
 
 for ns in "${CRITICAL_NAMESPACES[@]}"; do
     if kubectl get namespace "$ns" &>/dev/null; then
@@ -121,10 +121,12 @@ echo "------------------------------------------"
 OUTOF_SYNC=$(echo "$APPS" | jq -r '.items[] | select(.status.sync.status == "OutOfSync") | .metadata.name')
 if [[ -n "$OUTOF_SYNC" ]]; then
     echo -e "  ❌ ${RED}OutOfSync applications detected:${NC}"
-    echo "$OUTOF_SYNC" | while read -r app; do
-        echo -e "     - $app"
-        ((FAILED++)) || true
-    done
+    while read -r app; do
+        if [[ -n "$app" ]]; then
+            echo -e "     - $app"
+            ((FAILED++)) || true
+        fi
+    done <<< "$OUTOF_SYNC"
 else
     echo -e "  ✅ ${GREEN}No configuration drift detected${NC}"
 fi
