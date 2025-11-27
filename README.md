@@ -1,4 +1,4 @@
-# bizmatters-infra: The Agentic-Native Platform
+# zerotouch-infra: The Agentic-Native Platform
 
 **A "Digital Assembly Line" for the Solo Founder.**
 
