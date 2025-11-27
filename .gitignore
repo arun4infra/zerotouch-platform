@@ -1,4 +1,4 @@
-bootstrap/talos/
+bootstrap/talos/*
 .env
 docs/dev/repos
 docs/dev/platform-ref-multi-k8s
