@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - feat/intelligence-layer
     paths:
       - 'services/mcp-server-qdrant/**'
       - '.github/workflows/build-mcp-server-qdrant.yaml'

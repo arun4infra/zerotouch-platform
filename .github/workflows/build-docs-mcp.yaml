@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - feat/intelligence-layer
     paths:
       - 'services/docs-mcp/**'
       - '.github/workflows/build-docs-mcp.yaml'
