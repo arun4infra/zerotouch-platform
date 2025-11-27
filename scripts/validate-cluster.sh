@@ -114,14 +114,33 @@ fi
 
 echo ""
 
-# 5. Final Summary
+# 5. Check for OutOfSync applications
+echo "🔄 Checking for Configuration Drift:"
+echo "------------------------------------------"
+
+OUTOF_SYNC=$(echo "$APPS" | jq -r '.items[] | select(.status.sync.status == "OutOfSync") | .metadata.name')
+if [[ -n "$OUTOF_SYNC" ]]; then
+    echo -e "  ❌ ${RED}OutOfSync applications detected:${NC}"
+    echo "$OUTOF_SYNC" | while read -r app; do
+        echo -e "     - $app"
+        ((FAILED++)) || true
+    done
+else
+    echo -e "  ✅ ${GREEN}No configuration drift detected${NC}"
+fi
+
+echo ""
+
+# 6. Final Summary
 echo "=========================================="
 if [[ $FAILED -eq 0 ]]; then
     echo -e "✅ ${GREEN}VALIDATION PASSED${NC}"
-    echo "All critical components are healthy"
+    echo "All applications Synced & Healthy"
     exit 0
 else
     echo -e "❌ ${RED}VALIDATION FAILED${NC}"
     echo "$FAILED issue(s) detected"
+    echo ""
+    echo "Run './scripts/validate-cluster.sh' to see details"
     exit 1
 fi
