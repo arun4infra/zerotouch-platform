@@ -16,10 +16,10 @@ spec:
         - name: providers.default
           value: openAI
       values: |
-        # Schedule kagent agents on worker nodes
+        # Schedule kagent agents on worker nodes with intelligence workloads
         agents:
           nodeSelector:
-            workload-type: stateful
+            workload.bizmatters.dev/intelligence: "true"
         # Keep controller on control plane (lightweight)
         controller:
           nodeSelector: {}

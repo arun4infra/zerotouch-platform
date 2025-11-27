@@ -1,7 +1,7 @@
 ---
 # Intelligence workloads automatically scheduled on worker nodes
 # Node labels are defined in bootstrap/talos/nodes/worker01/config.yaml
-# When worker joins, it automatically gets: node-role=database, workload-type=stateful
+# When worker joins, it automatically gets: workload.bizmatters.dev/intelligence=true
 
 # Qdrant - Database, requires worker node
 apiVersion: apps/v1
@@ -13,7 +13,7 @@ spec:
   template:
     spec:
       nodeSelector:
-        workload-type: stateful  # Automatically present on worker01
+        workload.bizmatters.dev/intelligence: "true"  # Specific to intelligence workloads
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -32,7 +32,7 @@ spec:
   template:
     spec:
       nodeSelector:
-        workload-type: stateful
+        workload.bizmatters.dev/intelligence: "true"
 ---
 # GitHub Agent
 apiVersion: apps/v1
@@ -44,7 +44,7 @@ spec:
   template:
     spec:
       nodeSelector:
-        workload-type: stateful
+        workload.bizmatters.dev/intelligence: "true"
 ---
 # Librarian Agent
 apiVersion: apps/v1
@@ -56,4 +56,4 @@ spec:
   template:
     spec:
       nodeSelector:
-        workload-type: stateful
+        workload.bizmatters.dev/intelligence: "true"

@@ -45,7 +45,9 @@ machine:
     # Configures the node labels for the machine.
     nodeLabels:
         node-role.kubernetes.io/worker: ""  # Standard Kubernetes worker label
-        workload-type: stateful  # For stateful workloads (databases, AI agents)
+        workload.bizmatters.dev/intelligence: "true"  # Runs intelligence workloads
+        workload.bizmatters.dev/databases: "true"  # Can run databases
+        workload-type: stateful  # Generic: stateful workloads
         topology.kubernetes.io/zone: worker01
 
     # Configures the node taints for the machine. Effect is optional.
