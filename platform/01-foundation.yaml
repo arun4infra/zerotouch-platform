@@ -8,7 +8,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/arun4infra/bizmatters-infra.git
+    repoURL: https://github.com/arun4infra/zerotouch-infra.git
     targetRevision: HEAD
     path: platform/01-foundation
   destination:
