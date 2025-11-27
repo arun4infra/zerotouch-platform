@@ -1,0 +1,14 @@
+---
+# Patch to schedule intelligence pods on worker nodes
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: intelligence-node-affinity
+  namespace: intelligence
+data:
+  note: |
+    To apply node affinity to intelligence deployments:
+    kubectl patch deployment github-readonly-agent -n intelligence -p '{"spec":{"template":{"spec":{"affinity":{"nodeAffinity":{"preferredDuringSchedulingIgnoredDuringExecution":[{"weight":100,"preference":{"matchExpressions":[{"key":"node-role.kubernetes.io/control-plane","operator":"DoesNotExist"}]}}]}}}}}}'
+    kubectl patch deployment librarian-agent -n intelligence -p '{"spec":{"template":{"spec":{"affinity":{"nodeAffinity":{"preferredDuringSchedulingIgnoredDuringExecution":[{"weight":100,"preference":{"matchExpressions":[{"key":"node-role.kubernetes.io/control-plane","operator":"DoesNotExist"}]}}]}}}}}}'
+    kubectl patch deployment qdrant -n intelligence -p '{"spec":{"template":{"spec":{"affinity":{"nodeAffinity":{"preferredDuringSchedulingIgnoredDuringExecution":[{"weight":100,"preference":{"matchExpressions":[{"key":"node-role.kubernetes.io/control-plane","operator":"DoesNotExist"}]}}]}}}}}}'
+    kubectl patch deployment qdrant-mcp -n intelligence -p '{"spec":{"template":{"spec":{"affinity":{"nodeAffinity":{"preferredDuringSchedulingIgnoredDuringExecution":[{"weight":100,"preference":{"matchExpressions":[{"key":"node-role.kubernetes.io/control-plane","operator":"DoesNotExist"}]}}]}}}}}}'
