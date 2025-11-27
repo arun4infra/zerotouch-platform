@@ -95,9 +95,18 @@ kubectl wait --for=condition=ready pod \
 
 log_info "✓ ArgoCD is ready"
 
+# Step 2.5: Grant ArgoCD cluster-admin permissions
+log_info ""
+log_step "Step 2.5/6: Granting ArgoCD cluster-admin permissions..."
+
+log_info "Applying cluster-admin RBAC patch..."
+kubectl apply -f "$REPO_ROOT/bootstrap/argocd-admin-patch.yaml"
+
+log_info "✓ ArgoCD has cluster-admin permissions (required for namespace creation)"
+
 # Step 3: Configure repository credentials
 log_info ""
-log_step "Step 3/6: Configuring repository credentials..."
+log_step "Step 3/7: Configuring repository credentials..."
 
 # GitHub credentials - use public repo (no auth needed for public repos)
 GITHUB_REPO_URL="https://github.com/arun4infra/zerotouch-infra.git"
@@ -123,7 +132,7 @@ fi
 
 # Step 4: Get initial admin password
 log_info ""
-log_step "Step 4/6: Retrieving ArgoCD credentials..."
+log_step "Step 4/7: Retrieving ArgoCD credentials..."
 
 ARGOCD_PASSWORD=$(kubectl -n "$ARGOCD_NAMESPACE" get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d)
 
@@ -142,7 +151,7 @@ fi
 
 # Step 5: Deploy root application
 log_info ""
-log_step "Step 5/6: Deploying root application (GitOps)..."
+log_step "Step 5/7: Deploying root application (GitOps)..."
 
 if [[ ! -f "$REPO_ROOT/$ROOT_APP_PATH" ]]; then
     log_error "Root application not found at: $REPO_ROOT/$ROOT_APP_PATH"
@@ -156,7 +165,7 @@ log_info "✓ Root application deployed"
 
 # Step 6: Wait for initial sync
 log_info ""
-log_step "Step 6/6: Waiting for initial sync..."
+log_step "Step 6/7: Waiting for initial sync..."
 
 sleep 5  # Give ArgoCD time to detect the application
 
