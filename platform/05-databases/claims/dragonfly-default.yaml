@@ -1,0 +1,8 @@
+apiVersion: database.bizmatters.io/v1alpha1
+kind: DragonflyInstance
+metadata:
+  name: dragonfly
+  namespace: databases
+spec:
+  size: small
+  storageGB: 10

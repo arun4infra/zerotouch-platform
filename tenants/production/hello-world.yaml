@@ -1,0 +1,8 @@
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: WebService
+metadata:
+  name: hello-world
+  namespace: production
+spec:
+  image: ghcr.io/stefanprodan/podinfo:6.4.0
+  port: 9898

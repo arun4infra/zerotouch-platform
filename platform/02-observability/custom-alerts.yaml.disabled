@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: custom-alerts
+  namespace: observability
+  labels:
+    release: observability-stack
+spec:
+  groups:
+  - name: pod-health
+    interval: 30s
+    rules:
+    - alert: PodRestartDetected
+      expr: rate(kube_pod_container_status_restarts_total[5m]) > 0
+      for: 1m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is restarting"
+        description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has restarted {{ $value }} times in the last 5 minutes"

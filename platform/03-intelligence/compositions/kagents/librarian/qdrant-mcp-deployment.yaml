@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qdrant-mcp
+  namespace: intelligence
+  labels:
+    app.kubernetes.io/name: qdrant-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: qdrant-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: qdrant-mcp
+    spec:
+      containers:
+        - name: qdrant-mcp
+          image: ghcr.io/arun4infra/mcp-server-qdrant:main
+          imagePullPolicy: Always
+          env:
+            - name: QDRANT_URL
+              value: "http://qdrant.intelligence.svc.cluster.local:6333"
+            - name: COLLECTION_NAME
+              value: "librarian-memory"
+            - name: FASTMCP_HOST
+              value: "0.0.0.0"
+            - name: FASTMCP_PORT
+              value: "8000"
+          ports:
+            - containerPort: 8000
+              name: http
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

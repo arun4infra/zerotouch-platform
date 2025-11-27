@@ -1,0 +1,204 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: dragonfly-instance
+  labels:
+    crossplane.io/xrd: xdragonflyinstances.database.bizmatters.io
+spec:
+  compositeTypeRef:
+    apiVersion: database.bizmatters.io/v1alpha1
+    kind: XDragonflyInstance
+  
+  resources:
+    # Secret for cache credentials
+    - name: dragonfly-secret
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                namespace: databases
+              type: Opaque
+              stringData:
+                DRAGONFLY_PASSWORD: changeme-generated-password
+          providerConfigRef:
+            name: kubernetes-provider
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+          transforms:
+            - type: string
+              string:
+                fmt: "%s-secret"
+    
+    # Service
+    - name: dragonfly-service
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: Service
+              metadata:
+                namespace: databases
+              spec:
+                type: ClusterIP
+                ports:
+                  - port: 6379
+                    targetPort: 6379
+                    protocol: TCP
+                    name: dragonfly
+          providerConfigRef:
+            name: kubernetes-provider
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.selector.app
+    
+    # StatefulSet
+    - name: dragonfly-statefulset
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: apps/v1
+              kind: StatefulSet
+              metadata:
+                namespace: databases
+              spec:
+                replicas: 1
+                selector:
+                  matchLabels:
+                    app: dragonfly
+                template:
+                  metadata:
+                    labels:
+                      app: dragonfly
+                  spec:
+                    affinity:
+                      nodeAffinity:
+                        requiredDuringSchedulingIgnoredDuringExecution:
+                          nodeSelectorTerms:
+                            - matchExpressions:
+                                - key: node-role
+                                  operator: In
+                                  values:
+                                    - database
+                    tolerations:
+                      - key: database
+                        operator: Equal
+                        value: "true"
+                        effect: NoSchedule
+                    containers:
+                      - name: dragonfly
+                        image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+                        ports:
+                          - containerPort: 6379
+                            name: dragonfly
+                        args:
+                          - "--requirepass=$(DRAGONFLY_PASSWORD)"
+                          - "--dir=/data"
+                        env:
+                          - name: DRAGONFLY_PASSWORD
+                            valueFrom:
+                              secretKeyRef:
+                                name: dragonfly-secret
+                                key: DRAGONFLY_PASSWORD
+                        volumeMounts:
+                          - name: dragonfly-data
+                            mountPath: /data
+                        resources:
+                          requests:
+                            memory: "512Mi"
+                            cpu: "250m"
+                          limits:
+                            memory: "2Gi"
+                            cpu: "1000m"
+                volumeClaimTemplates:
+                  - metadata:
+                      name: dragonfly-data
+                    spec:
+                      accessModes: ["ReadWriteOnce"]
+                      storageClassName: local-path
+                      resources:
+                        requests:
+                          storage: 10Gi
+          providerConfigRef:
+            name: kubernetes-provider
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.serviceName
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.selector.matchLabels.app
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.template.metadata.labels.app
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.name
+          transforms:
+            - type: string
+              string:
+                fmt: "%s-secret"
+        # Size-based resource patches
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.requests.memory
+          transforms:
+            - type: map
+              map:
+                small: "512Mi"
+                medium: "1Gi"
+                large: "2Gi"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.limits.memory
+          transforms:
+            - type: map
+              map:
+                small: "2Gi"
+                medium: "4Gi"
+                large: "8Gi"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.requests.cpu
+          transforms:
+            - type: map
+              map:
+                small: "250m"
+                medium: "500m"
+                large: "1000m"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.limits.cpu
+          transforms:
+            - type: map
+              map:
+                small: "1000m"
+                medium: "2000m"
+                large: "4000m"
+        # Storage size patch
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.storageGB
+          toFieldPath: spec.forProvider.manifest.spec.volumeClaimTemplates[0].spec.resources.requests.storage
+          transforms:
+            - type: string
+              string:
+                fmt: "%dGi"

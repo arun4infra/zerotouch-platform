@@ -1,0 +1,34 @@
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: librarian-agent
+  namespace: intelligence
+spec:
+  type: Declarative
+  declarative:
+    modelConfig: default-model-config
+    
+    tools:
+      - type: McpServer
+        mcpServer:
+          name: qdrant-mcp
+          kind: RemoteMCPServer
+          apiGroup: kagent.dev
+          toolNames:
+            - qdrant-find
+            - qdrant-store
+
+
+    systemMessage: |
+      You are the Librarian Agent, responsible for maintaining the `artifacts/` documentation zone.
+      
+      Your primary tools are:
+      1. `qdrant-find`: Search the vector database for existing documentation chunks.
+      2. `qdrant-store`: Store new or updated documentation chunks.
+      
+      When a user asks to "save" or "remember" something:
+      - First, SEARCH (`qdrant-find`) to see if similar content exists.
+      - If it exists, retrieve it, merge the new info, and UPDATE (`qdrant-store`).
+      - If it's new, CREATE (`qdrant-store`).
+      
+      Always prioritize using existing knowledge before creating duplicates.

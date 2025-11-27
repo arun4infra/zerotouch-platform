@@ -1,0 +1,82 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability-stack
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  source:
+    chart: kube-prometheus-stack
+    repoURL: https://prometheus-community.github.io/helm-charts
+    targetRevision: 56.0.0
+    helm:
+      skipCrds: true
+      values: |
+        crds:
+          enabled: false
+        grafana:
+          adminPassword: "admin"
+          additionalDataSources:
+            - name: Loki
+              type: loki
+              url: http://loki.observability.svc.cluster.local:3100
+            - name: Tempo
+              type: tempo
+              url: http://tempo.observability.svc.cluster.local:3100
+          
+          alerting:
+            rules.yaml:
+              apiVersion: 1
+              groups:
+                - orgId: 1
+                  name: application-errors
+                  folder: Application Alerts
+                  interval: 1m
+                  rules:
+                    - uid: app-error-logs
+                      title: High Error Rate in Logs
+                      condition: C
+                      data:
+                        - refId: A
+                          relativeTimeRange:
+                            from: 300
+                            to: 0
+                          datasourceUid: loki
+                          model:
+                            expr: 'sum(rate({namespace="production"} |= "error" [5m]))'
+                            queryType: range
+                        - refId: C
+                          relativeTimeRange:
+                            from: 0
+                            to: 0
+                          datasourceUid: __expr__
+                          model:
+                            type: threshold
+                            expression: A
+                            conditions:
+                              - evaluator:
+                                  params:
+                                    - 10
+                                  type: gt
+                      noDataState: NoData
+                      execErrState: Alerting
+                      for: 2m
+                      annotations:
+                        summary: High error rate detected in production logs
+                        description: More than 10 errors per second in production namespace
+                      labels:
+                        severity: warning
+                        team: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - Replace=true

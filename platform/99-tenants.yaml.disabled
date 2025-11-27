@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tenant-production
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/arun4infra/bizmatters-infra.git
+    targetRevision: HEAD
+    path: tenants/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: production
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: robusta
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  project: default
+  source:
+    chart: robusta
+    repoURL: https://robusta-charts.storage.googleapis.com
+    targetRevision: 0.13.3
+    helm:
+      values: |
+        clusterName: my-cluster
+        enablePrometheusStack: false
+        globalConfig:
+          prometheus_url: http://observability-stack-kube-p-prometheus.observability.svc.cluster.local:9090
+        playbookRepos:
+          default_playbooks:
+            url: https://github.com/robusta-dev/robusta
+        runner:
+          sendAdditionalTelemetry: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

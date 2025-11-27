@@ -1,0 +1,237 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: postgres-instance
+  labels:
+    crossplane.io/xrd: xpostgresinstances.database.bizmatters.io
+spec:
+  compositeTypeRef:
+    apiVersion: database.bizmatters.io/v1alpha1
+    kind: XPostgresInstance
+  
+  resources:
+    # Secret for database credentials
+    - name: postgres-secret
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                namespace: databases
+              type: Opaque
+              stringData:
+                POSTGRES_DB: postgres
+                POSTGRES_USER: postgres
+                POSTGRES_PASSWORD: changeme-generated-password
+          providerConfigRef:
+            name: kubernetes-provider
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+          transforms:
+            - type: string
+              string:
+                fmt: "%s-secret"
+    
+    # Service
+    - name: postgres-service
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: Service
+              metadata:
+                namespace: databases
+              spec:
+                type: ClusterIP
+                ports:
+                  - port: 5432
+                    targetPort: 5432
+                    protocol: TCP
+                    name: postgres
+          providerConfigRef:
+            name: kubernetes-provider
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.selector.app
+    
+    # StatefulSet
+    - name: postgres-statefulset
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: apps/v1
+              kind: StatefulSet
+              metadata:
+                namespace: databases
+              spec:
+                replicas: 1
+                selector:
+                  matchLabels:
+                    app: postgres
+                template:
+                  metadata:
+                    labels:
+                      app: postgres
+                  spec:
+                    affinity:
+                      nodeAffinity:
+                        requiredDuringSchedulingIgnoredDuringExecution:
+                          nodeSelectorTerms:
+                            - matchExpressions:
+                                - key: node-role
+                                  operator: In
+                                  values:
+                                    - database
+                    tolerations:
+                      - key: database
+                        operator: Equal
+                        value: "true"
+                        effect: NoSchedule
+                    containers:
+                      - name: postgres
+                        image: postgres:16-alpine
+                        ports:
+                          - containerPort: 5432
+                            name: postgres
+                        env:
+                          - name: POSTGRES_DB
+                            valueFrom:
+                              secretKeyRef:
+                                name: postgres-secret
+                                key: POSTGRES_DB
+                          - name: POSTGRES_USER
+                            valueFrom:
+                              secretKeyRef:
+                                name: postgres-secret
+                                key: POSTGRES_USER
+                          - name: POSTGRES_PASSWORD
+                            valueFrom:
+                              secretKeyRef:
+                                name: postgres-secret
+                                key: POSTGRES_PASSWORD
+                          - name: PGDATA
+                            value: /var/lib/postgresql/data/pgdata
+                        volumeMounts:
+                          - name: postgres-data
+                            mountPath: /var/lib/postgresql/data
+                        resources:
+                          requests:
+                            memory: "256Mi"
+                            cpu: "250m"
+                          limits:
+                            memory: "1Gi"
+                            cpu: "1000m"
+                volumeClaimTemplates:
+                  - metadata:
+                      name: postgres-data
+                    spec:
+                      accessModes: ["ReadWriteOnce"]
+                      storageClassName: local-path
+                      resources:
+                        requests:
+                          storage: 20Gi
+          providerConfigRef:
+            name: kubernetes-provider
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.serviceName
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.selector.matchLabels.app
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.template.metadata.labels.app
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.name
+          transforms:
+            - type: string
+              string:
+                fmt: "%s-secret"
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[1].valueFrom.secretKeyRef.name
+          transforms:
+            - type: string
+              string:
+                fmt: "%s-secret"
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[2].valueFrom.secretKeyRef.name
+          transforms:
+            - type: string
+              string:
+                fmt: "%s-secret"
+        # Size-based resource patches
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.requests.memory
+          transforms:
+            - type: map
+              map:
+                small: "256Mi"
+                medium: "512Mi"
+                large: "1Gi"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.limits.memory
+          transforms:
+            - type: map
+              map:
+                small: "1Gi"
+                medium: "2Gi"
+                large: "4Gi"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.requests.cpu
+          transforms:
+            - type: map
+              map:
+                small: "250m"
+                medium: "500m"
+                large: "1000m"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.limits.cpu
+          transforms:
+            - type: map
+              map:
+                small: "1000m"
+                medium: "2000m"
+                large: "4000m"
+        # Storage size patch
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.storageGB
+          toFieldPath: spec.forProvider.manifest.spec.volumeClaimTemplates[0].spec.resources.requests.storage
+          transforms:
+            - type: string
+              string:
+                fmt: "%dGi"
+        # Version patch
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.version
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].image
+          transforms:
+            - type: string
+              string:
+                fmt: "postgres:%s-alpine"

@@ -1,0 +1,9 @@
+apiVersion: database.bizmatters.io/v1alpha1
+kind: PostgresInstance
+metadata:
+  name: postgres
+  namespace: databases
+spec:
+  size: small
+  version: "16"
+  storageGB: 20

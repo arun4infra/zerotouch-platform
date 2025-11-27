@@ -1,0 +1,16 @@
+bootstrap/talos/
+.env
+docs/dev/repos
+docs/dev/platform-ref-multi-k8s
+.age-key
+.sops.yaml
+.claude
+.kiro
+docs
+
+# Bootstrap credentials
+scripts
+
+# Temporary files
+*.log
+/tmp/
