@@ -150,7 +150,7 @@ if [[ ! -f "$REPO_ROOT/$ROOT_APP_PATH" ]]; then
 fi
 
 log_info "Applying root application..."
-kubectl apply -f "$REPO_ROOT/$ROOT_APP_PATH"
+kubectl apply --server-side -f "$REPO_ROOT/$ROOT_APP_PATH"
 
 log_info "✓ Root application deployed"
 
