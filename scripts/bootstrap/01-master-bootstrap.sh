@@ -313,28 +313,7 @@ if [ -n "$WORKER_NODES" ]; then
     echo "────────────────────────────────────────────────────────────────"
     echo -e "${BLUE}ℹ  Database layer will be deployed by ArgoCD via platform-bootstrap Application${NC}"
     
-    cat >> "$CREDENTIALS_FILE" << EOF
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DATABASE LAYER (ArgoCD Managed)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Deployed via Crossplane Compositions:
-  - PostgreSQL
-  - Dragonfly
-
-View instances:
-  kubectl get postgresinstance,dragonflyinstance -n databases
-
-View pods:
-  kubectl get pods -n databases
-
-View services:
-  kubectl get svc -n databases
-
-Create new instances:
-  See platform/02-databases/README.md
-
-EOF
+    
 else
     echo -e "${BLUE}ℹ  Single node cluster - databases can be deployed later via ArgoCD${NC}\n"
 fi
@@ -347,33 +326,6 @@ echo -e "   ${GREEN}./scripts/bootstrap/post-reboot-verify.sh${NC}"
 echo ""
 
 cat >> "$CREDENTIALS_FILE" << EOF
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-POST-REBOOT VERIFICATION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-After any server reboot, run:
-  ./scripts/bootstrap/post-reboot-verify.sh
-
-This will verify:
-  - Talos services (etcd, kubelet, containerd)
-  - Kubernetes API health
-  - Control plane pods
-  - Kagent and Intelligence namespaces
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-IMPORTANT SECRETS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-SOPS AGE Key: ~/.sops/age.key
-  ⚠️  BACKUP THIS FILE - Required for decrypting secrets
-
-OpenAI API Key (if configured):
-  Stored in: platform/03-intelligence/secrets/kagent-openai.enc.yaml
-  Decrypt: sops -d platform/03-intelligence/secrets/kagent-openai.enc.yaml
-
-GitHub Token (if configured):
-  Stored in: platform/03-intelligence/secrets/github-token.enc.yaml
-  Decrypt: sops -d platform/03-intelligence/secrets/github-token.enc.yaml
 
 EOF
 
