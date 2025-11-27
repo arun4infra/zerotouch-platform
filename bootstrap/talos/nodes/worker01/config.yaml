@@ -19,7 +19,8 @@ machine:
         disableManifestsDirectory: true # The `disableManifestsDirectory` field configures the kubelet to get static pod manifests from the /etc/kubernetes/manifests directory.
 
     # Provides machine specific network configuration options.
-    network: {}
+    network:
+        hostname: worker-01
 
     # Used to provide instructions for installations.
     install:
