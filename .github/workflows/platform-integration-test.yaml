@@ -103,33 +103,22 @@ jobs:
 
       - name: Wait for foundation layer to sync
         run: |
-          echo "Waiting for foundation layer to sync (creates ClusterSecretStore)..."
+          echo "Waiting for foundation layer (creates ClusterSecretStore)..."
           
           TIMEOUT=180
           ELAPSED=0
           while [ $ELAPSED -lt $TIMEOUT ]; do
-            # Check if external-secrets namespace exists
-            if ! kubectl get namespace external-secrets &>/dev/null; then
-              echo "Waiting for external-secrets namespace... (${ELAPSED}s / ${TIMEOUT}s)"
-              sleep 5
-              ELAPSED=$((ELAPSED + 5))
-              continue
-            fi
-            
-            # Check if ClusterSecretStore exists (created by foundation-config app)
-            if kubectl get clustersecretstore aws-parameter-store &>/dev/null; then
-              echo "✓ ClusterSecretStore aws-parameter-store exists"
+            if kubectl get clustersecretstore aws-parameter-store &>/dev/null 2>&1; then
+              echo "✓ ClusterSecretStore ready"
               break
             fi
-            
             echo "Waiting for ClusterSecretStore... (${ELAPSED}s / ${TIMEOUT}s)"
             sleep 5
             ELAPSED=$((ELAPSED + 5))
           done
           
           if [ $ELAPSED -ge $TIMEOUT ]; then
-            echo "✗ Timeout waiting for foundation layer"
-            echo "Checking ArgoCD app status:"
+            echo "✗ Timeout waiting for ClusterSecretStore"
             kubectl get applications -n argocd
             exit 1
           fi
@@ -151,326 +140,65 @@ jobs:
 
       - name: Verify ESO is working
         run: |
-          echo "Verifying External Secrets Operator is working..."
-          echo ""
+          echo "Verifying External Secrets Operator..."
           
-          # Wait for ESO pods to be ready
-          echo "Waiting for ESO pods to be ready..."
+          # Wait for ESO pods
           kubectl wait --for=condition=ready pod \
             -l app.kubernetes.io/name=external-secrets \
             -n external-secrets \
             --timeout=120s
           
-          echo "✓ ESO pods are ready"
-          echo ""
-          
-          # Wait for ClusterSecretStore to be ready
-          echo "Waiting for ClusterSecretStore to be ready..."
+          # Wait for ClusterSecretStore
           TIMEOUT=120
           ELAPSED=0
           while [ $ELAPSED -lt $TIMEOUT ]; do
-            STORE_STATUS=$(kubectl get clustersecretstore aws-parameter-store -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
-            
-            if [ "$STORE_STATUS" = "True" ]; then
-              echo "✓ ClusterSecretStore is ready"
+            STATUS=$(kubectl get clustersecretstore aws-parameter-store -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
+            if [ "$STATUS" = "True" ]; then
+              echo "✓ ClusterSecretStore ready"
               break
             fi
-            
-            echo "ClusterSecretStore status: $STORE_STATUS (${ELAPSED}s / ${TIMEOUT}s)"
+            echo "Waiting for ClusterSecretStore... (${ELAPSED}s / ${TIMEOUT}s)"
             sleep 5
             ELAPSED=$((ELAPSED + 5))
           done
           
           if [ $ELAPSED -ge $TIMEOUT ]; then
-            echo "✗ Timeout waiting for ClusterSecretStore"
+            echo "✗ ClusterSecretStore not ready"
             kubectl describe clustersecretstore aws-parameter-store
             exit 1
           fi
           
-          echo ""
-          echo "ClusterSecretStore status:"
-          kubectl get clustersecretstore aws-parameter-store
-          echo ""
-          
           # Wait for ExternalSecrets to sync
-          echo "Waiting for ExternalSecrets to sync..."
           TIMEOUT=120
           ELAPSED=0
           while [ $ELAPSED -lt $TIMEOUT ]; do
-            # Check if any ExternalSecrets exist
             ES_COUNT=$(kubectl get externalsecret -A --no-headers 2>/dev/null | wc -l | tr -d ' ')
-            
             if [ "$ES_COUNT" -gt 0 ]; then
-              # Check if all are synced
               SYNCED=$(kubectl get externalsecret -A -o json | jq '[.items[] | select(.status.conditions[0].status == "True")] | length')
-              
               if [ "$SYNCED" -eq "$ES_COUNT" ]; then
-                echo "✓ All $ES_COUNT ExternalSecrets are synced"
+                echo "✓ All $ES_COUNT ExternalSecrets synced"
                 break
               fi
-              
-              echo "ExternalSecrets synced: $SYNCED/$ES_COUNT (${ELAPSED}s / ${TIMEOUT}s)"
+              echo "ExternalSecrets: $SYNCED/$ES_COUNT synced (${ELAPSED}s / ${TIMEOUT}s)"
             else
-              echo "No ExternalSecrets found yet... (${ELAPSED}s / ${TIMEOUT}s)"
+              echo "Waiting for ExternalSecrets... (${ELAPSED}s / ${TIMEOUT}s)"
             fi
-            
             sleep 5
             ELAPSED=$((ELAPSED + 5))
           done
           
-          echo ""
-          echo "ExternalSecret status:"
           kubectl get externalsecret -A
-          echo ""
-          
-          # Verify secrets were created
-          echo "Verifying secrets were created:"
-          
-          if kubectl get secret kagent-openai -n kagent &>/dev/null; then
-            echo "✓ Secret kagent-openai exists in kagent namespace"
-          else
-            echo "⚠️  Secret kagent-openai not found in kagent namespace"
-          fi
-          
-          if kubectl get secret kagent-openai -n intelligence-platform &>/dev/null; then
-            echo "✓ Secret kagent-openai exists in intelligence-platform namespace"
-          else
-            echo "⚠️  Secret kagent-openai not found in intelligence-platform namespace"
-          fi
-          
-          echo ""
           echo "✓ ESO verification complete"
 
-      - name: Wait for ArgoCD to sync all applications
+      - name: Wait for ArgoCD applications to sync
         run: |
-          echo "Waiting for all ArgoCD applications to sync (timeout: 15 minutes)..."
-          
-          # Load ignore list
-          IGNORE_APPS=()
-          if [ -f ".github/ci-ignore-oos-apps.txt" ]; then
-            echo "Loading CI ignore list..."
-            while IFS= read -r line; do
-              # Skip comments and empty lines
-              [[ "$line" =~ ^#.*$ ]] && continue
-              [[ -z "$line" ]] && continue
-              # Extract app name (before any comment)
-              app=$(echo "$line" | sed 's/#.*//' | xargs)
-              [[ -n "$app" ]] && IGNORE_APPS+=("$app")
-            done < ".github/ci-ignore-oos-apps.txt"
-            
-            if [ ${#IGNORE_APPS[@]} -gt 0 ]; then
-              echo "Ignoring apps: ${IGNORE_APPS[*]}"
-            fi
-          fi
-          echo ""
-          
-          TIMEOUT=900
-          ELAPSED=0
-          CHECK_INTERVAL=15
-          
-          while [ $ELAPSED -lt $TIMEOUT ]; do
-            echo ""
-            echo "=== Checking application status (${ELAPSED}s / ${TIMEOUT}s) ==="
-            
-            # Get all applications
-            APPS=$(kubectl get applications -n argocd -o json)
-            TOTAL=$(echo "$APPS" | jq -r '.items | length')
-            
-            if [ "$TOTAL" -eq 0 ]; then
-              echo "No applications found yet, waiting..."
-              sleep $CHECK_INTERVAL
-              ELAPSED=$((ELAPSED + CHECK_INTERVAL))
-              continue
-            fi
-            
-            # Count synced and healthy apps
-            SYNCED=0
-            HEALTHY=0
-            PROGRESSING=0
-            FAILED=0
-            
-            echo "$APPS" | jq -r '.items[] | "\(.metadata.name)|\(.status.sync.status // "Unknown")|\(.status.health.status // "Unknown")"' | while IFS='|' read -r name sync health; do
-              echo "  $name: $sync / $health"
-              
-              if [ "$sync" = "Synced" ]; then
-                SYNCED=$((SYNCED + 1))
-              fi
-              
-              if [ "$health" = "Healthy" ]; then
-                HEALTHY=$((HEALTHY + 1))
-              elif [ "$health" = "Progressing" ]; then
-                PROGRESSING=$((PROGRESSING + 1))
-              elif [ "$health" = "Degraded" ] || [ "$health" = "Missing" ]; then
-                FAILED=$((FAILED + 1))
-              fi
-            done
-            
-            # Build jq filter to exclude ignored apps
-            IGNORE_FILTER=""
-            if [ ${#IGNORE_APPS[@]} -gt 0 ]; then
-              for ignore_app in "${IGNORE_APPS[@]}"; do
-                IGNORE_FILTER="$IGNORE_FILTER and .metadata.name != \"$ignore_app\""
-              done
-              echo "DEBUG: Ignore filter: $IGNORE_FILTER"
-              echo "DEBUG: Ignored apps: ${IGNORE_APPS[*]}"
-            fi
-            
-            # Check sync status (excluding ignored apps)
-            if [ -n "$IGNORE_FILTER" ]; then
-              ALL_SYNCED=$(echo "$APPS" | jq "[.items[] | select(true $IGNORE_FILTER) | select(.status.sync.status != \"Synced\")] | length")
-              CHECKED_TOTAL=$(echo "$APPS" | jq "[.items[] | select(true $IGNORE_FILTER)] | length")
-            else
-              ALL_SYNCED=$(echo "$APPS" | jq '[.items[] | select(.status.sync.status != "Synced")] | length')
-              CHECKED_TOTAL=$TOTAL
-            fi
-            
-            # Check health status (ALL apps including ignored - they must still be healthy!)
-            ALL_HEALTHY=$(echo "$APPS" | jq '[.items[] | select(.status.health.status != "Healthy" and .status.health.status != "Progressing")] | length')
-            
-            # Warn if any ignored apps are unhealthy (but don't fail yet, keep looping)
-            if [ ${#IGNORE_APPS[@]} -gt 0 ]; then
-              IGNORED_UNHEALTHY=$(echo "$APPS" | jq -r "[.items[] | select(true and .metadata.name == \"${IGNORE_APPS[0]}\"$(for i in "${IGNORE_APPS[@]:1}"; do echo " or .metadata.name == \"$i\""; done)) | select(.status.health.status != \"Healthy\" and .status.health.status != \"Progressing\")] | .[].metadata.name")
-              
-              if [ -n "$IGNORED_UNHEALTHY" ]; then
-                echo ""
-                echo "⚠️  WARNING: Ignored apps should still be Healthy!"
-                echo "Unhealthy ignored apps:"
-                while read -r app; do
-                  if [ -n "$app" ]; then
-                    HEALTH=$(kubectl get application $app -n argocd -o jsonpath='{.status.health.status}')
-                    echo "  - $app: $HEALTH (waiting...)"
-                  fi
-                done <<< "$IGNORED_UNHEALTHY"
-              fi
-            fi
-            
-            echo ""
-            if [ ${#IGNORE_APPS[@]} -gt 0 ]; then
-              echo "Summary: $TOTAL total applications ($CHECKED_TOTAL checked for sync, $((TOTAL - CHECKED_TOTAL)) ignored)"
-            else
-              echo "Summary: $TOTAL total applications"
-            fi
-            echo "  Synced: $(($CHECKED_TOTAL - $ALL_SYNCED))/$CHECKED_TOTAL (checked apps)"
-            echo "  Healthy: $(($TOTAL - $ALL_HEALTHY))/$TOTAL (all apps including ignored)"
-            
-            # Show detailed info for OutOfSync or unhealthy apps
-            echo ""
-            echo "=== Detailed Status for Non-Synced/Unhealthy Apps ==="
-            
-            # OutOfSync apps (excluding ignored)
-            OUTOF_SYNC=$(echo "$APPS" | jq -r "[.items[] | select(true $IGNORE_FILTER) | select(.status.sync.status != \"Synced\")] | .[].metadata.name")
-            if [ -n "$OUTOF_SYNC" ]; then
-              echo ""
-              echo "OutOfSync Applications:"
-              while read -r app; do
-                if [ -n "$app" ]; then
-                  echo ""
-                  echo "--- $app (OutOfSync) ---"
-                  
-                  # Get sync status details
-                  SYNC_STATUS=$(kubectl get application $app -n argocd -o json | jq -r '.status.sync.status // "Unknown"')
-                  SYNC_REVISION=$(kubectl get application $app -n argocd -o json | jq -r '.status.sync.revision // "Unknown"')
-                  
-                  echo "Sync Status: $SYNC_STATUS"
-                  echo "Revision: $SYNC_REVISION"
-                  
-                  # Show diff/reason
-                  echo "Sync Comparison Result:"
-                  kubectl get application $app -n argocd -o json | jq -r '.status.operationState.syncResult // .status.conditions[] | select(.type == "ComparisonError") | .message' 2>/dev/null || echo "No comparison details available"
-                  
-                  # Show recent operation
-                  echo "Recent Operation:"
-                  kubectl get application $app -n argocd -o json | jq -r '.status.operationState.message // "No recent operation"'
-                fi
-              done <<< "$OUTOF_SYNC"
-            fi
-            
-            # Unhealthy apps (excluding ignored)
-            UNHEALTHY=$(echo "$APPS" | jq -r "[.items[] | select(true $IGNORE_FILTER) | select(.status.health.status != \"Healthy\" and .status.health.status != \"Progressing\")] | .[].metadata.name")
-            if [ -n "$UNHEALTHY" ]; then
-              echo ""
-              echo "Unhealthy Applications:"
-              while read -r app; do
-                if [ -n "$app" ]; then
-                  echo ""
-                  echo "--- $app (Unhealthy) ---"
-                  
-                  # Get health status details
-                  HEALTH_STATUS=$(kubectl get application $app -n argocd -o json | jq -r '.status.health.status // "Unknown"')
-                  HEALTH_MESSAGE=$(kubectl get application $app -n argocd -o json | jq -r '.status.health.message // "No message"')
-                  
-                  echo "Health Status: $HEALTH_STATUS"
-                  echo "Health Message: $HEALTH_MESSAGE"
-                  
-                  # Show unhealthy resources
-                  echo "Unhealthy Resources:"
-                  kubectl get application $app -n argocd -o json | jq -r '.status.resources[] | select(.health.status != "Healthy") | "  - \(.kind)/\(.name): \(.health.status) - \(.health.message // "no message")"' 2>/dev/null || echo "  No resource details available"
-                fi
-              done <<< "$UNHEALTHY"
-            fi
-            
-            echo ""
-            echo "Exit condition check: ALL_SYNCED=$ALL_SYNCED, ALL_HEALTHY=$ALL_HEALTHY"
-            
-            if [ "$ALL_SYNCED" -eq 0 ] && [ "$ALL_HEALTHY" -eq 0 ]; then
-              echo ""
-              echo "✓ All applications synced and healthy!"
-              break
-            fi
-            
-            # Show pods status for debugging
-            echo ""
-            echo "Non-Running Pods:"
-            kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded 2>/dev/null || echo "  All pods are running"
-            
-            sleep $CHECK_INTERVAL
-            ELAPSED=$((ELAPSED + CHECK_INTERVAL))
-          done
-          
-          if [ $ELAPSED -ge $TIMEOUT ]; then
-            echo ""
-            echo "✗ Timeout waiting for applications to sync"
-            echo ""
-            echo "Application details:"
-            kubectl get applications -n argocd
-            echo ""
-            echo "Describing failed applications:"
-            kubectl get applications -n argocd -o json | jq -r '.items[] | select(.status.health.status != "Healthy") | .metadata.name' | while read app; do
-              echo "=== $app ==="
-              kubectl describe application $app -n argocd
-            done
-            exit 1
-          fi
+          chmod +x scripts/wait-for-sync.sh
+          ./scripts/wait-for-sync.sh --ignore-file .github/ci-ignore-oos-apps.txt --timeout 900
 
-      - name: Wait for Progressing apps to become Healthy
+      - name: Wait for pods to be ready
         run: |
-          echo "Waiting for all Progressing apps to become fully Healthy..."
-          
-          TIMEOUT=300
-          ELAPSED=0
-          
-          while [ $ELAPSED -lt $TIMEOUT ]; do
-            PROGRESSING=$(kubectl get applications -n argocd -o json | jq -r '[.items[] | select(.status.health.status == "Progressing")] | .[].metadata.name')
-            
-            if [ -z "$PROGRESSING" ]; then
-              echo "✓ All apps are fully Healthy (no Progressing apps)"
-              break
-            fi
-            
-            echo "Progressing apps (${ELAPSED}s / ${TIMEOUT}s):"
-            while read -r app; do
-              if [ -n "$app" ]; then
-                echo "  - $app"
-              fi
-            done <<< "$PROGRESSING"
-            
-            sleep 10
-            ELAPSED=$((ELAPSED + 10))
-          done
-          
-          if [ $ELAPSED -ge $TIMEOUT ]; then
-            echo "⚠️  Some apps still Progressing after timeout, proceeding with validation..."
-          fi
+          chmod +x scripts/wait-for-pods.sh
+          ./scripts/wait-for-pods.sh --timeout 600
 
       - name: Run cluster validation using existing script
         run: |

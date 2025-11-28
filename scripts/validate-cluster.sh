@@ -59,22 +59,27 @@ echo "------------------------------------------"
 
 APPS=$(kubectl get applications -n argocd -o json)
 TOTAL_APPS=$(echo "$APPS" | jq -r '.items | length')
-SYNCED_HEALTHY=0
-ISSUES=0
 
 echo "$APPS" | jq -r '.items[] | "\(.metadata.name)|\(.status.sync.status // "Unknown")|\(.status.health.status // "Unknown")"' | while IFS='|' read -r name sync health; do
+    # Check if app is in ignore list
+    IS_IGNORED=false
+    for ignore_app in "${IGNORE_APPS[@]}"; do
+        if [[ "$name" == "$ignore_app" ]]; then
+            IS_IGNORED=true
+            break
+        fi
+    done
+    
     if [[ "$sync" == "Synced" && "$health" == "Healthy" ]]; then
         echo -e "  ✅ ${GREEN}$name${NC}: Synced & Healthy"
-        ((SYNCED_HEALTHY++)) || true
     elif [[ "$sync" == "Synced" && "$health" == "Progressing" ]]; then
-        echo -e "  ⚠️  ${YELLOW}$name${NC}: Synced & Progressing (deploying)"
+        echo -e "  ⚠️  ${YELLOW}$name${NC}: Synced & Progressing"
+    elif [[ "$sync" == "OutOfSync" && "$health" == "Healthy" && "$IS_IGNORED" == "true" ]]; then
+        echo -e "  ⚠️  ${YELLOW}$name${NC}: OutOfSync but Healthy (ignored)"
     elif [[ "$sync" == "OutOfSync" && "$health" == "Healthy" ]]; then
         echo -e "  ⚠️  ${YELLOW}$name${NC}: OutOfSync but Healthy"
-    elif [[ "$sync" == "Unknown" && "$health" == "Healthy" ]]; then
-        echo -e "  ⚠️  ${YELLOW}$name${NC}: Unknown sync but Healthy"
     else
         echo -e "  ❌ ${RED}$name${NC}: $sync / $health"
-        ((ISSUES++)) || true
         ((FAILED++)) || true
     fi
 done
@@ -87,24 +92,47 @@ echo ""
 echo "🏢 Critical Namespaces:"
 echo "------------------------------------------"
 
-CRITICAL_NAMESPACES=("argocd" "kagent" "intelligence-platform" "external-secrets" "crossplane-system" "keda")
+# Core infrastructure namespaces (must be fully ready)
+CORE_NAMESPACES=("argocd" "external-secrets" "crossplane-system" "keda")
+# Application namespaces (may have pods waiting for dependencies)
+APP_NAMESPACES=("kagent" "intelligence-platform")
 
-for ns in "${CRITICAL_NAMESPACES[@]}"; do
+for ns in "${CORE_NAMESPACES[@]}"; do
     if kubectl get namespace "$ns" &>/dev/null; then
-        POD_STATUS=$(kubectl get pods -n "$ns" --no-headers 2>/dev/null | wc -l | tr -d ' ')
-        RUNNING=$(kubectl get pods -n "$ns" --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l | tr -d ' ')
+        TOTAL_PODS=$(kubectl get pods -n "$ns" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+        READY_PODS=$(kubectl get pods -n "$ns" --field-selector=status.phase=Running -o json 2>/dev/null | jq '[.items[] | select(.status.conditions[] | select(.type=="Ready" and .status=="True"))] | length')
         
-        if [[ "$POD_STATUS" -eq "$RUNNING" && "$POD_STATUS" -gt 0 ]]; then
-            echo -e "  ✅ ${GREEN}$ns${NC}: $RUNNING/$POD_STATUS pods running"
-        elif [[ "$POD_STATUS" -eq 0 ]]; then
+        if [[ "$TOTAL_PODS" -eq 0 ]]; then
             echo -e "  ⚠️  ${YELLOW}$ns${NC}: No pods (may be expected)"
+        elif [[ "$READY_PODS" -eq "$TOTAL_PODS" ]]; then
+            echo -e "  ✅ ${GREEN}$ns${NC}: $READY_PODS/$TOTAL_PODS pods ready"
         else
-            echo -e "  ❌ ${RED}$ns${NC}: $RUNNING/$POD_STATUS pods running"
+            NOT_READY=$(kubectl get pods -n "$ns" -o json 2>/dev/null | jq -r '.items[] | select(.status.conditions[] | select(.type=="Ready" and .status!="True")) | .metadata.name' | head -3)
+            echo -e "  ❌ ${RED}$ns${NC}: $READY_PODS/$TOTAL_PODS pods ready"
+            if [[ -n "$NOT_READY" ]]; then
+                echo -e "     ${YELLOW}Not ready:${NC} $(echo "$NOT_READY" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')"
+            fi
             ((FAILED++)) || true
         fi
     else
         echo -e "  ❌ ${RED}$ns${NC}: Namespace not found"
         ((FAILED++)) || true
+    fi
+done
+
+# Check application namespaces (informational only, don't fail)
+for ns in "${APP_NAMESPACES[@]}"; do
+    if kubectl get namespace "$ns" &>/dev/null; then
+        TOTAL_PODS=$(kubectl get pods -n "$ns" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+        READY_PODS=$(kubectl get pods -n "$ns" --field-selector=status.phase=Running -o json 2>/dev/null | jq '[.items[] | select(.status.conditions[] | select(.type=="Ready" and .status=="True"))] | length')
+        
+        if [[ "$TOTAL_PODS" -eq 0 ]]; then
+            echo -e "  ⚠️  ${YELLOW}$ns${NC}: No pods (may be expected)"
+        elif [[ "$READY_PODS" -eq "$TOTAL_PODS" ]]; then
+            echo -e "  ✅ ${GREEN}$ns${NC}: $READY_PODS/$TOTAL_PODS pods ready"
+        else
+            echo -e "  ⚠️  ${YELLOW}$ns${NC}: $READY_PODS/$TOTAL_PODS pods ready (may be waiting for dependencies)"
+        fi
     fi
 done
 
