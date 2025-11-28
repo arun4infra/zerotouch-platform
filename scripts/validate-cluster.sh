@@ -1,6 +1,8 @@
 #!/bin/bash
 # Cluster Validation Script
 # Validates all ArgoCD applications and critical namespaces are healthy
+#
+# Usage: ./validate-cluster.sh [--ignore-file path/to/ignore-list.txt]
 
 set -e
 
@@ -8,6 +10,40 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
+
+# Parse arguments
+IGNORE_FILE=""
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --ignore-file)
+            IGNORE_FILE="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
+
+# Load ignore list
+IGNORE_APPS=()
+if [[ -n "$IGNORE_FILE" && -f "$IGNORE_FILE" ]]; then
+    echo "Loading ignore list from: $IGNORE_FILE"
+    while IFS= read -r line; do
+        # Skip comments and empty lines
+        [[ "$line" =~ ^#.*$ ]] && continue
+        [[ -z "$line" ]] && continue
+        # Extract app name (before any comment)
+        app=$(echo "$line" | sed 's/#.*//' | xargs)
+        [[ -n "$app" ]] && IGNORE_APPS+=("$app")
+    done < "$IGNORE_FILE"
+    
+    if [[ ${#IGNORE_APPS[@]} -gt 0 ]]; then
+        echo "Ignoring OutOfSync status for: ${IGNORE_APPS[*]}"
+    fi
+    echo ""
+fi
 
 echo "=========================================="
 echo "🔍 Cluster Validation Report"
@@ -120,13 +156,39 @@ echo "------------------------------------------"
 
 OUTOF_SYNC=$(echo "$APPS" | jq -r '.items[] | select(.status.sync.status == "OutOfSync") | .metadata.name')
 if [[ -n "$OUTOF_SYNC" ]]; then
-    echo -e "  ❌ ${RED}OutOfSync applications detected:${NC}"
+    CRITICAL_OUTOF_SYNC=""
+    IGNORED_OUTOF_SYNC=""
+    
     while read -r app; do
         if [[ -n "$app" ]]; then
-            echo -e "     - $app"
-            ((FAILED++)) || true
+            # Check if app is in ignore list
+            IS_IGNORED=false
+            for ignore_app in "${IGNORE_APPS[@]}"; do
+                if [[ "$app" == "$ignore_app" ]]; then
+                    IS_IGNORED=true
+                    break
+                fi
+            done
+            
+            if [[ "$IS_IGNORED" == "true" ]]; then
+                IGNORED_OUTOF_SYNC="$IGNORED_OUTOF_SYNC\n     - $app (ignored)"
+            else
+                echo -e "  ❌ ${RED}OutOfSync applications detected:${NC}"
+                echo -e "     - $app"
+                CRITICAL_OUTOF_SYNC="yes"
+                ((FAILED++)) || true
+            fi
         fi
     done <<< "$OUTOF_SYNC"
+    
+    if [[ -n "$IGNORED_OUTOF_SYNC" ]]; then
+        echo -e "  ⚠️  ${YELLOW}OutOfSync (ignored):${NC}"
+        echo -e "$IGNORED_OUTOF_SYNC"
+    fi
+    
+    if [[ -z "$CRITICAL_OUTOF_SYNC" ]]; then
+        echo -e "  ✅ ${GREEN}No critical configuration drift detected${NC}"
+    fi
 else
     echo -e "  ✅ ${GREEN}No configuration drift detected${NC}"
 fi

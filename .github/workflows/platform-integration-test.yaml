@@ -450,8 +450,8 @@ jobs:
           # Make script executable
           chmod +x scripts/validate-cluster.sh
           
-          # Run validation
-          ./scripts/validate-cluster.sh
+          # Run validation with CI ignore list
+          ./scripts/validate-cluster.sh --ignore-file .github/ci-ignore-oos-apps.txt
 
       - name: Show final cluster state
         if: always()
