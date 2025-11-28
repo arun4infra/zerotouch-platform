@@ -233,6 +233,25 @@ jobs:
         run: |
           echo "Waiting for all ArgoCD applications to sync (timeout: 15 minutes)..."
           
+          # Load ignore list
+          IGNORE_APPS=()
+          if [ -f ".github/ci-ignore-apps.txt" ]; then
+            echo "Loading CI ignore list..."
+            while IFS= read -r line; do
+              # Skip comments and empty lines
+              [[ "$line" =~ ^#.*$ ]] && continue
+              [[ -z "$line" ]] && continue
+              # Extract app name (before any comment)
+              app=$(echo "$line" | sed 's/#.*//' | xargs)
+              [[ -n "$app" ]] && IGNORE_APPS+=("$app")
+            done < ".github/ci-ignore-apps.txt"
+            
+            if [ ${#IGNORE_APPS[@]} -gt 0 ]; then
+              echo "Ignoring apps: ${IGNORE_APPS[*]}"
+            fi
+          fi
+          echo ""
+          
           TIMEOUT=900
           ELAPSED=0
           CHECK_INTERVAL=15
@@ -274,21 +293,51 @@ jobs:
               fi
             done
             
-            # Check if all apps are synced and healthy
-            ALL_SYNCED=$(echo "$APPS" | jq '[.items[] | select(.status.sync.status != "Synced")] | length')
+            # Build jq filter to exclude ignored apps
+            IGNORE_FILTER=""
+            for ignore_app in "${IGNORE_APPS[@]}"; do
+              IGNORE_FILTER="$IGNORE_FILTER and .metadata.name != \"$ignore_app\""
+            done
+            
+            # Check sync status (excluding ignored apps)
+            ALL_SYNCED=$(echo "$APPS" | jq "[.items[] | select(true $IGNORE_FILTER) | select(.status.sync.status != \"Synced\")] | length")
+            CHECKED_TOTAL=$(echo "$APPS" | jq "[.items[] | select(true $IGNORE_FILTER)] | length")
+            
+            # Check health status (ALL apps including ignored - they must still be healthy!)
             ALL_HEALTHY=$(echo "$APPS" | jq '[.items[] | select(.status.health.status != "Healthy" and .status.health.status != "Progressing")] | length')
             
+            # Warn if any ignored apps are unhealthy (but don't fail yet, keep looping)
+            if [ ${#IGNORE_APPS[@]} -gt 0 ]; then
+              IGNORED_UNHEALTHY=$(echo "$APPS" | jq -r "[.items[] | select(true and .metadata.name == \"${IGNORE_APPS[0]}\"$(for i in "${IGNORE_APPS[@]:1}"; do echo " or .metadata.name == \"$i\""; done)) | select(.status.health.status != \"Healthy\" and .status.health.status != \"Progressing\")] | .[].metadata.name")
+              
+              if [ -n "$IGNORED_UNHEALTHY" ]; then
+                echo ""
+                echo "⚠️  WARNING: Ignored apps should still be Healthy!"
+                echo "Unhealthy ignored apps:"
+                while read -r app; do
+                  if [ -n "$app" ]; then
+                    HEALTH=$(kubectl get application $app -n argocd -o jsonpath='{.status.health.status}')
+                    echo "  - $app: $HEALTH (waiting...)"
+                  fi
+                done <<< "$IGNORED_UNHEALTHY"
+              fi
+            fi
+            
             echo ""
-            echo "Summary: $TOTAL total applications"
-            echo "  Synced: $(($TOTAL - $ALL_SYNCED))/$TOTAL"
-            echo "  Healthy: $(($TOTAL - $ALL_HEALTHY))/$TOTAL"
+            if [ ${#IGNORE_APPS[@]} -gt 0 ]; then
+              echo "Summary: $TOTAL total applications ($CHECKED_TOTAL checked for sync, $((TOTAL - CHECKED_TOTAL)) ignored)"
+            else
+              echo "Summary: $TOTAL total applications"
+            fi
+            echo "  Synced: $(($CHECKED_TOTAL - $ALL_SYNCED))/$CHECKED_TOTAL (checked apps)"
+            echo "  Healthy: $(($TOTAL - $ALL_HEALTHY))/$TOTAL (all apps including ignored)"
             
             # Show detailed info for OutOfSync or unhealthy apps
             echo ""
             echo "=== Detailed Status for Non-Synced/Unhealthy Apps ==="
             
-            # OutOfSync apps
-            OUTOF_SYNC=$(echo "$APPS" | jq -r '.items[] | select(.status.sync.status != "Synced") | .metadata.name')
+            # OutOfSync apps (excluding ignored)
+            OUTOF_SYNC=$(echo "$APPS" | jq -r "[.items[] | select(true $IGNORE_FILTER) | select(.status.sync.status != \"Synced\")] | .[].metadata.name")
             if [ -n "$OUTOF_SYNC" ]; then
               echo ""
               echo "OutOfSync Applications:"
@@ -315,8 +364,8 @@ jobs:
               done <<< "$OUTOF_SYNC"
             fi
             
-            # Unhealthy apps
-            UNHEALTHY=$(echo "$APPS" | jq -r '.items[] | select(.status.health.status != "Healthy" and .status.health.status != "Progressing") | .metadata.name')
+            # Unhealthy apps (excluding ignored)
+            UNHEALTHY=$(echo "$APPS" | jq -r "[.items[] | select(true $IGNORE_FILTER) | select(.status.health.status != \"Healthy\" and .status.health.status != \"Progressing\")] | .[].metadata.name")
             if [ -n "$UNHEALTHY" ]; then
               echo ""
               echo "Unhealthy Applications:"

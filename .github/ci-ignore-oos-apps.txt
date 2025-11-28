@@ -1,0 +1,4 @@
+# Apps to ignore in CI validation
+# These apps have known differences between k3d and production Talos clusters
+
+local-path-provisioner  # k3d provides this built-in, conflicts with our version
