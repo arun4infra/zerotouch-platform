@@ -76,15 +76,23 @@ jobs:
         run: |
           echo "Configuring ArgoCD to sync from feature branch: ${{ github.head_ref }}"
           
-          # Update platform apps to point to PR branch
-          for file in platform/*.yaml; do
-            if [ -f "$file" ] && [ "${file##*.}" = "yaml" ] && [[ ! "$file" =~ \.disabled$ ]]; then
+          # Update bootstrap apps to point to PR branch
+          for file in bootstrap/*.yaml bootstrap/components/*.yaml; do
+            if [ -f "$file" ] && [[ ! "$file" =~ \.disabled$ ]]; then
               echo "Updating $file to use branch: ${{ github.head_ref }}"
               sed -i "s|targetRevision:.*|targetRevision: ${{ github.head_ref }}|g" "$file"
             fi
           done
           
-          echo "✓ Platform apps configured for feature branch"
+          # Update platform apps to point to PR branch
+          for file in platform/*.yaml; do
+            if [ -f "$file" ] && [[ ! "$file" =~ \.disabled$ ]]; then
+              echo "Updating $file to use branch: ${{ github.head_ref }}"
+              sed -i "s|targetRevision:.*|targetRevision: ${{ github.head_ref }}|g" "$file"
+            fi
+          done
+          
+          echo "✓ All ArgoCD apps configured for feature branch"
 
       - name: Deploy platform root application
         run: |
