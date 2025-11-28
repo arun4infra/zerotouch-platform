@@ -1,0 +1,52 @@
+name: ArgoCD Diff Preview
+
+on:
+  pull_request:
+    paths:
+      - 'platform/**'
+      - 'bootstrap/**'
+
+jobs:
+  argocd-diff:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          chmod +x argocd
+          sudo mv argocd /usr/local/bin/
+
+      - name: ArgoCD Diff (Dry Run)
+        env:
+          ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
+        run: |
+          echo "::group::ArgoCD Diff Preview"
+          echo "This shows what would change in the cluster if this PR is merged"
+          echo ""
+          
+          # Loop through each app and show diff
+          for app in foundation intelligence databases; do
+            echo "--- Diff for $app ---"
+            argocd app diff $app --local platform/ --revision ${{ github.head_ref }} || true
+            echo ""
+          done
+          
+          echo "::endgroup::"
+        continue-on-error: true
+
+      - name: Comment PR with diff
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '## ArgoCD Diff Preview\n\nCheck the workflow logs to see what would change in the cluster if this PR is merged to main.'
+            })

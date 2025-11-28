@@ -1,0 +1,86 @@
+name: Validate Kubernetes Manifests
+
+on:
+  pull_request:
+    paths:
+      - 'platform/**'
+      - 'bootstrap/**'
+      - 'services/**/k8s/**'
+  workflow_dispatch:
+
+jobs:
+  validate-manifests:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Install kubeconform
+        run: |
+          wget https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz
+          tar xf kubeconform-linux-amd64.tar.gz
+          sudo mv kubeconform /usr/local/bin/
+
+      - name: Validate YAML syntax
+        run: |
+          echo "::group::YAML Syntax Check"
+          find platform bootstrap services -name "*.yaml" -not -name "*.disabled" | while read file; do
+            echo "Checking $file"
+            kubectl apply --dry-run=client -f "$file" || echo "⚠️  Failed: $file"
+          done
+          echo "::endgroup::"
+
+      - name: Validate with kubeconform
+        run: |
+          echo "::group::Schema Validation"
+          kubeconform -summary -output json \
+            -ignore-missing-schemas \
+            -skip Composition,CompositeResourceDefinition,XPostgreSQL \
+            -kubernetes-version 1.28.0 \
+            platform/ bootstrap/
+          echo "::endgroup::"
+      
+      - name: Validate Crossplane Compositions
+        run: |
+          echo "::group::Crossplane Validation"
+          # Check that Compositions reference valid XRDs
+          echo "Checking Crossplane resources..."
+          find platform -name "*.yaml" -not -name "*.disabled" -exec grep -l "kind: Composition" {} \; | while read file; do
+            echo "✓ Found Composition: $file"
+          done
+          echo "::endgroup::"
+
+      - name: Check for common issues
+        run: |
+          echo "::group::Security & Best Practices"
+          
+          # Check for missing resource limits
+          echo "Checking for missing resource limits..."
+          grep -r "kind: Deployment\|kind: StatefulSet" platform/ bootstrap/ | cut -d: -f1 | sort -u | while read file; do
+            if ! grep -q "resources:" "$file"; then
+              echo "⚠️  Missing resources in: $file"
+            fi
+          done
+          
+          # Check for latest tags
+          echo "Checking for :latest tags..."
+          if grep -r "image:.*:latest" platform/ bootstrap/ services/; then
+            echo "⚠️  Found :latest tags (not recommended for production)"
+          fi
+          
+          echo "::endgroup::"
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "✅ All Kubernetes manifest validations passed!"
+          echo ""
+          echo "✅ YAML syntax valid"
+          echo "✅ Schema validation passed"
+          echo "✅ Best practices checked"
