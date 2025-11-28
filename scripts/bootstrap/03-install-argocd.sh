@@ -87,6 +87,10 @@ log_info "✓ ArgoCD manifests applied"
 log_info ""
 log_step "Step 2/5: Waiting for ArgoCD to be ready..."
 
+# Give Kubernetes a moment to create the pods
+log_info "Waiting for pods to be created..."
+sleep 10
+
 log_info "Waiting for ArgoCD pods (timeout: 5 minutes)..."
 kubectl wait --for=condition=ready pod \
     -l app.kubernetes.io/name=argocd-server \
