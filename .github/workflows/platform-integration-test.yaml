@@ -388,6 +388,9 @@ jobs:
               done <<< "$UNHEALTHY"
             fi
             
+            echo ""
+            echo "Exit condition check: ALL_SYNCED=$ALL_SYNCED, ALL_HEALTHY=$ALL_HEALTHY"
+            
             if [ "$ALL_SYNCED" -eq 0 ] && [ "$ALL_HEALTHY" -eq 0 ]; then
               echo ""
               echo "✓ All applications synced and healthy!"
