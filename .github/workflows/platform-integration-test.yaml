@@ -101,24 +101,36 @@ jobs:
           echo "ArgoCD Applications:"
           kubectl get applications -n argocd
 
-      - name: Wait for external-secrets namespace to be created
+      - name: Wait for foundation layer to sync
         run: |
-          echo "Waiting for ArgoCD to create external-secrets namespace..."
+          echo "Waiting for foundation layer to sync (creates ClusterSecretStore)..."
           
-          TIMEOUT=120
+          TIMEOUT=180
           ELAPSED=0
           while [ $ELAPSED -lt $TIMEOUT ]; do
-            if kubectl get namespace external-secrets &>/dev/null; then
-              echo "✓ external-secrets namespace exists"
+            # Check if external-secrets namespace exists
+            if ! kubectl get namespace external-secrets &>/dev/null; then
+              echo "Waiting for external-secrets namespace... (${ELAPSED}s / ${TIMEOUT}s)"
+              sleep 5
+              ELAPSED=$((ELAPSED + 5))
+              continue
+            fi
+            
+            # Check if ClusterSecretStore exists (created by foundation-config app)
+            if kubectl get clustersecretstore aws-parameter-store &>/dev/null; then
+              echo "✓ ClusterSecretStore aws-parameter-store exists"
               break
             fi
-            echo "Waiting for external-secrets namespace... (${ELAPSED}s / ${TIMEOUT}s)"
+            
+            echo "Waiting for ClusterSecretStore... (${ELAPSED}s / ${TIMEOUT}s)"
             sleep 5
             ELAPSED=$((ELAPSED + 5))
           done
           
           if [ $ELAPSED -ge $TIMEOUT ]; then
-            echo "✗ Timeout waiting for external-secrets namespace"
+            echo "✗ Timeout waiting for foundation layer"
+            echo "Checking ArgoCD app status:"
+            kubectl get applications -n argocd
             exit 1
           fi
 
