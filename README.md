@@ -1,4 +1,4 @@
-# zerotouch-infra: The Agentic-Native Platform
+# zerotouch-platform: The Agentic-Native Platform
 
 **A "Digital Assembly Line" for the Solo Founder.**
 

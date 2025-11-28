@@ -7,7 +7,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/arun4infra/zerotouch-platform.git
-    targetRevision: feat/migrate-secrets-to-eso
+    targetRevision: main
     path: bootstrap/components
     directory:
       recurse: true
