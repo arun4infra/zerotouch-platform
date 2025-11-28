@@ -8,8 +8,8 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/arun4infra/zerotouch-infra.git
-    targetRevision: feat/migrate-secrets-to-eso
+    repoURL: https://github.com/arun4infra/zerotouch-platform.git
+    targetRevision: main
     path: platform/03-intelligence
     directory:
       recurse: true
