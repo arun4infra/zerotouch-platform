@@ -283,6 +283,62 @@ jobs:
             echo "  Synced: $(($TOTAL - $ALL_SYNCED))/$TOTAL"
             echo "  Healthy: $(($TOTAL - $ALL_HEALTHY))/$TOTAL"
             
+            # Show detailed info for OutOfSync or unhealthy apps
+            echo ""
+            echo "=== Detailed Status for Non-Synced/Unhealthy Apps ==="
+            
+            # OutOfSync apps
+            OUTOF_SYNC=$(echo "$APPS" | jq -r '.items[] | select(.status.sync.status != "Synced") | .metadata.name')
+            if [ -n "$OUTOF_SYNC" ]; then
+              echo ""
+              echo "OutOfSync Applications:"
+              while read -r app; do
+                if [ -n "$app" ]; then
+                  echo ""
+                  echo "--- $app (OutOfSync) ---"
+                  
+                  # Get sync status details
+                  SYNC_STATUS=$(kubectl get application $app -n argocd -o json | jq -r '.status.sync.status // "Unknown"')
+                  SYNC_REVISION=$(kubectl get application $app -n argocd -o json | jq -r '.status.sync.revision // "Unknown"')
+                  
+                  echo "Sync Status: $SYNC_STATUS"
+                  echo "Revision: $SYNC_REVISION"
+                  
+                  # Show diff/reason
+                  echo "Sync Comparison Result:"
+                  kubectl get application $app -n argocd -o json | jq -r '.status.operationState.syncResult // .status.conditions[] | select(.type == "ComparisonError") | .message' 2>/dev/null || echo "No comparison details available"
+                  
+                  # Show recent operation
+                  echo "Recent Operation:"
+                  kubectl get application $app -n argocd -o json | jq -r '.status.operationState.message // "No recent operation"'
+                fi
+              done <<< "$OUTOF_SYNC"
+            fi
+            
+            # Unhealthy apps
+            UNHEALTHY=$(echo "$APPS" | jq -r '.items[] | select(.status.health.status != "Healthy" and .status.health.status != "Progressing") | .metadata.name')
+            if [ -n "$UNHEALTHY" ]; then
+              echo ""
+              echo "Unhealthy Applications:"
+              while read -r app; do
+                if [ -n "$app" ]; then
+                  echo ""
+                  echo "--- $app (Unhealthy) ---"
+                  
+                  # Get health status details
+                  HEALTH_STATUS=$(kubectl get application $app -n argocd -o json | jq -r '.status.health.status // "Unknown"')
+                  HEALTH_MESSAGE=$(kubectl get application $app -n argocd -o json | jq -r '.status.health.message // "No message"')
+                  
+                  echo "Health Status: $HEALTH_STATUS"
+                  echo "Health Message: $HEALTH_MESSAGE"
+                  
+                  # Show unhealthy resources
+                  echo "Unhealthy Resources:"
+                  kubectl get application $app -n argocd -o json | jq -r '.status.resources[] | select(.health.status != "Healthy") | "  - \(.kind)/\(.name): \(.health.status) - \(.health.message // "no message")"' 2>/dev/null || echo "  No resource details available"
+                fi
+              done <<< "$UNHEALTHY"
+            fi
+            
             if [ "$ALL_SYNCED" -eq 0 ] && [ "$ALL_HEALTHY" -eq 0 ]; then
               echo ""
               echo "✓ All applications synced and healthy!"
@@ -291,8 +347,8 @@ jobs:
             
             # Show pods status for debugging
             echo ""
-            echo "Pod status across namespaces:"
-            kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded 2>/dev/null || true
+            echo "Non-Running Pods:"
+            kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded 2>/dev/null || echo "  All pods are running"
             
             sleep $CHECK_INTERVAL
             ELAPSED=$((ELAPSED + CHECK_INTERVAL))
