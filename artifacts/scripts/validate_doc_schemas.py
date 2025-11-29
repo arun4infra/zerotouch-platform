@@ -18,6 +18,7 @@ import re
 import yaml
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from datetime import datetime, date
 
 # Schema definitions for each category
 SCHEMAS = {
@@ -143,6 +144,9 @@ def validate_schema(frontmatter: Dict[str, Any], file_path: str) -> List[str]:
     for field, expected_type in schema["field_types"].items():
         if field in frontmatter:
             value = frontmatter[field]
+            # Allow datetime/date objects for date fields (YAML parser converts them)
+            if field in ["created_at", "last_updated"] and isinstance(value, (datetime, date)):
+                continue
             if not isinstance(value, expected_type):
                 errors.append(
                     f"Field '{field}' has wrong type. "
@@ -169,8 +173,13 @@ def validate_schema(frontmatter: Dict[str, Any], file_path: str) -> List[str]:
     for field in date_fields:
         if field in frontmatter:
             date_value = frontmatter[field]
+            # Convert datetime objects to string (YAML parser may parse dates)
+            if hasattr(date_value, 'isoformat'):
+                date_value = date_value.isoformat()
+            # Convert to string if not already
+            date_value = str(date_value)
             # Basic ISO 8601 check (YYYY-MM-DDTHH:MM:SSZ or YYYY-MM-DD)
-            if not re.match(r'^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}Z)?$', date_value):
+            if not re.match(r'^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2})?', date_value):
                 errors.append(
                     f"Field '{field}' must be in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ or YYYY-MM-DD). "
                     f"Got: '{date_value}'"
