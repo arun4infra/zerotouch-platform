@@ -552,12 +552,15 @@ platform/03-intelligence/agents/shared/
 ### Dependencies
 ```txt
 # requirements.txt
-agents>=0.1.0          # OpenAI Agents SDK with native MCP support
+openai-agents==0.6.1   # OpenAI Agents SDK with native MCP support
+# mcp>=1.11.0, <2      # Automatically included with openai-agents for Python 3.10+
 pyyaml>=6.0.0          # YAML parsing
 pydantic>=2.0.0        # Data validation
 pytest>=7.0.0          # Testing
 pytest-asyncio>=0.21.0 # Async testing
 ```
+
+**Note:** Requires Python 3.10+ for MCP support.
 
 ---
 

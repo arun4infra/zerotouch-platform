@@ -88,14 +88,18 @@ This document defines requirements for the Validator Agent, a fast gate that val
 
 **Reference Pattern:** ✅ GitHub issue comment triggers (ChatOps pattern)
 
+**Implementation Note:** Override check MUST use direct GitHub API call (not Agent/LLM) to keep execution time < 5 seconds.
+
 #### Acceptance Criteria
 
 1. WHEN developer comments `@librarian override`, THE Validator Agent SHALL check for this comment BEFORE running LLM validation
-2. WHEN `@librarian override` detected, THE Validator Agent SHALL exit with success (0) immediately without LLM call
-3. WHEN override used, THE system SHALL log override event with comment author and timestamp for audit purposes
-4. THE Validator Agent SHALL fetch and scan ALL PR comments for override command before validation
-5. THE override command SHALL work regardless of whether "librarian" is a real GitHub user account
-6. WHEN override detected, THE Validator SHALL post acknowledgment comment: "✅ Override detected. Validation skipped by {author}"
+2. WHEN checking for override, THE Validator SHALL use direct GitHub API call (via `requests` library) NOT via Agent/LLM
+3. WHEN `@librarian override` detected, THE Validator Agent SHALL exit with success (0) immediately without LLM call
+4. WHEN override used, THE system SHALL log override event with comment author and timestamp for audit purposes
+5. THE Validator Agent SHALL fetch and scan ALL PR comments for override command before validation
+6. THE override command SHALL work regardless of whether "librarian" is a real GitHub user account
+7. WHEN override detected, THE Validator SHALL post acknowledgment comment: "✅ Override detected. Validation skipped by {author}"
+8. THE override check execution time SHALL be < 5 seconds
 
 ---
 
@@ -187,15 +191,15 @@ This document defines requirements for the Validator Agent, a fast gate that val
 #### Acceptance Criteria
 
 1. WHEN Validator starts, THE agent SHALL parse inputs (PR number, GitHub token, OpenAI key)
-2. WHEN Validator starts, THE agent SHALL start GitHub MCP server
-3. WHEN Validator starts, THE agent SHALL initialize MCP bridge
-4. WHEN Validator starts, THE agent SHALL check for `@librarian override` comment (via GitHub MCP tool)
-5. WHEN override found, THE agent SHALL post acknowledgment and exit(0)
+2. WHEN Validator starts, THE agent SHALL check for `@librarian override` comment (via direct GitHub API call, NOT via Agent)
+3. WHEN override found, THE agent SHALL post acknowledgment and exit(0) WITHOUT starting MCP servers or Agent
+4. WHEN no override, THE agent SHALL start GitHub MCP server
+5. WHEN no override, THE agent SHALL create Agent with GitHub MCP server (using `create_agent_with_mcp()`)
 6. WHEN no override, THE agent SHALL load system prompt from repo
-7. WHEN no override, THE agent SHALL fetch PR diff and spec (via GitHub MCP tools)
-8. WHEN no override, THE agent SHALL run agent loop (OpenAI + MCP bridge)
-9. WHEN mismatch detected, THE agent SHALL post gatekeeper comment
-10. WHEN complete, THE agent SHALL exit with appropriate code (0=pass, 1=block)
+7. WHEN no override, THE agent SHALL run agent task to validate PR
+8. WHEN mismatch detected, THE agent SHALL post gatekeeper comment
+9. WHEN complete, THE agent SHALL exit with appropriate code (0=pass, 1=block)
+10. THE override check SHALL complete in < 5 seconds to save tokens and time
 
 ---
 

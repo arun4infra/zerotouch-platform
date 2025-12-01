@@ -176,12 +176,14 @@ This task list covers the implementation of core infrastructure components that 
 
 - [ ] 7. Verify dependencies and setup
   - [ ] 7.1 Create requirements.txt
-    - Add `agents>=0.1.0` (OpenAI Agents SDK)
+    - Add `openai-agents==0.6.1` (OpenAI Agents SDK with native MCP support)
+    - Note: `mcp>=1.11.0, <2` is automatically included for Python 3.10+
     - Add `pyyaml>=6.0.0` (YAML parsing)
     - Add `pydantic>=2.0.0` (data validation)
     - Add `pytest>=7.0.0` (testing)
     - Add `pytest-asyncio>=0.21.0` (async testing)
     - Add `pytest-cov>=4.0.0` (coverage)
+    - Require Python 3.10+ for MCP support
     - _Requirements: All_
   
   - [ ] 7.2 Test installation

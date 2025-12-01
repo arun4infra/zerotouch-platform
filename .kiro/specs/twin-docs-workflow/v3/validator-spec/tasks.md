@@ -43,26 +43,29 @@ This task list covers the implementation of the Validator Agent, which validates
     - _Requirements: 8, 10_
   
   - [ ] 2.4 Implement agent execution flow
-    - Check for override comment first (before LLM call)
-    - If override found: post acknowledgment and exit(0)
-    - If no override: fetch PR diff and spec
-    - Run agent loop with validation task
+    - Check for override comment FIRST (via direct GitHub API, NOT Agent)
+    - If override found: post acknowledgment and exit(0) WITHOUT starting MCP/Agent
+    - If no override: start GitHub MCP server
+    - If no override: create Agent with MCP server
+    - If no override: run agent task to validate PR
     - Post gatekeeper comment if mismatch detected
-    - Exit with appropriate code
+    - Exit with appropriate code (0=pass, 1=block)
     - _Requirements: 2, 4, 10_
 
 - [ ] 3. Implement Override Checker
   - [ ] 3.1 Create `override_checker.py` module
     - Implement `check_for_override()` function
-    - Use GitHub MCP tool `github_list_issue_comments`
-    - Scan all PR comments for `@librarian override`
+    - Use `requests` library for direct GitHub API call (NOT Agent/MCP)
+    - Call GitHub API: `GET /repos/{owner}/{repo}/issues/{pr_number}/comments`
+    - Scan all PR comments for `@librarian override` (case-insensitive)
     - Return override status and author
+    - Keep execution time < 5 seconds
     - _Requirements: 4_
   
   - [ ] 3.2 Implement override acknowledgment
     - Post comment: "✅ Override detected. Validation skipped by {author}"
-    - Use GitHub MCP tool `github_create_issue_comment`
-    - Log override event for audit
+    - Use direct GitHub API call: `POST /repos/{owner}/{repo}/issues/{pr_number}/comments`
+    - Log override event for audit (author, timestamp)
     - _Requirements: 4_
   
   - [ ] 3.3 Write unit tests for Override Checker
@@ -70,6 +73,8 @@ This task list covers the implementation of the Validator Agent, which validates
     - Test case-insensitive matching
     - Test with multiple comments
     - Test with no override comment
+    - Test execution time < 5 seconds
+    - Mock GitHub API responses
     - _Requirements: 4_
 
 - [ ] 4. Create Validator system prompt

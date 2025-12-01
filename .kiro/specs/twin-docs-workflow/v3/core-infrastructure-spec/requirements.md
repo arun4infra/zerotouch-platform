@@ -171,12 +171,13 @@ async with MCPServerStdio(
 
 ## Dependencies
 
-- Python 3.11+
-- OpenAI Agents SDK (`agents>=0.1.0`) - includes native MCP support
+- Python 3.10+ (required for MCP support)
+- OpenAI Agents SDK (`openai-agents==0.6.1`) - includes native MCP support
+- MCP SDK (`mcp>=1.11.0, <2`) - automatically included with openai-agents for Python 3.10+
 - Node.js v20+ (for GitHub MCP server)
 - pytest (for testing)
 
-**Note:** OpenAI Agents SDK includes built-in MCP support, eliminating the need for custom bridge code or separate MCP Python SDK.
+**Note:** OpenAI Agents SDK v0.6.1 includes built-in MCP support via `MCPServerStdio`, eliminating the need for custom bridge code.
 
 ---
 
