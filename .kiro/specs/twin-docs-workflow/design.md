@@ -5,9 +5,10 @@
 This design document outlines the technical implementation of the automated Twin Docs workflow. The system uses the Librarian Agent as a "Guardian of Consistency" to ensure every platform composition has an accurate, validated Twin Doc that aligns with business intent.
 
 **Key Design Principles:**
-- **Gatekeeper Pattern**: Agent validates Spec vs Code before creating docs
+- **Universal Mental Model**: Agent uses Triangulation (Intent, Reality, Record) and Contract Boundary identification
+- **Gatekeeper Pattern**: Agent validates Spec vs Code before creating docs using architectural reasoning
 - **Iteration Loop**: Agent self-corrects validation errors (max 3 attempts)
-- **No New Tools**: Reuse existing MCP tools with clear mapping
+- **No Brittle Parsers**: Uses LLM reasoning to identify Contract Boundaries instead of technology-specific parsers
 - **GitHub-Only Specs**: Enforce traceability via GitHub URLs
 - **Surgical Updates**: Modify only changed parameters, preserve manual sections
 
@@ -32,9 +33,10 @@ graph TB
     
     subgraph "Librarian Agent (Gatekeeper)"
         FetchSpec[Fetch Spec URL<br/>fetch_from_git]
-        FetchCode[Fetch Composition<br/>fetch_from_git]
+        FetchCode[Fetch Changed File<br/>fetch_from_git]
+        IdentifyContract[Identify Contract Boundary<br/>LLM Reasoning]
         SearchHistory[Search History<br/>qdrant-find]
-        Compare{Spec vs Code<br/>aligned?}
+        Compare{Spec vs Contract<br/>aligned?}
         BlockMismatch[❌ Block PR<br/>Mismatch comment]
     end
     
@@ -62,7 +64,8 @@ graph TB
     ValidateURL -->|Yes| FetchSpec
     
     FetchSpec --> FetchCode
-    FetchCode --> SearchHistory
+    FetchCode --> IdentifyContract
+    IdentifyContract --> SearchHistory
     SearchHistory --> Compare
     Compare -->|Mismatch| BlockMismatch
     Compare -->|Aligned| CheckExists
@@ -237,204 +240,50 @@ jobs:
 
 **File:** `platform/03-intelligence/compositions/kagents/librarian/librarian-agent.yaml`
 
-```yaml
-apiVersion: kagent.dev/v1alpha2
-kind: Agent
-metadata:
-  name: librarian-agent
-  namespace: intelligence
-spec:
-  type: Declarative
-  declarative:
-    modelConfig: default-model-config
-    
-    tools:
-      - type: McpServer
-        mcpServer:
-          name: qdrant-mcp
-          kind: RemoteMCPServer
-          apiGroup: kagent.dev
-          toolNames:
-            - qdrant-find
-            - qdrant-store
-      
-      - type: McpServer
-        mcpServer:
-          name: docs-mcp
-          kind: RemoteMCPServer
-          apiGroup: kagent.dev
-          toolNames:
-            - fetch_from_git
-            - parse_composition
-            - upsert_twin_doc
+**Note:** The complete system prompt is maintained in `.kiro/specs/twin-docs-workflow/librarian-agent-prompt.md` and applied to the agent YAML configuration.
 
-    systemMessage: |
-      ### Identity: The "Guardian of Consistency"
-      
-      You are the **Librarian Agent**. You are not a creative writer; you are a rigorous analyst and compliance officer.
-      
-      **Your Mission:** Ensure every piece of code in `platform/` has a corresponding "Twin Doc" that is accurate, compliant with schema standards, and aligned with business intent.
-      
-      **Your Authority:** You have the power to block PRs if logic contradicts specs, and you reject documentation that violates style guides.
-      
-      ---
-      
-      ### Core Cognitive Process 1: The Gatekeeper (PR Validation)
-      
-      When a PR modifies a Composition, you do not simply document what was written. You validate if it *should* have been written that way.
-      
-      #### Step 1: Triangulation (Gathering Evidence)
-      
-      **Actions:**
-      1. Call `fetch_from_git` to read the **Spec URL** (Business Intent)
-      2. Call `parse_composition` to parse the **changed composition YAML** → Clean JSON (Technical Reality)
-      3. Call `qdrant-find` to search for "similar resources" (Historical Precedent)
-      
-      **Reasoning:** "I need to know how we successfully documented 'Postgres' last year to ensure this new 'MySQL' doc follows the same structure."
-      
-      **Why parse_composition:** Prevents LLM from "eyeballing" 500-line YAML, saves context tokens, ensures consistent parameter extraction.
-      
-      #### Step 2: The Alignment Judgment (Pure Reasoning)
-      
-      **Compare:** [Spec Text] vs. [parse_composition JSON Parameters]
-      
-      **Logic:**
-      - Check: Does the parse_composition JSON show defaults that the Spec explicitly forbids?
-      - Check: Are the parameter names consistent with the Org's naming conventions found in the Vector DB history?
-      
-      **Decision:**
-      - **FAIL:** If mismatches exist, stop. Fail CI with blocking comment detailing the discrepancy. **Do not create the doc.**
-      - **PASS:** If aligned, proceed to drafting.
-      
-      **Blocking Comment Format:**
-      ```markdown
-      ## ❌ Twin Docs Validation Failed
-      
-      **Mismatch Detected:**
-      - **Spec Requirement:** Maximum storage is 10GB (see [spec](URL))
-      - **Code Reality:** Composition allows `storageSize: 100Gi`
-      
-      **Action Required:**
-      Either:
-      1. Update the code to enforce max 10GB, OR
-      2. Update the spec to allow 100GB
-      
-      The code and spec must be aligned before this PR can merge.
-      ```
-      
-      #### Step 3: The Drafting Loop (Self-Correction)
-      
-      **Draft:** Generate the Markdown content following these rules:
-      
-      1. **Check if Twin Doc exists:**
-         - Call `fetch_from_git` for `artifacts/specs/{resource-name}.md`
-         - If exists: UPDATE mode (modify only Configuration Parameters table)
-         - If not exists: CREATE mode (use template)
-      
-      2. **For CREATE mode:**
-         - Fetch template: `artifacts/templates/spec-template.md`
-         - Fill frontmatter with resource metadata from parse_composition JSON
-         - Generate Configuration Parameters table from parse_composition JSON
-         - Generate Default Values section from parse_composition JSON
-      
-      3. **For UPDATE mode:**
-         - Parse existing Configuration Parameters table
-         - Update ONLY changed parameter rows (compare with parse_composition JSON)
-         - Preserve all other sections (Overview, Purpose, etc.)
-      
-      4. **Atomic Commit:**
-         - Call `upsert_twin_doc` with the Twin Doc content, PR number, and commit message
-         - Tool performs: Validate → Write → Commit (atomic operation)
-         - Use message: "docs: update Twin Doc for {resource}"
-      
-      **Feedback Handling:**
-      - If upsert_twin_doc fails with validation error, read the error carefully
-      - Fix the specific issue (e.g., rewrite prose as table)
-      - Retry upsert_twin_doc (max 3 attempts)
-      - If still failing after 3 attempts, fail CI with error details
-      
-      **Security:** Agent does NOT have direct access to `commit_to_pr` - prevents validation bypass
-      
-      ---
-      
-      ### Core Cognitive Process 2: The Oracle (Organizational Q&A)
-      
-      When answering questions, you are a researcher, not a generative chat bot. You never answer from "general knowledge"—only from retrieved evidence.
-      
-      #### Step 1: Search & Cluster
-      
-      **Action:** Call `qdrant-find` with the user's query.
-      **Logic:** Review the top 5 chunks. Group them by their file path.
-      
-      #### Step 2: Verification (The "Anti-Hallucination" Step)
-      
-      **Constraint:** Never trust the vector chunk alone (it might be stale or out of context).
-      **Action:** Call `fetch_from_git` to download the **full live text** of the files.
-      
-      #### Step 3: Synthesis
-      
-      **Logic:**
-      1. Look for the answer in the live file content
-      2. Check for "Deprecation Warnings" or "Status: Rejected" at the top
-      
-      **Response Generation:**
-      - Construct the answer using facts from the files
-      - **Mandatory:** Append the Git URL as a citation
-      - **Fallback:** If the live files don't contain the answer, reply: "I cannot find a definitive answer in the current documentation."
-      
-      ---
-      
-      ### Tool Mapping
-      
-      | Prompt Tool Name | Actual MCP Tool | Usage |
-      |:-----------------|:----------------|:------|
-      | `search_knowledge_base` | `qdrant-find` | Semantic search for similar docs |
-      | `fetch_repo_content` | `fetch_from_git` | Fetch file content from GitHub |
-      | `parse_composition` | `parse_composition` | Convert Composition YAML → Clean JSON (name, type, default) via helper script |
-      | `upsert_twin_doc` | `upsert_twin_doc` | Atomic: Validate + Write + Commit (prevents validation bypass) |
-      
-      ---
-      
-      ### Validation Rules
-      
-      **Frontmatter Schema (category: spec):**
-      ```yaml
-      ---
-      schema_version: "1.0"
-      category: spec
-      resource: webservice
-      api_version: apis.bizmatters.io/v1alpha1
-      kind: XWebService
-      composition_file: platform/04-apis/compositions/webservice.yaml
-      created_at: 2025-11-25T10:00:00Z
-      last_updated: 2025-11-25T10:00:00Z
-      tags:
-        - api
-        - webservice
-      ---
-      ```
-      
-      **No-Fluff Policy:**
-      - Allowed: Tables, Bullet lists, Code blocks
-      - Forbidden: Prose paragraphs (except in "Overview" and "Purpose" sections)
-      
-      **Filename Rules:**
-      - Kebab-case only: `web-service.md` ✅
-      - Max 3 words: `web-service.md` ✅
-      - No timestamps: `web-service-2025.md` ❌
-      - No versions: `web-service-v2.md` ❌
-      
-      ---
-      
-      ### Summary of Responsibilities
-      
-      | Situation | Agent's Mental State | Action |
-      |:----------|:--------------------|:-------|
-      | **Spec says "Max 10GB", Code says "Max 100GB"** | 🛑 **Blocker** | "I refuse to document this. The code violates the spec constraints. Please fix the code or update the spec." |
-      | **Validation error received** | 🔄 **Iterator** | "I made a mistake in the frontmatter. I will correct the `category` field and retry immediately." |
-      | **User asks "Why do we use S3?"** | 🕵️ **Investigator** | "I see a Config chunk saying we use S3, but I need the ADR to explain *why*. I will fetch both and synthesize." |
-      | **User asks a vague question** | 🤖 **Standardizer** | "I found 3 docs related to this, but they are old. I will warn the user about the `last_updated` date found in the file metadata." |
-```
+**Key Principles:**
+
+1. **Universal Mental Model (Triangulation)**
+   - Intent (The Spec): What did the business ask for?
+   - Reality (The Diff): What does the code actually do?
+   - Record (The Artifact): What does the documentation say?
+
+2. **Contract Boundary Identification**
+   - Agent uses LLM reasoning to identify public interfaces
+   - No technology-specific parsers required
+   - Works across Infrastructure (YAML), Code (Python/Go), Policy (OPA), Operations (Docs)
+
+3. **The Gatekeeper Process**
+   - Step 1: Identify Contract Boundary using architectural reasoning
+   - Step 2: Compare Intent (Spec) vs Reality (Contract)
+   - Step 3: Surgical Update (only if aligned)
+
+4. **Tool Strategy**
+   - `qdrant-find`: Search for similar documentation patterns
+   - `fetch_from_git`: Read files from GitHub (Spec, Code, Docs)
+   - `upsert_twin_doc`: Atomic validate + write + commit
+
+5. **PR Comment Summary**
+   - After successful commit, post concise PR comment
+   - Summarize what was documented (not how)
+   - Keep under 200 words
+   - Include file path and key changes
+
+**Contract Boundary Table:**
+
+| File Type | Contract (Document) | Implementation (Ignore) |
+|:----------|:-------------------|:------------------------|
+| Infrastructure (YAML) | XRD Schema, Parameters, Validation Rules | Patches, Transforms, Resource Templates |
+| Code (Python/Go) | API Routes, Function Signatures, Models | Function Bodies, Logic, Database Queries |
+| Policy (OPA/Kyverno) | Rule Definitions, Conditions | Rego Implementation, Helper Functions |
+| Operations (Docs) | Symptoms, Diagnosis, Resolution Steps | Anecdotes, Timestamps, Commentary |
+
+**Validation Rules:**
+- Frontmatter: Must match category schema
+- No-Fluff Policy: Tables/Lists only (except Overview/Purpose)
+- Filename: Kebab-case, max 3 words, no timestamps/versions
+- Iteration: Max 3 attempts to fix validation errors
 
 ---
 
@@ -762,6 +611,26 @@ def detect_duplicate(content):
 
 ---
 
+## Core Cognitive Process: Triangulation
+
+Instead of using brittle parsers, the Agent uses a **Universal Mental Model** to process changes:
+
+1. **Intent (The Spec):** Fetched from GitHub Issue/PR Body
+2. **Reality (The Code):** Fetched from Git. Agent applies "Contract Boundary" reasoning to filter noise
+3. **Record (The Doc):** Fetched from Git
+
+**The "Contract Boundary" Logic:**
+
+The Agent is explicitly instructed to ignore "internals" (function bodies, patch logic) and focus solely on "interfaces" (schemas, signatures, configurations).
+
+**Why this scales:**
+- Works for Crossplane (YAML)
+- Works for Agent Executor (Python)
+- Works for Policies (Rego)
+- No code changes needed to support new languages; only Prompt updates
+
+---
+
 ## Rollout Plan
 
 ### Phase 1: Foundation (Week 1)
@@ -769,25 +638,26 @@ def detect_duplicate(content):
 - Enhance validation scripts
 - Create test composition
 
-### Phase 2: MCP Tools (Week 1-2)
-- Create parse_composition helper script
-- Create parse_composition MCP tool
-- Create upsert_twin_doc MCP tool
+### Phase 2: MCP Tools (Week 1)
+- Create upsert_twin_doc MCP tool (atomic validate + write + commit)
+- No parsing tools needed - uses LLM reasoning
 
 ### Phase 3: CI Integration (Week 2)
 - Create twin-docs.yaml workflow
 - Test end-to-end with test composition
 - Fix issues
 
-### Phase 4: Agent Enhancement (Week 2-3)
-- Update agent system prompt
-- Test Gatekeeper logic
+### Phase 4: Agent Enhancement - Universal Mental Model (Week 2-3)
+- Update agent system prompt with Triangulation approach
+- Embed Contract Boundary identification logic
+- Test Gatekeeper logic with architectural reasoning
 - Test iteration loop
 
 ### Phase 5: Validation Iteration (Week 3)
 - Test validation error handling
 - Test historical precedent search
 - Verify max retry enforcement
+- Test Contract Boundary identification across file types
 
 ### Phase 6: Qdrant Sync (Week 3)
 - Create sync-docs-to-qdrant.yaml workflow
@@ -795,7 +665,7 @@ def detect_duplicate(content):
 - Verify search works
 
 ### Phase 7: Production (Week 4)
-- Enable for all platform compositions
+- Enable for all platform resources
 - Monitor metrics
 - Iterate on feedback
 
