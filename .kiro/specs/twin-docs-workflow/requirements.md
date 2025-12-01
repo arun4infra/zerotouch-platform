@@ -38,35 +38,39 @@ This document defines requirements for the automated Twin Docs workflow where th
 
 ---
 
-### Requirement 2: Gatekeeper Validation (Spec vs Code)
+### Requirement 2: Universal Contract Validation (Triangulation)
 
-**User Story:** As a platform architect, I want the agent to validate that code changes align with business specs, so that implementation doesn't drift from requirements.
+**User Story:** As a platform architect, I want the agent to validate that the "Public Interface" of any changed file matches the Business Spec, regardless of language (YAML/Python/Rego/etc), so that implementation doesn't drift from requirements.
 
-**Reference Pattern:** ⚠️ CUSTOM - Agent compares external spec against code
+**Reference Pattern:** ✅ Universal Mental Model (Triangulation)
 
 #### Acceptance Criteria
 
-1. WHEN agent runs, THE agent SHALL fetch Spec URL content (business intent)
-2. WHEN agent runs, THE agent SHALL call `parse_composition` to get clean JSON (technical reality)
-3. WHEN comparing, THE agent SHALL check parameter constraints from JSON (e.g., "max 10GB")
-4. WHEN mismatch detected, THE agent SHALL block PR with detailed comment
-5. WHEN aligned, THE agent SHALL proceed to Twin Doc creation
+1. WHEN analyzing a file, THE agent SHALL identify the "Contract Boundary" (Interface) and ignore implementation details
+2. WHEN analyzing Infrastructure (YAML), THE agent SHALL identify Schemas/Parameters (Contract) vs Patches/Transforms (Implementation)
+3. WHEN analyzing Code (Python/Go), THE agent SHALL identify Function Signatures/API Models (Contract) vs Logic/Loops (Implementation)
+4. WHEN analyzing Policy (OPA/Kyverno), THE agent SHALL identify Rule Definitions (Contract) vs Rego Logic (Implementation)
+5. WHEN analyzing Operations Docs, THE agent SHALL identify Trigger/Resolution Steps (Contract) vs Anecdotes (Implementation)
+6. THE agent SHALL compare the extracted Contract against the Spec URL requirements
+7. IF a mismatch is detected (e.g., Code allows what Spec forbids), THE agent SHALL block the PR with detailed comment
+8. WHEN aligned, THE agent SHALL proceed to Twin Doc creation
 
 ---
 
 ### Requirement 3: Twin Doc Creation Logic
 
-**User Story:** As a developer, I want the agent to automatically create Twin Docs for new compositions, so that documentation is never missing.
+**User Story:** As a developer, I want the agent to automatically create Twin Docs for new resources, so that documentation is never missing.
 
-**Reference Pattern:** ✅ Template-based document generation
+**Reference Pattern:** ✅ Template-based document generation with Contract Boundary extraction
 
 #### Acceptance Criteria
 
-1. WHEN composition is new, THE agent SHALL check if Twin Doc exists
+1. WHEN resource is new, THE agent SHALL check if Twin Doc exists
 2. WHEN Twin Doc missing, THE agent SHALL fetch template from `artifacts/templates/spec-template.md`
-3. WHEN creating, THE agent SHALL fill frontmatter with resource metadata from `parse_composition` JSON
-4. WHEN creating, THE agent SHALL generate Configuration Parameters table from `parse_composition` JSON
-5. WHEN created, THE agent SHALL call `upsert_twin_doc` (atomic: validate + write + commit)
+3. WHEN creating, THE agent SHALL identify the Contract Boundary in the changed file
+4. WHEN creating, THE agent SHALL fill frontmatter with resource metadata extracted from the Contract
+5. WHEN creating, THE agent SHALL generate Configuration Parameters table from Contract Boundary data
+6. WHEN created, THE agent SHALL call `upsert_twin_doc` (atomic: validate + write + commit)
 
 ---
 
@@ -78,12 +82,13 @@ This document defines requirements for the automated Twin Docs workflow where th
 
 #### Acceptance Criteria
 
-1. WHEN composition modified, THE agent SHALL fetch existing Twin Doc
+1. WHEN resource modified, THE agent SHALL fetch existing Twin Doc
 2. WHEN updating, THE agent SHALL parse Configuration Parameters table
-3. WHEN updating, THE agent SHALL compare with `parse_composition` JSON to identify changes
-4. WHEN updating, THE agent SHALL modify ONLY changed parameter rows
-5. WHEN updating, THE agent SHALL preserve all other sections (Overview, Purpose, etc.)
-6. WHEN updated, THE agent SHALL call `upsert_twin_doc` (atomic: validate + write + commit)
+3. WHEN updating, THE agent SHALL identify the Contract Boundary in the changed file
+4. WHEN updating, THE agent SHALL compare existing table with extracted Contract data to identify changes
+5. WHEN updating, THE agent SHALL modify ONLY changed parameter rows
+6. WHEN updating, THE agent SHALL preserve all other sections (Overview, Purpose, etc.)
+7. WHEN updated, THE agent SHALL call `upsert_twin_doc` (atomic: validate + write + commit)
 
 ---
 
@@ -180,11 +185,11 @@ This document defines requirements for the automated Twin Docs workflow where th
 
 #### Acceptance Criteria
 
-1. WHEN agent calls `search_knowledge_base`, THE call SHALL map to `qdrant-find` tool
-2. WHEN agent calls `fetch_repo_content`, THE call SHALL map to `fetch_from_git` tool
-3. WHEN agent calls `parse_composition`, THE call SHALL map to `parse_composition` MCP tool (backed by Python helper script)
-4. WHEN agent calls `upsert_twin_doc`, THE call SHALL map to `upsert_twin_doc` MCP tool (atomic: validate + write + commit)
-5. WHEN mapping, THE agent SHALL NOT have direct access to `commit_to_pr` (prevents validation bypass)
+1. WHEN agent calls `qdrant-find`, THE call SHALL search for similar documentation patterns
+2. WHEN agent calls `fetch_from_git`, THE call SHALL fetch file content from GitHub
+3. WHEN agent calls `upsert_twin_doc`, THE call SHALL map to `upsert_twin_doc` MCP tool (atomic: validate + write + commit)
+4. WHEN mapping, THE agent SHALL NOT have direct access to `commit_to_pr` (prevents validation bypass)
+5. THE agent SHALL NOT require custom parsing tools (parse_composition removed - uses LLM reasoning instead)
 
 ---
 
