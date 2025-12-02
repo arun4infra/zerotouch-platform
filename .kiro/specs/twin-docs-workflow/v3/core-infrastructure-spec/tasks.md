@@ -57,7 +57,8 @@ This task list covers the implementation of core infrastructure components that 
     - Verify tool discovery works correctly
     - _Requirements: 1, 7_
 
-  - [ ] **CHECKPOINT 1: Agent Runner Validation**
+  - [x] **CHECKPOINT 1: Agent Runner Validation**
+
 
     - Run: `uv run pytest platform/03-intelligence/agents/shared/tests/test_agent_runner.py -v`
     - Verify: All tests pass
@@ -113,7 +114,8 @@ This task list covers the implementation of core infrastructure components that 
     - Ignore rule logic
     - _Requirements: 3_
   
-  - [ ] 3.5 Implement Markdown Contract Extractor
+  - [x] 3.5 Implement Markdown Contract Extractor
+
     - Create `MarkdownContractExtractor` class
 
 
@@ -164,6 +166,8 @@ This task list covers the implementation of core infrastructure components that 
     - Add validation for Steps (must contain Step children)
     - Add validation for unclosed tags
     - Add whitelist check for approved components
+
+
     - _Requirements: 4_
   
 
@@ -174,11 +178,15 @@ This task list covers the implementation of core infrastructure components that 
     - Check required fields: title, category, description
     - Validate category values: spec, runbook, adr
     - Check optional fields: tags, author, date
+
+
+
     - _Requirements: 4_
   
   - [ ] 4.4 Implement filename validation
     - Implement `validate_filename()` function
     - Check kebab-case format
+
     - Check max 3 words
     - Check no timestamps
     - Check .mdx extension
@@ -186,20 +194,33 @@ This task list covers the implementation of core infrastructure components that 
   
   - [ ] 4.5 Write unit tests for MDX Validator
     - Test ParamField validation with missing required attributes
+
+
+
     - Test Step validation with missing title
     - Test unclosed tag detection
     - Test frontmatter validation with missing fields
+
+
     - Test frontmatter validation with invalid category
+
+
+
+
     - Test filename validation with invalid formats
     - Test filename validation with too many words
     - Test filename validation with timestamps
     - _Requirements: 4, 7_
+
 
   - [ ] **CHECKPOINT 3: MDX Validator Validation**
     - Run: `uv run pytest platform/03-intelligence/agents/shared/tests/test_mdx_validator.py -v`
     - Verify: All tests pass
     - Verify: Validator catches missing required attributes
     - Verify: Validator detects unclosed tags
+
+
+
     - Verify: Validator validates frontmatter correctly
     - **STOP HERE and review test results before proceeding**
 
@@ -210,9 +231,13 @@ This task list covers the implementation of core infrastructure components that 
     - Configure coverage reporting
     - _Requirements: 7_
   
+
+
   - [ ] 5.2 Create test fixtures
     - Create sample YAML files for testing
     - Create sample Python files for testing
+
+
     - Create sample Rego files for testing
     - Create sample Markdown files for testing
     - Create sample MDX files for testing
