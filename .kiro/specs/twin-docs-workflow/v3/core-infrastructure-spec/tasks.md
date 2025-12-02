@@ -12,15 +12,25 @@ This task list covers the implementation of core infrastructure components that 
 
 ## Tasks
 
-- [ ] 1. Set up project structure
+- [x] 1. Set up project structure with uv
+
+
+
+
   - Create `platform/03-intelligence/agents/shared/` directory
   - Create `platform/03-intelligence/agents/shared/tests/` directory
   - Create `__init__.py` files
-  - Create `requirements.txt` with dependencies
+  - Run `uv init` to initialize project
+  - Create `pyproject.toml` with project metadata and dependencies
   - _Requirements: All_
 
-- [ ] 2. Implement Agent Runner
-  - [ ] 2.1 Create `agent_runner.py` file
+- [x] 2. Implement Agent Runner
+
+
+
+  - [x] 2.1 Create `agent_runner.py` file
+
+
     - Implement `create_agent_with_mcp()` function
     - Implement `load_prompt_from_file()` function
     - Implement `run_agent_task()` function
@@ -28,7 +38,9 @@ This task list covers the implementation of core infrastructure components that 
     - Add error handling for prompt loading failures
     - _Requirements: 1_
   
-  - [ ] 2.2 Write unit tests for Agent Runner
+  - [x] 2.2 Write unit tests for Agent Runner
+
+
     - Test `create_agent_with_mcp()` with single MCP server
     - Test `create_agent_with_mcp()` with multiple MCP servers
     - Test `load_prompt_from_file()` with valid file
@@ -37,12 +49,21 @@ This task list covers the implementation of core infrastructure components that 
     - Test error handling for MCP connection failures
     - _Requirements: 1, 7_
   
-  - [ ] 2.3 Write integration tests with real MCP servers
+  - [x] 2.3 Write integration tests with real MCP servers
+
     - Test with GitHub MCP server (using test repository)
     - Test with Qdrant MCP server (using test collection)
     - Test with both servers simultaneously
     - Verify tool discovery works correctly
     - _Requirements: 1, 7_
+
+  - [ ] **CHECKPOINT 1: Agent Runner Validation**
+
+    - Run: `uv run pytest platform/03-intelligence/agents/shared/tests/test_agent_runner.py -v`
+    - Verify: All tests pass
+    - Verify: Agent successfully connects to GitHub MCP server
+    - Verify: Agent can list tools from MCP server
+    - **STOP HERE and review test results before proceeding**
 
 - [ ] 3. Implement Contract Boundary Extractor
   - [ ] 3.1 Create `contract_extractor.py` file
@@ -94,6 +115,14 @@ This task list covers the implementation of core infrastructure components that 
     - Test error handling for unsupported file types
     - _Requirements: 3, 7_
 
+  - [ ] **CHECKPOINT 2: Contract Extractor Validation**
+    - Run: `uv run pytest platform/03-intelligence/agents/shared/tests/test_contract_extractor.py -v`
+    - Verify: All tests pass
+    - Verify: YAML extractor correctly identifies parameters
+    - Verify: Python extractor correctly identifies function signatures
+    - Test manually with real composition file: `platform/03-intelligence/test-webservice.yaml`
+    - **STOP HERE and review test results before proceeding**
+
 - [ ] 4. Implement MDX Validator
   - [ ] 4.1 Create `mdx_validator.py` file
     - Define `ComponentType` enum
@@ -137,6 +166,14 @@ This task list covers the implementation of core infrastructure components that 
     - Test filename validation with timestamps
     - _Requirements: 4, 7_
 
+  - [ ] **CHECKPOINT 3: MDX Validator Validation**
+    - Run: `uv run pytest platform/03-intelligence/agents/shared/tests/test_mdx_validator.py -v`
+    - Verify: All tests pass
+    - Verify: Validator catches missing required attributes
+    - Verify: Validator detects unclosed tags
+    - Verify: Validator validates frontmatter correctly
+    - **STOP HERE and review test results before proceeding**
+
 - [ ] 5. Create comprehensive test suite
   - [ ] 5.1 Set up pytest configuration
     - Create `pytest.ini` file
@@ -159,6 +196,13 @@ This task list covers the implementation of core infrastructure components that 
     - Verify high coverage (>80%)
     - _Requirements: 7_
 
+  - [ ] **CHECKPOINT 4: Full Test Suite Validation**
+    - Run: `uv run pytest platform/03-intelligence/agents/shared/tests/ -v --cov=. --cov-report=html`
+    - Verify: All tests pass
+    - Verify: Coverage > 80%
+    - Review: `htmlcov/index.html` for coverage report
+    - **STOP HERE and review full test results before proceeding**
+
 - [ ] 6. Create documentation
   - [ ] 6.1 Write README for shared libraries
     - Document purpose of each component
@@ -174,24 +218,37 @@ This task list covers the implementation of core infrastructure components that 
     - Generate API docs (Sphinx or similar)
     - _Requirements: 6_
 
-- [ ] 7. Verify dependencies and setup
-  - [ ] 7.1 Create requirements.txt
+- [ ] 7. Verify dependencies and setup with uv
+  - [ ] 7.1 Configure pyproject.toml dependencies
     - Add `openai-agents==0.6.1` (OpenAI Agents SDK with native MCP support)
     - Note: `mcp>=1.11.0, <2` is automatically included for Python 3.10+
     - Add `pyyaml>=6.0.0` (YAML parsing)
     - Add `pydantic>=2.0.0` (data validation)
-    - Add `pytest>=7.0.0` (testing)
-    - Add `pytest-asyncio>=0.21.0` (async testing)
-    - Add `pytest-cov>=4.0.0` (coverage)
-    - Require Python 3.10+ for MCP support
+    - Add dev dependencies: `pytest>=7.0.0`, `pytest-asyncio>=0.21.0`, `pytest-cov>=4.0.0`, `ruff`, `mypy`
+    - Set `requires-python = ">=3.10"` for MCP support
+    - Run `uv add openai-agents==0.6.1 pyyaml pydantic`
+    - Run `uv add --dev pytest pytest-asyncio pytest-cov ruff mypy`
     - _Requirements: All_
   
-  - [ ] 7.2 Test installation
-    - Create clean virtual environment
-    - Install dependencies from requirements.txt
-    - Verify all imports work
-    - Run test suite in clean environment
+  - [ ] 7.2 Test installation with uv
+    - Run `uv sync` to create virtual environment and install dependencies
+    - Run `uv run python -c "import agents; import shared"` to verify imports
+    - Run `uv run pytest` to verify test suite runs
     - _Requirements: All_
+
+  - [ ] **CHECKPOINT 5: Final Gate - Core Infrastructure Complete**
+    - Run: `uv run pytest platform/03-intelligence/agents/shared/tests/ -v`
+    - Run: `uv run ruff check platform/03-intelligence/agents/shared/`
+    - Run: `uv run mypy platform/03-intelligence/agents/shared/`
+    - Verify: All tests pass
+    - Verify: No linting errors
+    - Verify: Type checking passes
+    - Verify: Coverage > 80%
+    - Verify: Agent Runner works with real MCP servers
+    - Verify: Contract Extractor works on real files
+    - Verify: MDX Validator catches all error cases
+    - **GATE: DO NOT proceed to Validator/Documentor until all checks pass**
+    - **STOP HERE for final review before moving to next spec**
 
 ---
 

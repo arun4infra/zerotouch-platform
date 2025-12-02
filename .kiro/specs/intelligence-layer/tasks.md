@@ -2,7 +2,9 @@
 
 ## MILESTONE 1: Core Infrastructure (Tasks 1-5)
 
-- [x] 1. Setup Crossplane Configuration structure
+- [ ] 1. Setup Crossplane Configuration structure
+
+
   - Create `platform/03-intelligence/` directory with Crossplane layout
   - Add `crossplane.yaml` Configuration metadata file
   - Create `compositions/`, `definitions/`, `examples/`, `providers/`, `test/` directories
