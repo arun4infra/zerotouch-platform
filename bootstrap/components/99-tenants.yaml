@@ -10,28 +10,24 @@ spec:
     - git:
         repoURL: https://github.com/arun4infra/zerotouch-tenants.git
         revision: main
-        directories:
-          - path: tenants/*
-        values:
-          # Read config.yaml from each tenant directory
-          files:
-            - config.yaml
+        files:
+          - path: tenants/*/config.yaml
   template:
     metadata:
-      name: '{{values.tenant}}'
+      name: '{{tenant}}'
       namespace: argocd
       labels:
-        tenant: '{{values.tenant}}'
+        tenant: '{{tenant}}'
         managed-by: applicationset
     spec:
       project: default
       source:
-        repoURL: '{{values.repoURL}}'
-        targetRevision: '{{values.targetRevision}}'
-        path: '{{values.path}}'
+        repoURL: '{{repoURL}}'
+        targetRevision: '{{targetRevision}}'
+        path: '{{manifestPath}}'
       destination:
         server: https://kubernetes.default.svc
-        namespace: '{{values.namespace | default "default"}}'
+        namespace: '{{namespace}}'
       syncPolicy:
         automated:
           prune: true

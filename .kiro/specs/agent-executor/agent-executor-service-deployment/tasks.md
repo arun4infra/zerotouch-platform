@@ -318,7 +318,7 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - Commit and push to zerotouch-tenants repo
   - _Requirements: 15.1, 15.2_
 
-- [ ] 4.4 Configure ArgoCD repository credentials (CRITICAL: Do this BEFORE creating ApplicationSet)
+- [x] 4.4 Configure ArgoCD repository credentials (CRITICAL: Do this BEFORE creating ApplicationSet)
   - **IMPORTANT**: Credentials must be added BEFORE ApplicationSet is created to avoid sync failures
   - Add zerotouch-tenants repo credentials: `./scripts/bootstrap/06-add-private-repo.sh https://github.com/arun4infra/zerotouch-tenants.git <user> <token>`
   - Add bizmatters repo credentials: `./scripts/bootstrap/06-add-private-repo.sh https://github.com/arun4infra/bizmatters.git <user> <token>`
@@ -327,7 +327,7 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - **Order matters**: Tenant registry credentials → ApplicationSet → Tenant config
   - _Requirements: 15.1, 15.2_
 
-- [ ] 4.5 Commit platform manifests to bizmatters
+- [x] 4.5 Commit platform manifests to bizmatters
   - Move platform claims to: `bizmatters/services/agent_executor/platform/`
   - Stage all files: `git add services/agent_executor/platform/`
   - Commit: `git commit -m "feat: Add agent-executor platform manifests"`

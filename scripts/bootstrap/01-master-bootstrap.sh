@@ -421,6 +421,53 @@ Verify parameters:
 
 EOF
 
+# Step 4.7: Configure ArgoCD Repository Credentials (for Tenant Registry)
+echo -e "${YELLOW}[4.7/5] Configuring ArgoCD Repository Credentials...${NC}"
+echo "────────────────────────────────────────────────────────────────"
+
+# Check if GITHUB_USERNAME and GITHUB_TOKEN are provided via environment variables
+if [ -n "$GITHUB_USERNAME" ] && [ -n "$GITHUB_TOKEN" ]; then
+    echo -e "${BLUE}Found GitHub credentials in environment variables${NC}"
+    
+    # Add zerotouch-tenants repository
+    if [ -n "$TENANT_REGISTRY_REPO" ]; then
+        echo -e "${BLUE}Adding tenant registry repository: $TENANT_REGISTRY_REPO${NC}"
+        ./07-add-private-repo.sh "$TENANT_REGISTRY_REPO" "$GITHUB_USERNAME" "$GITHUB_TOKEN"
+    fi
+    
+    # Add bizmatters repository
+    if [ -n "$BIZMATTERS_REPO" ]; then
+        echo -e "${BLUE}Adding bizmatters repository: $BIZMATTERS_REPO${NC}"
+        ./07-add-private-repo.sh "$BIZMATTERS_REPO" "$GITHUB_USERNAME" "$GITHUB_TOKEN"
+    fi
+    
+    echo -e "${GREEN}✓ Repository credentials configured${NC}"
+else
+    echo -e "${YELLOW}⚠️  GitHub credentials not provided via environment variables${NC}"
+    echo -e "${BLUE}ℹ  To add private repository credentials for ArgoCD:${NC}"
+    echo -e "   ${GREEN}./scripts/bootstrap/07-add-private-repo.sh <repo-url> <username> <token>${NC}"
+    echo ""
+fi
+
+cat >> "$CREDENTIALS_FILE" << EOF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ARGOCD REPOSITORY CREDENTIALS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Add private repository credentials:
+  ./scripts/bootstrap/07-add-private-repo.sh <repo-url> <username> <token>
+
+Example:
+  ./scripts/bootstrap/07-add-private-repo.sh \\
+    https://github.com/arun4infra/zerotouch-tenants.git \\
+    arun4infra \\
+    ghp_xxxxx
+
+Verify:
+  kubectl get secret -n argocd | grep repo-
+
+EOF
+
 # Step 4.5: Database Layer (managed by ArgoCD)
 if [ -n "$WORKER_NODES" ]; then
     echo -e "${YELLOW}[4.5/5] Database Layer (will be deployed by ArgoCD)...${NC}"

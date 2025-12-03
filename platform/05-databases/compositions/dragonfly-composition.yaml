@@ -40,7 +40,7 @@ spec:
         - type: CombineFromComposite
           combine:
             variables:
-              - fromFieldPath: spec.claimRef.name
+              - fromFieldPath: metadata.name
               - fromFieldPath: spec.claimRef.namespace
             strategy: string
             string:
