@@ -541,34 +541,7 @@ spec:
     - ghcr-pull-secret
 ```
 
-#### 3.3.6 ArgoCD Application
-
-**File: `platform/argocd-application.yaml`**
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: bizmatters-workloads
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "3"
-spec:
-  project: default
-  source:
-    repoURL: https://github.com/arun4infra/bizmatters.git  # Private repo
-    targetRevision: main
-    path: platform/claims
-    directory:
-      recurse: true
-  destination:
-    server: https://kubernetes.default.svc
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - ServerSideApply=true
-```
+**Note:** No ArgoCD Application manifest needed in bizmatters repo. The ApplicationSet in zerotouch-platform automatically generates the Application CRD from the tenant config in zerotouch-tenants.
 
 ## 4. Deployment Workflow
 
@@ -593,31 +566,48 @@ aws ssm put-parameter --name /zerotouch/prod/agent-executor/openai_api_key --val
 aws ssm put-parameter --name /zerotouch/prod/agent-executor/anthropic_api_key --value "sk-ant-..." --type SecureString
 ```
 
-**Step 2: Configure ArgoCD for Private Repo**
+**Step 2: Configure ArgoCD Repository Credentials**
 ```bash
-# Add private repo credentials to ArgoCD
-kubectl create secret generic bizmatters-repo \
-  --from-literal=url=https://github.com/arun4infra/bizmatters.git \
-  --from-literal=username=<github-username> \
-  --from-literal=password=<github-token> \
-  -n argocd
+# Add tenant registry repo credentials
+./scripts/bootstrap/06-add-private-repo.sh \
+  https://github.com/arun4infra/zerotouch-tenants.git \
+  <github-username> \
+  <github-token>
 
-# Label the secret
-kubectl label secret bizmatters-repo argocd.argoproj.io/secret-type=repository -n argocd
+# Add bizmatters repo credentials
+./scripts/bootstrap/06-add-private-repo.sh \
+  https://github.com/arun4infra/bizmatters.git \
+  <github-username> \
+  <github-token>
 ```
 
-**Step 3: Deploy ArgoCD Application**
+**Step 3: Create Tenant Config**
 ```bash
-# Apply ArgoCD Application (can be in either repo)
-kubectl apply -f platform/argocd-application.yaml
+# In zerotouch-tenants repo
+cat > tenants/bizmatters/config.yaml <<EOF
+tenant: bizmatters-workloads
+repoURL: https://github.com/arun4infra/bizmatters.git
+targetRevision: main
+path: services/agent_executor/platform
+EOF
+
+git add tenants/bizmatters/config.yaml
+git commit -m "Add bizmatters tenant"
+git push
 ```
 
-### 4.2 Deploying Agent Executor
+**Step 4: ApplicationSet Auto-Discovers and Deploys**
+- ApplicationSet in zerotouch-platform detects new tenant config
+- Automatically creates Application: bizmatters-workloads
+- ArgoCD syncs manifests from bizmatters repo
+- Kubernetes resources deployed
 
-**Step 1: Commit all claim files**
+### 4.2 Updating Agent Executor
+
+**Step 1: Update manifests in bizmatters repo**
 ```bash
 cd bizmatters
-git add platform/claims/intelligence-deepagents/
+git add services/agent_executor/platform/
 git commit -m "feat: Deploy agent-executor service"
 git push
 ```
