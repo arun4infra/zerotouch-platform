@@ -13,15 +13,15 @@ This implementation plan deploys the agent_executor service using the AgentExecu
 **Goal:** Modify agent_executor code to support NATS consumer and remove Vault dependency
 
 **Verification Criteria:**
-- [x] Vault code removed, no import errors
-- [x] NATS consumer module created and functional
-- [x] FastAPI lifespan starts NATS consumer
-- [x] Migration script works without kubectl
-- [x] Code passes linting and type checks
+- [ ] Vault code removed, no import errors
+- [ ] NATS consumer module created and functional
+- [ ] FastAPI lifespan starts NATS consumer
+- [ ] Migration script works without kubectl
+- [ ] Code passes linting and type checks
 
 ### Tasks
 
-- [x] 1.1 Remove Vault integration
+- [ ] 1.1 Remove Vault integration
   - Delete file: `services/agent_executor/services/vault.py`
   - Remove VaultClient imports from `services/agent_executor/api/main.py`
   - Update lifespan to read secrets from environment variables instead of Vault
@@ -29,7 +29,7 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - Update environment variable names to match platform standards (POSTGRES_HOST, POSTGRES_PORT, etc.)
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
 
-- [x] 1.2 Create NATS consumer module
+- [ ] 1.2 Create NATS consumer module
   - Create file: `services/agent_executor/services/nats_consumer.py`
   - Implement NATSConsumer class with __init__, start(), stop(), process_message(), publish_result()
   - Use nats-py library for NATS JetStream connectivity
@@ -38,7 +38,7 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - Add structured logging with correlation IDs
   - _Requirements: 8.1, 8.3, 8.4_
 
-- [x] 1.3 Update FastAPI lifespan to start NATS consumer
+- [ ] 1.3 Update FastAPI lifespan to start NATS consumer
   - Update `services/agent_executor/api/main.py` lifespan function
   - Initialize NATSConsumer with NATS_URL, stream name, consumer group from environment
   - Start NATS consumer as asyncio background task
@@ -46,7 +46,7 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - Ensure NATS consumer uses same execution logic as HTTP endpoint
   - _Requirements: 1.1, 1.2, 8.2, 8.5_
 
-- [x] 1.4 Update CloudEvent emission to publish to NATS
+- [ ] 1.4 Update CloudEvent emission to publish to NATS
   - Update CloudEventEmitter in `services/agent_executor/services/cloudevents.py`
   - Replace K_SINK HTTP POST with NATS publish
   - Publish completed events to subject "agent.status.completed"
@@ -54,7 +54,7 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - Remove K_SINK environment variable dependency
   - _Requirements: 4.3, 4.4_
 
-- [x] 1.5 Update migration script for init container
+- [ ] 1.5 Update migration script for init container
   - Update `services/agent_executor/scripts/ci/run-migrations.sh`
   - Remove all kubectl commands
   - Read database credentials from environment variables
@@ -63,14 +63,14 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - Test script works without cluster access
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
-- [x] 1.6 Add health and readiness endpoints
+- [ ] 1.6 Add health and readiness endpoints
   - Implement /health endpoint in `services/agent_executor/api/main.py`
   - Implement /ready endpoint that checks PostgreSQL, Dragonfly, NATS connectivity
   - Ensure /metrics endpoint exists and includes NATS metrics
   - Add counters: nats_messages_processed_total, nats_messages_failed_total
   - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5_
 
-- [x] 1.7 Run linting and type checks
+- [ ] 1.7 Run linting and type checks
   - Run: `cd services/agent_executor && ruff check .`
   - Run: `cd services/agent_executor && mypy .`
   - Fix any errors or warnings
@@ -86,15 +86,15 @@ This implementation plan deploys the agent_executor service using the AgentExecu
 **Goal:** Update integration tests to use Dragonfly and NATS, remove K_SINK mocking
 
 **Verification Criteria:**
-- [x] docker-compose.test.yml uses Dragonfly instead of Redis
-- [x] docker-compose.test.yml includes NATS with JetStream
-- [x] K_SINK mocking removed from tests
-- [x] NATS result verification added (fixture and setup complete)
+- [ ] docker-compose.test.yml uses Dragonfly instead of Redis
+- [ ] docker-compose.test.yml includes NATS with JetStream
+- [ ] K_SINK mocking removed from tests
+- [ ] NATS result verification added (fixture and setup complete)
 - [ ] All integration tests pass
 
 ### Tasks
 
-- [x] 2.1 Update docker-compose.test.yml
+- [ ] 2.1 Update docker-compose.test.yml
   - Update file: `services/agent_executor/tests/integration/docker-compose.test.yml`
   - Replace redis service with dragonfly service using docker.dragonflydb.io/dragonflydb/dragonfly:latest
   - Keep port mapping 16380:6379 for compatibility
@@ -103,7 +103,7 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - Add healthchecks for both services
   - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-- [x] 2.2 Remove K_SINK mocking from tests
+- [ ] 2.2 Remove K_SINK mocking from tests
   - Update file: `services/agent_executor/tests/integration/test_api.py`
   - Remove mock_k_sink_http fixture
   - Remove all K_SINK HTTP POST assertions
@@ -112,7 +112,7 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - Update REDIS_HOST/REDIS_PORT to DRAGONFLY_HOST/DRAGONFLY_PORT
   - _Requirements: 9.2_
 
-- [x] 2.3 Add NATS result verification to HTTP endpoint test
+- [ ] 2.3 Add NATS result verification to HTTP endpoint test
   - Update existing HTTP endpoint test in test_api.py
   - Added nats_client fixture for NATS connection with JetStream
   - Added NATS subscription to "agent.status.completed" before HTTP request
@@ -122,7 +122,7 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - Validate W3C Trace Context propagation (traceparent)
   - _Requirements: 4.3, 4.4, 9.3_
 
-- [x] 2.4 Add NATS consumer integration test
+- [ ] 2.4 Add NATS consumer integration test
   - Created new test function test_nats_consumer_processing() in test_api.py
   - Publish CloudEvent to NATS subject "agent.execute.test"
   - Wait for NATS consumer to process message (30s timeout for LLM execution)
@@ -194,13 +194,13 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - Test ESO can read parameters: Check ESO logs for errors
   - _Requirements: 18.5_
 
-- [x] 3.3 Create namespace manifest
+- [ ] 3.3 Create namespace manifest
   - Create file: `platform/claims/intelligence-deepagents/namespace.yaml`
   - Define namespace: intelligence-deepagents
   - Add labels: layer=intelligence, category=deepagents, name=intelligence-deepagents
   - _Requirements: 10.1, 10.2, 10.3, 10.4_
 
-- [x] 3.4 Create ImagePullSecret manifest
+- [ ] 3.4 Create ImagePullSecret manifest
   - Create file: `platform/claims/intelligence-deepagents/image-pull-secret.yaml`
   - Generate secret data: `kubectl create secret docker-registry ghcr-pull-secret --docker-server=ghcr.io --docker-username=<username> --docker-password=<token> --dry-run=client -o yaml`
   - Copy .dockerconfigjson value to manifest
@@ -208,7 +208,7 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - Set name: ghcr-pull-secret
   - _Requirements: 14.1, 14.2, 14.4, 14.5_
 
-- [x] 3.5 Create PostgreSQL ExternalSecret
+- [ ] 3.5 Create PostgreSQL ExternalSecret
   - Create file: `platform/claims/intelligence-deepagents/external-secrets/postgres-es.yaml`
   - Define ExternalSecret: agent-executor-postgres
   - Set namespace: intelligence-deepagents
@@ -217,7 +217,7 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - Set refreshInterval: 1h
   - _Requirements: 11.1, 11.4, 11.5_
 
-- [x] 3.6 Create Dragonfly ExternalSecret
+- [ ] 3.6 Create Dragonfly ExternalSecret
   - Create file: `platform/claims/intelligence-deepagents/external-secrets/dragonfly-es.yaml`
   - Define ExternalSecret: agent-executor-dragonfly
   - Set namespace: intelligence-deepagents
@@ -226,7 +226,7 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - Set refreshInterval: 1h
   - _Requirements: 11.2, 11.4, 11.5_
 
-- [x] 3.7 Create LLM keys ExternalSecret
+- [ ] 3.7 Create LLM keys ExternalSecret
   - Create file: `platform/claims/intelligence-deepagents/external-secrets/llm-keys-es.yaml`
   - Define ExternalSecret: agent-executor-llm-keys
   - Set namespace: intelligence-deepagents
@@ -235,7 +235,7 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - Set refreshInterval: 1h
   - _Requirements: 11.3, 11.4, 11.5_
 
-- [x] 3.8 Create NATS stream Job manifest
+- [ ] 3.8 Create NATS stream Job manifest
   - Create file: `platform/claims/intelligence-deepagents/nats-stream.yaml`
   - Define Job: create-agent-execution-stream
   - Set namespace: intelligence-deepagents
@@ -246,7 +246,7 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - **CRITICAL**: Add annotation `argocd.argoproj.io/sync-wave: "1"` to ensure stream is created BEFORE deployment (sync-wave "2")
   - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5_
 
-- [x] 3.9 Create AgentExecutor claim manifest
+- [ ] 3.9 Create AgentExecutor claim manifest
   - Create file: `platform/claims/intelligence-deepagents/agent-executor-deployment.yaml` (using Deployment instead of claim)
   - Define Deployment: agent-executor with init container for migrations
   - Set namespace: intelligence-deepagents
@@ -437,10 +437,10 @@ This implementation plan deploys the agent_executor service using the AgentExecu
 
 After completing all checkpoints, verify:
 
-- [x] Application code updated for NATS architecture (Checkpoint 1)
-- [x] Integration tests updated with Dragonfly and NATS (Checkpoint 2)
-- [x] GitHub Actions workflow created with script hierarchy (Checkpoint 2)
-- [x] All deployment manifests created (Checkpoint 3)
+- [ ] Application code updated for NATS architecture (Checkpoint 1)
+- [ ] Integration tests updated with Dragonfly and NATS (Checkpoint 2)
+- [ ] GitHub Actions workflow created with script hierarchy (Checkpoint 2)
+- [ ] All deployment manifests created (Checkpoint 3)
 - [ ] Tenant registry setup with ApplicationSet pattern (Checkpoint 4)
 - [ ] Service deployed via GitOps (Checkpoint 4)
 - [ ] Pods running and healthy (Checkpoint 4)
