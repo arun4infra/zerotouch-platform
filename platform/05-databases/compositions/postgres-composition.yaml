@@ -9,21 +9,11 @@ spec:
     apiVersion: database.bizmatters.io/v1alpha1
     kind: XPostgresInstance
   
-  publishConnectionDetailsTo:
-    - name: endpoint
-      fromConnectionSecretKey: endpoint
-    - name: port
-      fromConnectionSecretKey: port
-    - name: username
-      fromConnectionSecretKey: username
-    - name: password
-      fromConnectionSecretKey: password
-    - name: database
-      fromConnectionSecretKey: database
-  
   resources:
-    # Secret for database credentials
-    - name: postgres-secret
+    # Connection Secret - creates secret with claim-specified name
+    # This ensures workloads depend on the claim contract, not CNPG implementation details
+    # The secret copies connection details from CNPG-generated secret
+    - name: connection-secret
       base:
         apiVersion: kubernetes.crossplane.io/v1alpha2
         kind: Object
@@ -33,240 +23,194 @@ spec:
               apiVersion: v1
               kind: Secret
               metadata:
-                namespace: databases
+                name: placeholder-secret
+                namespace: placeholder
               type: Opaque
               stringData:
                 endpoint: ""
                 port: "5432"
-                username: postgres
-                password: changeme-generated-password
-                database: postgres
+                database: "postgres"
+                username: "postgres"
+              # Note: password is NOT in stringData - it's patched from CNPG secret via references
+              # If password were in stringData, it would override the data.password from references
+          references:
+            - patchesFrom:
+                apiVersion: v1
+                kind: Secret
+                namespace: placeholder
+                name: placeholder-app
+                fieldPath: data.password
+              toFieldPath: data.password
           providerConfigRef:
             name: kubernetes-provider
       patches:
+        # Secret name from connectionSecretName field
         - type: FromCompositeFieldPath
-          fromFieldPath: metadata.name
+          fromFieldPath: spec.connectionSecretName
           toFieldPath: spec.forProvider.manifest.metadata.name
+        # Namespace from claim
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        # Reference namespace for CNPG secret
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.references[0].patchesFrom.namespace
+        # Reference the CNPG-generated secret ({claim-name}-app)
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.references[0].patchesFrom.name
           transforms:
             - type: string
               string:
-                fmt: "%s-secret"
-        - type: FromCompositeFieldPath
-          fromFieldPath: metadata.name
+                fmt: "%s-app"
+        # Set endpoint using claim name and namespace
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.claimRef.name
+              - fromFieldPath: spec.claimRef.namespace
+            strategy: string
+            string:
+              fmt: "%s-rw.%s.svc.cluster.local"
           toFieldPath: spec.forProvider.manifest.stringData.endpoint
-          transforms:
-            - type: string
-              string:
-                fmt: "%s.databases.svc.cluster.local"
-        - type: ToCompositeFieldPath
-          fromFieldPath: spec.forProvider.manifest.stringData.endpoint
-          toFieldPath: status.endpoint
-      connectionDetails:
-        - name: endpoint
-          fromFieldPath: spec.forProvider.manifest.stringData.endpoint
-        - name: port
-          fromFieldPath: spec.forProvider.manifest.stringData.port
-        - name: username
-          fromFieldPath: spec.forProvider.manifest.stringData.username
-        - name: password
-          fromFieldPath: spec.forProvider.manifest.stringData.password
-        - name: database
-          fromFieldPath: spec.forProvider.manifest.stringData.database
-    
-    # Service
-    - name: postgres-service
+
+    # CNPG Cluster
+    - name: cnpg-cluster
       base:
         apiVersion: kubernetes.crossplane.io/v1alpha2
         kind: Object
         spec:
           forProvider:
             manifest:
-              apiVersion: v1
-              kind: Service
+              apiVersion: postgresql.cnpg.io/v1
+              kind: Cluster
               metadata:
-                namespace: databases
+                name: placeholder
+                namespace: placeholder
               spec:
-                type: ClusterIP
-                ports:
-                  - port: 5432
-                    targetPort: 5432
-                    protocol: TCP
-                    name: postgres
+                instances: 1
+                imageName: ghcr.io/cloudnative-pg/postgresql:16
+                storage:
+                  size: 20Gi
+                  storageClass: local-path
+                bootstrap:
+                  initdb:
+                    database: postgres
+                    owner: postgres
+                    # Use deterministic secret name from claim
+                    secretName: placeholder-secret
+                # Node affinity to schedule on worker nodes with database label
+                affinity:
+                  nodeAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      nodeSelectorTerms:
+                        - matchExpressions:
+                            - key: workload.bizmatters.dev/databases
+                              operator: In
+                              values:
+                                - "true"
+                resources:
+                  requests:
+                    memory: "512Mi"
+                    cpu: "250m"
+                  limits:
+                    memory: "2Gi"
+                    cpu: "1000m"
           providerConfigRef:
             name: kubernetes-provider
       patches:
+        # Namespace from claim
         - type: FromCompositeFieldPath
-          fromFieldPath: metadata.name
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        
+        # Cluster name - use claim name for predictable naming
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
           toFieldPath: spec.forProvider.manifest.metadata.name
+        
+        # Secret name - use claim name (CNPG will create {name}-app)
         - type: FromCompositeFieldPath
-          fromFieldPath: metadata.name
-          toFieldPath: spec.forProvider.manifest.spec.selector.app
-    
-    # StatefulSet
-    - name: postgres-statefulset
-      base:
-        apiVersion: kubernetes.crossplane.io/v1alpha2
-        kind: Object
-        spec:
-          forProvider:
-            manifest:
-              apiVersion: apps/v1
-              kind: StatefulSet
-              metadata:
-                namespace: databases
-              spec:
-                replicas: 1
-                selector:
-                  matchLabels:
-                    app: postgres
-                template:
-                  metadata:
-                    labels:
-                      app: postgres
-                  spec:
-                    affinity:
-                      nodeAffinity:
-                        requiredDuringSchedulingIgnoredDuringExecution:
-                          nodeSelectorTerms:
-                            - matchExpressions:
-                                - key: node-role
-                                  operator: In
-                                  values:
-                                    - database
-                    tolerations:
-                      - key: database
-                        operator: Equal
-                        value: "true"
-                        effect: NoSchedule
-                    containers:
-                      - name: postgres
-                        image: postgres:16-alpine
-                        ports:
-                          - containerPort: 5432
-                            name: postgres
-                        env:
-                          - name: POSTGRES_DB
-                            valueFrom:
-                              secretKeyRef:
-                                name: postgres-secret
-                                key: POSTGRES_DB
-                          - name: POSTGRES_USER
-                            valueFrom:
-                              secretKeyRef:
-                                name: postgres-secret
-                                key: POSTGRES_USER
-                          - name: POSTGRES_PASSWORD
-                            valueFrom:
-                              secretKeyRef:
-                                name: postgres-secret
-                                key: POSTGRES_PASSWORD
-                          - name: PGDATA
-                            value: /var/lib/postgresql/data/pgdata
-                        volumeMounts:
-                          - name: postgres-data
-                            mountPath: /var/lib/postgresql/data
-                        resources:
-                          requests:
-                            memory: "256Mi"
-                            cpu: "250m"
-                          limits:
-                            memory: "1Gi"
-                            cpu: "1000m"
-                volumeClaimTemplates:
-                  - metadata:
-                      name: postgres-data
-                    spec:
-                      accessModes: ["ReadWriteOnce"]
-                      storageClassName: local-path
-                      resources:
-                        requests:
-                          storage: 20Gi
-          providerConfigRef:
-            name: kubernetes-provider
-      patches:
-        - type: FromCompositeFieldPath
-          fromFieldPath: metadata.name
-          toFieldPath: spec.forProvider.manifest.metadata.name
-        - type: FromCompositeFieldPath
-          fromFieldPath: metadata.name
-          toFieldPath: spec.forProvider.manifest.spec.serviceName
-        - type: FromCompositeFieldPath
-          fromFieldPath: metadata.name
-          toFieldPath: spec.forProvider.manifest.spec.selector.matchLabels.app
-        - type: FromCompositeFieldPath
-          fromFieldPath: metadata.name
-          toFieldPath: spec.forProvider.manifest.spec.template.metadata.labels.app
-        - type: FromCompositeFieldPath
-          fromFieldPath: metadata.name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.name
-          transforms:
-            - type: string
-              string:
-                fmt: "%s-secret"
-        - type: FromCompositeFieldPath
-          fromFieldPath: metadata.name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[1].valueFrom.secretKeyRef.name
-          transforms:
-            - type: string
-              string:
-                fmt: "%s-secret"
-        - type: FromCompositeFieldPath
-          fromFieldPath: metadata.name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[2].valueFrom.secretKeyRef.name
-          transforms:
-            - type: string
-              string:
-                fmt: "%s-secret"
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.bootstrap.initdb.secretName
+        
         # Size-based resource patches
         - type: FromCompositeFieldPath
           fromFieldPath: spec.size
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.requests.memory
+          toFieldPath: spec.forProvider.manifest.spec.resources.requests.memory
           transforms:
             - type: map
               map:
                 small: "256Mi"
                 medium: "512Mi"
                 large: "1Gi"
+        
         - type: FromCompositeFieldPath
           fromFieldPath: spec.size
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.limits.memory
+          toFieldPath: spec.forProvider.manifest.spec.resources.limits.memory
           transforms:
             - type: map
               map:
                 small: "1Gi"
                 medium: "2Gi"
                 large: "4Gi"
+        
         - type: FromCompositeFieldPath
           fromFieldPath: spec.size
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.requests.cpu
+          toFieldPath: spec.forProvider.manifest.spec.resources.requests.cpu
           transforms:
             - type: map
               map:
                 small: "250m"
                 medium: "500m"
                 large: "1000m"
+        
         - type: FromCompositeFieldPath
           fromFieldPath: spec.size
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.limits.cpu
+          toFieldPath: spec.forProvider.manifest.spec.resources.limits.cpu
           transforms:
             - type: map
               map:
                 small: "1000m"
                 medium: "2000m"
                 large: "4000m"
+        
         # Storage size patch
         - type: FromCompositeFieldPath
           fromFieldPath: spec.storageGB
-          toFieldPath: spec.forProvider.manifest.spec.volumeClaimTemplates[0].spec.resources.requests.storage
+          toFieldPath: spec.forProvider.manifest.spec.storage.size
           transforms:
             - type: string
               string:
                 fmt: "%dGi"
+        
         # Version patch
         - type: FromCompositeFieldPath
           fromFieldPath: spec.version
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].image
+          toFieldPath: spec.forProvider.manifest.spec.imageName
           transforms:
             - type: string
               string:
-                fmt: "postgres:%s-alpine"
+                fmt: "ghcr.io/cloudnative-pg/postgresql:%s"
+      
+      # Connection details - extract from CNPG-generated secret
+      connectionDetails:
+        - name: username
+          type: FromConnectionSecretKey
+          fromConnectionSecretKey: username
+        - name: password
+          type: FromConnectionSecretKey
+          fromConnectionSecretKey: password
+        - name: database
+          type: FromConnectionSecretKey
+          fromConnectionSecretKey: dbname
+        - name: host
+          type: FromConnectionSecretKey
+          fromConnectionSecretKey: host
+        - name: port
+          type: FromConnectionSecretKey
+          fromConnectionSecretKey: port
+        - name: endpoint
+          type: FromValue
+          value: ""  # Will be patched from status

@@ -45,8 +45,12 @@ spec:
                   default: 20
                   minimum: 10
                   maximum: 1000
+                connectionSecretName:
+                  type: string
+                  description: "Name of the connection secret to create"
               required:
                 - size
+                - connectionSecretName
             status:
               type: object
               properties:

@@ -7,6 +7,16 @@ spec:
   type: Declarative
   declarative:
     modelConfig: default-model-config
+    deployment:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: workload.bizmatters.dev/intelligence
+                    operator: In
+                    values:
+                      - "true"
     
     tools:
       - type: McpServer

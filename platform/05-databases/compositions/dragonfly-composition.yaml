@@ -9,14 +9,6 @@ spec:
     apiVersion: database.bizmatters.io/v1alpha1
     kind: XDragonflyInstance
   
-  publishConnectionDetailsTo:
-    - name: endpoint
-      fromConnectionSecretKey: endpoint
-    - name: port
-      fromConnectionSecretKey: port
-    - name: password
-      fromConnectionSecretKey: password
-  
   resources:
     # Secret for cache credentials
     - name: dragonfly-secret
@@ -29,7 +21,7 @@ spec:
               apiVersion: v1
               kind: Secret
               metadata:
-                namespace: databases
+                namespace: placeholder
               type: Opaque
               stringData:
                 endpoint: ""
@@ -39,29 +31,24 @@ spec:
             name: kubernetes-provider
       patches:
         - type: FromCompositeFieldPath
-          fromFieldPath: metadata.name
-          toFieldPath: spec.forProvider.manifest.metadata.name
-          transforms:
-            - type: string
-              string:
-                fmt: "%s-secret"
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        # Use connectionSecretName from claim for predictable secret name
         - type: FromCompositeFieldPath
-          fromFieldPath: metadata.name
+          fromFieldPath: spec.connectionSecretName
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.claimRef.name
+              - fromFieldPath: spec.claimRef.namespace
+            strategy: string
+            string:
+              fmt: "%s.%s.svc.cluster.local"
           toFieldPath: spec.forProvider.manifest.stringData.endpoint
-          transforms:
-            - type: string
-              string:
-                fmt: "%s.databases.svc.cluster.local"
         - type: ToCompositeFieldPath
           fromFieldPath: spec.forProvider.manifest.stringData.endpoint
           toFieldPath: status.endpoint
-      connectionDetails:
-        - name: endpoint
-          fromFieldPath: spec.forProvider.manifest.stringData.endpoint
-        - name: port
-          fromFieldPath: spec.forProvider.manifest.stringData.port
-        - name: password
-          fromFieldPath: spec.forProvider.manifest.stringData.password
     
     # Service
     - name: dragonfly-service
@@ -74,7 +61,7 @@ spec:
               apiVersion: v1
               kind: Service
               metadata:
-                namespace: databases
+                namespace: placeholder
               spec:
                 type: ClusterIP
                 ports:
@@ -85,6 +72,9 @@ spec:
           providerConfigRef:
             name: kubernetes-provider
       patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
         - type: FromCompositeFieldPath
           fromFieldPath: metadata.name
           toFieldPath: spec.forProvider.manifest.metadata.name
@@ -103,7 +93,7 @@ spec:
               apiVersion: apps/v1
               kind: StatefulSet
               metadata:
-                namespace: databases
+                namespace: placeholder
               spec:
                 replicas: 1
                 selector:
@@ -119,15 +109,10 @@ spec:
                         requiredDuringSchedulingIgnoredDuringExecution:
                           nodeSelectorTerms:
                             - matchExpressions:
-                                - key: node-role
+                                - key: workload-type
                                   operator: In
                                   values:
-                                    - database
-                    tolerations:
-                      - key: database
-                        operator: Equal
-                        value: "true"
-                        effect: NoSchedule
+                                    - stateful
                     containers:
                       - name: dragonfly
                         image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
@@ -141,8 +126,8 @@ spec:
                           - name: DRAGONFLY_PASSWORD
                             valueFrom:
                               secretKeyRef:
-                                name: dragonfly-secret
-                                key: DRAGONFLY_PASSWORD
+                                name: placeholder-secret
+                                key: password
                         volumeMounts:
                           - name: dragonfly-data
                             mountPath: /data
@@ -166,6 +151,9 @@ spec:
             name: kubernetes-provider
       patches:
         - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        - type: FromCompositeFieldPath
           fromFieldPath: metadata.name
           toFieldPath: spec.forProvider.manifest.metadata.name
         - type: FromCompositeFieldPath
@@ -177,13 +165,10 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: metadata.name
           toFieldPath: spec.forProvider.manifest.spec.template.metadata.labels.app
+        # Use connectionSecretName from claim for secret reference
         - type: FromCompositeFieldPath
-          fromFieldPath: metadata.name
+          fromFieldPath: spec.connectionSecretName
           toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.name
-          transforms:
-            - type: string
-              string:
-                fmt: "%s-secret"
         # Size-based resource patches
         - type: FromCompositeFieldPath
           fromFieldPath: spec.size

@@ -39,8 +39,12 @@ spec:
                   default: 10
                   minimum: 5
                   maximum: 500
+                connectionSecretName:
+                  type: string
+                  description: "Name of the connection secret to create (used by composition to create predictable secret name)"
               required:
                 - size
+                - connectionSecretName
             status:
               type: object
               properties:
