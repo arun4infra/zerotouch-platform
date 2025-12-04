@@ -42,6 +42,23 @@ spec:
               memory: 1Gi
         natsBox:
           enabled: true
+        statefulSet:
+          patch:
+            - op: add
+              path: /spec/template/spec/tolerations
+              value:
+                - key: node-role.kubernetes.io/control-plane
+                  operator: Exists
+                  effect: NoSchedule
+            - op: add
+              path: /spec/template/spec/affinity
+              value:
+                nodeAffinity:
+                  requiredDuringSchedulingIgnoredDuringExecution:
+                    nodeSelectorTerms:
+                      - matchExpressions:
+                          - key: node-role.kubernetes.io/control-plane
+                            operator: Exists
   destination:
     server: https://kubernetes.default.svc
     namespace: nats
@@ -51,10 +68,16 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - ServerSideApply=true
     retry:
       limit: 5
       backoff:
         duration: 5s
         factor: 2
         maxDuration: 3m
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      name: nats
+      jqPathExpressions:
+        - .spec.volumeClaimTemplates[]?.metadata.creationTimestamp
+        - .spec.volumeClaimTemplates[]?.status
