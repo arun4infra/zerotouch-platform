@@ -352,35 +352,39 @@ fi
 echo -e "${YELLOW}[4/5] Injecting ESO Bootstrap Secret...${NC}"
 echo "────────────────────────────────────────────────────────────────"
 
-# Check if AWS credentials are provided via environment variables
-if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
-    echo -e "${BLUE}Using AWS credentials from environment variables${NC}"
-    ./05-inject-secrets.sh "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY"
+# Inject AWS credentials from AWS CLI configuration
+echo -e "${BLUE}Fetching AWS credentials from AWS CLI configuration...${NC}"
+if ./05-inject-secrets.sh; then
+    echo -e "${GREEN}✓ AWS credentials injected successfully${NC}"
+    
+    # Only wait for ESO if credentials were successfully injected
+    if kubectl get secret aws-access-token -n external-secrets &>/dev/null; then
     
     # Wait for ESO to sync
     echo -e "${BLUE}⏳ Waiting for ESO to sync secrets (timeout: 2 minutes)...${NC}"
-    TIMEOUT=120
-    ELAPSED=0
-    while [ $ELAPSED -lt $TIMEOUT ]; do
-        STORE_STATUS=$(kubectl get clustersecretstore aws-parameter-store -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
+        # Wait for ESO to sync
+        echo -e "${BLUE}⏳ Waiting for ESO to sync secrets (timeout: 2 minutes)...${NC}"
+        TIMEOUT=120
+        ELAPSED=0
+        while [ $ELAPSED -lt $TIMEOUT ]; do
+            STORE_STATUS=$(kubectl get clustersecretstore aws-parameter-store -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
+            
+            if [ "$STORE_STATUS" = "True" ]; then
+                echo -e "${GREEN}✓ ESO credentials configured and working${NC}"
+                break
+            fi
+            
+            sleep 10
+            ELAPSED=$((ELAPSED + 10))
+        done
         
-        if [ "$STORE_STATUS" = "True" ]; then
-            echo -e "${GREEN}✓ ESO credentials configured and working${NC}"
-            break
+        if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo -e "${YELLOW}⚠️  ESO not ready yet - secrets may sync later${NC}"
         fi
-        
-        sleep 10
-        ELAPSED=$((ELAPSED + 10))
-    done
-    
-    if [ $ELAPSED -ge $TIMEOUT ]; then
-        echo -e "${YELLOW}⚠️  ESO not ready yet - secrets may sync later${NC}"
     fi
 else
-    echo -e "${YELLOW}⚠️  AWS credentials not provided via environment variables${NC}"
-    echo -e "${BLUE}ℹ  You need to manually inject AWS credentials for External Secrets Operator${NC}"
-    echo -e "${BLUE}   Run: ./scripts/bootstrap/05-inject-secrets.sh <AWS_ACCESS_KEY_ID> <AWS_SECRET_ACCESS_KEY>${NC}"
-    echo ""
+    echo -e "${YELLOW}⚠️  Failed to inject AWS credentials${NC}"
+    echo -e "${BLUE}ℹ  You can inject manually: ./scripts/bootstrap/05-inject-secrets.sh${NC}"
     echo -e "${YELLOW}⚠️  IMPORTANT: ESO needs AWS credentials to sync secrets from Parameter Store${NC}"
     echo ""
 fi
