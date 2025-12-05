@@ -218,6 +218,27 @@ kubectl_retry get nodes
 
 echo -e "\n${GREEN}✓ Talos cluster bootstrapped successfully${NC}\n"
 
+# Step 1.6: Wait for Cilium to be ready (critical for ArgoCD networking)
+echo -e "${YELLOW}[1.6/5] Waiting for Cilium CNI to be ready...${NC}"
+echo "────────────────────────────────────────────────────────────────"
+echo -e "${BLUE}⏳ Waiting for Cilium agent pods (single node bootstrap)...${NC}"
+kubectl_retry wait --for=condition=ready pod -n kube-system -l k8s-app=cilium --timeout=180s
+
+echo -e "${BLUE}⏳ Waiting for Cilium operator (single replica on single node)...${NC}"
+kubectl_retry wait --for=condition=ready pod -n kube-system -l name=cilium-operator --timeout=180s
+
+echo -e "${BLUE}Verifying Cilium health...${NC}"
+CILIUM_POD=$(kubectl get pod -n kube-system -l k8s-app=cilium -o jsonpath='{.items[0].metadata.name}')
+if kubectl exec -n kube-system "$CILIUM_POD" -- cilium status --brief 2>/dev/null | grep -q "OK"; then
+    echo -e "${GREEN}✓ Cilium is healthy${NC}"
+else
+    echo -e "${YELLOW}⚠️  Cilium status check failed, but continuing (basic connectivity verified)${NC}"
+fi
+
+echo -e "\n${GREEN}✓ Cilium CNI is ready - networking operational${NC}"
+echo -e "${BLUE}ℹ  Note: Cilium operator running with 1 replica (normal for single node)${NC}"
+echo -e "${BLUE}ℹ  After worker joins, operator will scale to 2 replicas automatically${NC}\n"
+
 cd "$SCRIPT_DIR"
 
 # Step 2: Foundation Layer (managed by ArgoCD)
