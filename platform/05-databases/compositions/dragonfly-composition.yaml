@@ -2,6 +2,8 @@ apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
   name: dragonfly-instance
+  annotations:
+    argocd.argoproj.io/sync-options: ServerSideApply=true
   labels:
     crossplane.io/xrd: xdragonflyinstances.database.bizmatters.io
 spec:

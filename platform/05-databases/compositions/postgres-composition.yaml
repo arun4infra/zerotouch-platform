@@ -2,6 +2,8 @@ apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
   name: postgres-instance
+  annotations:
+    argocd.argoproj.io/sync-options: ServerSideApply=true
   labels:
     crossplane.io/xrd: xpostgresinstances.database.bizmatters.io
 spec:
