@@ -5,8 +5,8 @@ WORKDIR /app
 # Install uv for package management
 RUN pip install --no-cache-dir uv
 
-# Install the mcp-server-qdrant package
-RUN uv pip install --system --no-cache-dir mcp-server-qdrant
+# Install the mcp-server-qdrant package with pinned fastmcp version to avoid ctx bug
+RUN uv pip install --system --no-cache-dir "mcp-server-qdrant==0.6.2" "fastmcp<2.0.0"
 
 # Expose the default port for SSE transport
 EXPOSE 8000
