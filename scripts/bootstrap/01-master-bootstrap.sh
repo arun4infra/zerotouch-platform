@@ -143,7 +143,7 @@ echo "────────────────────────�
 cd "$SCRIPT_DIR"
 
 echo -e "${BLUE}Embedding Cilium manifest in control plane Talos config...${NC}"
-./embed-cilium.sh
+"$SCRIPT_DIR/embed-cilium.sh"
 
 echo -e "\n${GREEN}✓ Cilium CNI prepared for bootstrap${NC}\n"
 
@@ -151,7 +151,7 @@ echo -e "\n${GREEN}✓ Cilium CNI prepared for bootstrap${NC}\n"
 echo -e "${YELLOW}[1/5] Installing Talos OS...${NC}"
 echo "────────────────────────────────────────────────────────────────"
 cd "$SCRIPT_DIR"
-./02-install-talos-rescue.sh --server-ip "$SERVER_IP" --user root --password "$ROOT_PASSWORD" --yes
+"$SCRIPT_DIR/02-install-talos-rescue.sh" --server-ip "$SERVER_IP" --user root --password "$ROOT_PASSWORD" --yes
 
 echo -e "\n${GREEN}✓ Talos installation complete${NC}\n"
 
@@ -218,13 +218,83 @@ kubectl_retry get nodes
 
 echo -e "\n${GREEN}✓ Talos cluster bootstrapped successfully${NC}\n"
 
-# Step 1.6: Wait for Cilium to be ready (critical for ArgoCD networking)
-echo -e "${YELLOW}[1.6/5] Waiting for Cilium CNI to be ready...${NC}"
+# Step 1.6: Install Worker Nodes (BEFORE Cilium wait for better HA)
+if [ -n "$WORKER_NODES" ]; then
+    echo -e "${YELLOW}[1.6/5] Installing Worker Nodes...${NC}"
+    echo "────────────────────────────────────────────────────────────────"
+    
+    # Parse worker nodes (format: name:ip,name:ip)
+    IFS=',' read -ra WORKERS <<< "$WORKER_NODES"
+    WORKER_COUNT=${#WORKERS[@]}
+    WORKER_NUM=1
+    
+    for worker in "${WORKERS[@]}"; do
+        IFS=':' read -r WORKER_NAME WORKER_IP <<< "$worker"
+        
+        echo -e "${BLUE}Installing worker node $WORKER_NUM/$WORKER_COUNT: $WORKER_NAME ($WORKER_IP)${NC}"
+        
+        # Install Talos on worker (use full path since we may have cd'd elsewhere)
+        "$SCRIPT_DIR/02-install-talos-rescue.sh" \
+            --server-ip "$WORKER_IP" \
+            --user root \
+            --password "$WORKER_PASSWORD" \
+            --yes
+        
+        echo -e "${BLUE}⏳ Waiting 3 minutes for worker to boot...${NC}"
+        sleep 180
+        
+        # Apply worker configuration
+        cd "$SCRIPT_DIR/../../bootstrap/talos"
+        echo -e "${BLUE}Applying worker configuration for $WORKER_NAME (inherits CNI from control plane)...${NC}"
+
+        if ! talosctl apply-config --insecure \
+            --nodes "$WORKER_IP" \
+            --endpoints "$WORKER_IP" \
+            --file "nodes/$WORKER_NAME/config.yaml"; then
+            echo -e "${RED}Failed to apply config. Waiting 30s and retrying...${NC}"
+            sleep 30
+            talosctl apply-config --insecure \
+                --nodes "$WORKER_IP" \
+                --endpoints "$WORKER_IP" \
+                --file "nodes/$WORKER_NAME/config.yaml"
+        fi
+        
+        echo -e "${BLUE}Waiting 120 seconds for worker to join cluster...${NC}"
+        sleep 120
+
+        # Verify node joined
+        echo -e "${BLUE}Verifying worker node joined cluster (with retries)...${NC}"
+        kubectl_retry get nodes
+        
+        cd "$SCRIPT_DIR"
+        
+        echo -e "${GREEN}✓ Worker node $WORKER_NAME installed${NC}\n"
+        
+        cat >> "$CREDENTIALS_FILE" << EOF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WORKER NODE: $WORKER_NAME
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Node IP: $WORKER_IP
+Config: bootstrap/talos/nodes/$WORKER_NAME/config.yaml
+
+EOF
+        
+        WORKER_NUM=$((WORKER_NUM + 1))
+    done
+    
+    echo -e "${GREEN}✓ All worker nodes installed${NC}\n"
+else
+    echo -e "${BLUE}ℹ  No worker nodes specified - single node cluster${NC}\n"
+fi
+
+# Step 1.7: Wait for Cilium to be ready (critical for ArgoCD networking)
+echo -e "${YELLOW}[1.7/5] Waiting for Cilium CNI to be ready...${NC}"
 echo "────────────────────────────────────────────────────────────────"
-echo -e "${BLUE}⏳ Waiting for Cilium agent pods (single node bootstrap)...${NC}"
+echo -e "${BLUE}⏳ Waiting for Cilium agent pods (multi-node cluster)...${NC}"
 kubectl_retry wait --for=condition=ready pod -n kube-system -l k8s-app=cilium --timeout=180s
 
-echo -e "${BLUE}⏳ Waiting for Cilium operator (single replica on single node)...${NC}"
+echo -e "${BLUE}⏳ Waiting for Cilium operator (2 replicas in HA mode)...${NC}"
 kubectl_retry wait --for=condition=ready pod -n kube-system -l name=cilium-operator --timeout=180s
 
 echo -e "${BLUE}Verifying Cilium health...${NC}"
@@ -236,13 +306,31 @@ else
 fi
 
 echo -e "\n${GREEN}✓ Cilium CNI is ready - networking operational${NC}"
-echo -e "${BLUE}ℹ  Note: Cilium operator running with 1 replica (normal for single node)${NC}"
-echo -e "${BLUE}ℹ  After worker joins, operator will scale to 2 replicas automatically${NC}\n"
+echo -e "${BLUE}ℹ  Note: Cilium operator running with 2 replicas (HA mode with worker node)${NC}\n"
 
 cd "$SCRIPT_DIR"
 
-# Step 2: Foundation Layer (managed by ArgoCD)
-echo -e "${YELLOW}[2/5] Foundation Layer (will be deployed by ArgoCD)...${NC}"
+# Step 2: Pre-create namespaces and inject secrets (BEFORE ArgoCD)
+echo -e "${YELLOW}[2/5] Pre-creating namespaces and injecting secrets...${NC}"
+echo "────────────────────────────────────────────────────────────────"
+echo -e "${BLUE}ℹ  Creating namespaces for ESO and injecting AWS credentials BEFORE ArgoCD${NC}"
+echo -e "${BLUE}   This ensures ESO can sync secrets immediately when deployed${NC}"
+
+# Create external-secrets namespace
+kubectl_retry create namespace external-secrets --dry-run=client -o yaml | kubectl_retry apply -f -
+echo -e "${GREEN}✓ external-secrets namespace ready${NC}"
+
+# Inject AWS credentials from AWS CLI configuration
+echo -e "${BLUE}Fetching AWS credentials from AWS CLI configuration...${NC}"
+if "$SCRIPT_DIR/05-inject-secrets.sh"; then
+    echo -e "${GREEN}✓ AWS credentials injected successfully${NC}"
+else
+    echo -e "${YELLOW}⚠️  Failed to inject AWS credentials${NC}"
+    echo -e "${BLUE}ℹ  You can inject manually later: ./scripts/bootstrap/05-inject-secrets.sh${NC}"
+fi
+
+# Step 2.5: Foundation Layer info
+echo -e "${YELLOW}[2.5/5] Foundation Layer (will be deployed by ArgoCD)...${NC}"
 echo "────────────────────────────────────────────────────────────────"
 echo -e "${BLUE}ℹ  Foundation components (Crossplane, KEDA, Kagent) will be deployed by ArgoCD${NC}"
 echo -e "${BLUE}   after bootstrap completes via platform-bootstrap Application${NC}"
@@ -269,7 +357,7 @@ EOF
 # Step 3: Bootstrap ArgoCD
 echo -e "${YELLOW}[3/5] Bootstrapping ArgoCD...${NC}"
 echo "────────────────────────────────────────────────────────────────"
-./03-install-argocd.sh
+"$SCRIPT_DIR/03-install-argocd.sh"
 
 echo -e "\n${GREEN}✓ ArgoCD installed${NC}\n"
 
@@ -340,117 +428,33 @@ Access via CLI:
 
 EOF
 
-# Step 3.5: Install Worker Nodes (if specified)
-if [ -n "$WORKER_NODES" ]; then
-    echo -e "${YELLOW}[3.5/5] Installing Worker Nodes...${NC}"
-    echo "────────────────────────────────────────────────────────────────"
-    
-    # Parse worker nodes (format: name:ip,name:ip)
-    IFS=',' read -ra WORKERS <<< "$WORKER_NODES"
-    WORKER_COUNT=${#WORKERS[@]}
-    WORKER_NUM=1
-    
-    for worker in "${WORKERS[@]}"; do
-        IFS=':' read -r WORKER_NAME WORKER_IP <<< "$worker"
-        
-        echo -e "${BLUE}Installing worker node $WORKER_NUM/$WORKER_COUNT: $WORKER_NAME ($WORKER_IP)${NC}"
-        
-        # Install Talos on worker
-        ./02-install-talos-rescue.sh \
-            --server-ip "$WORKER_IP" \
-            --user root \
-            --password "$WORKER_PASSWORD" \
-            --yes
-        
-        echo -e "${BLUE}⏳ Waiting 3 minutes for worker to boot...${NC}"
-        sleep 180
-        
-        # Apply worker configuration
-        cd "$SCRIPT_DIR/../../bootstrap/talos"
-        echo -e "${BLUE}Applying worker configuration for $WORKER_NAME (with CNI=none)...${NC}"
-
-        if ! talosctl apply-config --insecure \
-            --nodes "$WORKER_IP" \
-            --endpoints "$WORKER_IP" \
-            --file "nodes/$WORKER_NAME/config.yaml" \
-            --config-patch '[{"op": "add", "path": "/machine/network/cni", "value": {"name": "none"}}]'; then
-            echo -e "${RED}Failed to apply config. Waiting 30s and retrying...${NC}"
-            sleep 30
-            talosctl apply-config --insecure \
-                --nodes "$WORKER_IP" \
-                --endpoints "$WORKER_IP" \
-                --file "nodes/$WORKER_NAME/config.yaml" \
-                --config-patch '[{"op": "add", "path": "/machine/network/cni", "value": {"name": "none"}}]'
-        fi
-        
-        echo -e "${BLUE}Waiting 120 seconds for worker to join cluster...${NC}"
-        sleep 120
-
-        # Verify node joined
-        echo -e "${BLUE}Verifying worker node joined cluster (with retries)...${NC}"
-        kubectl_retry get nodes
-        
-        cd "$SCRIPT_DIR"
-        
-        echo -e "${GREEN}✓ Worker node $WORKER_NAME installed${NC}\n"
-        
-        cat >> "$CREDENTIALS_FILE" << EOF
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-WORKER NODE: $WORKER_NAME
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Node IP: $WORKER_IP
-Config: bootstrap/talos/nodes/$WORKER_NAME/config.yaml
-
-EOF
-        
-        WORKER_NUM=$((WORKER_NUM + 1))
-    done
-    
-    echo -e "${GREEN}✓ All worker nodes installed${NC}\n"
-else
-    echo -e "${BLUE}ℹ  No worker nodes specified - single node cluster${NC}\n"
-fi
-
-# Step 4: Inject ESO Bootstrap Secret
-echo -e "${YELLOW}[4/5] Injecting ESO Bootstrap Secret...${NC}"
+# Step 4: Verify ESO and Inject SSM Parameters
+echo -e "${YELLOW}[4/5] Verifying ESO and Injecting SSM Parameters...${NC}"
 echo "────────────────────────────────────────────────────────────────"
 
-# Inject AWS credentials from AWS CLI configuration
-echo -e "${BLUE}Fetching AWS credentials from AWS CLI configuration...${NC}"
-if ./05-inject-secrets.sh; then
-    echo -e "${GREEN}✓ AWS credentials injected successfully${NC}"
-    
-    # Only wait for ESO if credentials were successfully injected
-    if kubectl_retry get secret aws-access-token -n external-secrets &>/dev/null; then
-
-    # Wait for ESO to sync
+# Wait for ESO to sync (credentials were injected in Step 2)
+if kubectl_retry get secret aws-access-token -n external-secrets &>/dev/null; then
     echo -e "${BLUE}⏳ Waiting for ESO to sync secrets (timeout: 2 minutes)...${NC}"
-        # Wait for ESO to sync
-        echo -e "${BLUE}⏳ Waiting for ESO to sync secrets (timeout: 2 minutes)...${NC}"
-        TIMEOUT=120
-        ELAPSED=0
-        while [ $ELAPSED -lt $TIMEOUT ]; do
-            STORE_STATUS=$(kubectl_retry get clustersecretstore aws-parameter-store -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
-            
-            if [ "$STORE_STATUS" = "True" ]; then
-                echo -e "${GREEN}✓ ESO credentials configured and working${NC}"
-                break
-            fi
-            
-            sleep 10
-            ELAPSED=$((ELAPSED + 10))
-        done
+    TIMEOUT=120
+    ELAPSED=0
+    while [ $ELAPSED -lt $TIMEOUT ]; do
+        STORE_STATUS=$(kubectl_retry get clustersecretstore aws-parameter-store -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
         
-        if [ $ELAPSED -ge $TIMEOUT ]; then
-            echo -e "${YELLOW}⚠️  ESO not ready yet - secrets may sync later${NC}"
+        if [ "$STORE_STATUS" = "True" ]; then
+            echo -e "${GREEN}✓ ESO credentials configured and working${NC}"
+            break
         fi
+        
+        sleep 10
+        ELAPSED=$((ELAPSED + 10))
+    done
+    
+    if [ $ELAPSED -ge $TIMEOUT ]; then
+        echo -e "${YELLOW}⚠️  ESO not ready yet - secrets may sync later${NC}"
     fi
 else
-    echo -e "${YELLOW}⚠️  Failed to inject AWS credentials${NC}"
+    echo -e "${YELLOW}⚠️  AWS credentials not found - ESO won't be able to sync secrets${NC}"
     echo -e "${BLUE}ℹ  You can inject manually: ./scripts/bootstrap/05-inject-secrets.sh${NC}"
-    echo -e "${YELLOW}⚠️  IMPORTANT: ESO needs AWS credentials to sync secrets from Parameter Store${NC}"
-    echo ""
 fi
 
 cat >> "$CREDENTIALS_FILE" << EOF
@@ -474,14 +478,14 @@ EOF
 
 cd "$SCRIPT_DIR"
 
-# Step 4.6: Inject SSM Parameters
+# Step 4.5: Inject SSM Parameters
 echo -e "${YELLOW}[4.6/5] Injecting SSM Parameters...${NC}"
 echo "────────────────────────────────────────────────────────────────"
 
 # Check if .env.ssm file exists
-if [ -f "../.env.ssm" ]; then
+if [ -f "$SCRIPT_DIR/../../.env.ssm" ]; then
     echo -e "${BLUE}Found .env.ssm file, injecting parameters to AWS SSM...${NC}"
-    ./06-inject-ssm-parameters.sh
+    "$SCRIPT_DIR/06-inject-ssm-parameters.sh"
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ SSM parameters injected successfully${NC}"
@@ -553,7 +557,7 @@ if [ -n "$GITHUB_USERNAME" ] && [ -n "$GITHUB_TOKEN" ]; then
             while IFS= read -r repo_url; do
                 if [ -n "$repo_url" ]; then
                     echo -e "${BLUE}Adding repository: $repo_url${NC}"
-                    ./07-add-private-repo.sh "$repo_url" "$GITHUB_USERNAME" "$GITHUB_TOKEN"
+                    "$SCRIPT_DIR/07-add-private-repo.sh" "$repo_url" "$GITHUB_USERNAME" "$GITHUB_TOKEN"
                 fi
             done <<< "$PRIVATE_REPOS"
         else

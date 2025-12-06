@@ -9,8 +9,8 @@ SCRIPTS_DIR := scripts/bootstrap
 help:  ## Show this help
 	@echo "BizMatters Infrastructure - Bootstrap Automation"
 	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $1, $2}'
 
 bootstrap:  ## Full cluster bootstrap (ENV=dev|staging|prod)
 	@echo "╔══════════════════════════════════════════════════════════════╗"
@@ -22,15 +22,16 @@ bootstrap:  ## Full cluster bootstrap (ENV=dev|staging|prod)
 		echo "Copy environments/$(ENV)/talos-values.yaml.example and fill in values"; \
 		exit 1; \
 	fi
-	@CP_IP=$$(grep -A 3 "^controlplane:" environments/$(ENV)/talos-values.yaml | grep "ip:" | sed 's/.*: *"\(.*\)".*/\1/'); \
-	CP_PASS=$$(grep -A 3 "^controlplane:" environments/$(ENV)/talos-values.yaml | grep "rescue_password:" | sed 's/.*: *"\(.*\)".*/\1/'); \
-	WORKER_IP=$$(grep -A 10 "^workers:" environments/$(ENV)/talos-values.yaml | grep "ip:" | head -1 | sed 's/.*: *"\(.*\)".*/\1/'); \
-	WORKER_PASS=$$(grep -A 10 "^workers:" environments/$(ENV)/talos-values.yaml | grep "rescue_password:" | head -1 | sed 's/.*: *"\(.*\)".*/\1/'); \
-	WORKER_NAME=$$(grep -A 10 "^workers:" environments/$(ENV)/talos-values.yaml | grep "name:" | head -1 | sed 's/.*name: *\(.*\)/\1/'); \
+	@VALUES=$$($(SCRIPTS_DIR)/parse-values.sh $(ENV)); \
+	CP_IP=$$(echo "$$VALUES" | sed -n '1p'); \
+	CP_PASS=$$(echo "$$VALUES" | sed -n '2p'); \
+	WORKER_NAME=$$(echo "$$VALUES" | sed -n '3p'); \
+	WORKER_IP=$$(echo "$$VALUES" | sed -n '4p'); \
+	WORKER_PASS=$$(echo "$$VALUES" | sed -n '5p'); \
 	$(SCRIPTS_DIR)/01-master-bootstrap.sh \
-		$$CP_IP $$CP_PASS \
-		--worker-nodes $$WORKER_NAME:$$WORKER_IP \
-		--worker-password $$WORKER_PASS
+		"$$CP_IP" "$$CP_PASS" \
+		--worker-nodes "$$WORKER_NAME:$$WORKER_IP" \
+		--worker-password "$$WORKER_PASS"
 
 embed-cilium:  ## Embed Cilium manifest in control plane config
 	@echo "Embedding Cilium CNI in Talos control plane config..."

@@ -18,6 +18,13 @@ fi
 # Check if control plane config exists
 if [ ! -f "$CP_CONFIG" ]; then
     echo "ERROR: Control plane config not found at: $CP_CONFIG"
+    echo ""
+    echo "The Talos control plane config must exist before embedding Cilium."
+    echo "This config should be checked into git at: bootstrap/talos/nodes/cp01-main/config.yaml"
+    echo ""
+    echo "If you need to generate a new config, use:"
+    echo "  talosctl gen config <cluster-name> https://<control-plane-ip>:6443"
+    echo ""
     exit 1
 fi
 
@@ -25,8 +32,25 @@ echo "Embedding Cilium manifest into control plane Talos config..."
 
 # Check if inlineManifests already exists (uncommented)
 if grep -q "^[[:space:]]*inlineManifests:" "$CP_CONFIG"; then
-    echo "✓ inlineManifests section already exists - skipping"
-    exit 0
+    echo "⚠️  inlineManifests section already exists - removing old version"
+    # Remove old inlineManifests section (from inlineManifests: to next top-level key at same indentation)
+    # This AWK script removes the inlineManifests section and all its nested content
+    awk '
+        /^[[:space:]]*inlineManifests:/ { 
+            indent = match($0, /[^ ]/)
+            skip=1
+            next 
+        }
+        skip && /^[[:space:]]*[a-zA-Z]/ {
+            current_indent = match($0, /[^ ]/)
+            if (current_indent <= indent) {
+                skip=0
+            }
+        }
+        !skip { print }
+    ' "$CP_CONFIG" > /tmp/cp-config-no-inline.yaml
+    mv /tmp/cp-config-no-inline.yaml "$CP_CONFIG"
+    echo "✓ Old inlineManifests removed - will re-embed with latest manifest"
 fi
 
 # Find insertion point (after allowSchedulingOnControlPlanes)

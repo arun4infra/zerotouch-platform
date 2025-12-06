@@ -23,6 +23,9 @@ spec:
         # Keep controller on control plane (lightweight)
         controller:
           nodeSelector: {}
+        # Disable kmcp controller - platform uses RemoteMCPServer (v1alpha2) instead of MCPServer (v1alpha1)
+        kmcp:
+          enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: kagent

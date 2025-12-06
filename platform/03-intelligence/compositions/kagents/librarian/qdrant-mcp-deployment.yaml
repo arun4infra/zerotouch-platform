@@ -19,8 +19,8 @@ spec:
         workload.bizmatters.dev/intelligence: "true"
       containers:
         - name: qdrant-mcp
-          image: ghcr.io/arun4infra/mcp-server-qdrant:main
-          imagePullPolicy: Always
+          image: ghcr.io/qdrant/mcp-server-qdrant:v0.7.1
+          imagePullPolicy: IfNotPresent
           env:
             - name: QDRANT_URL
               value: "http://qdrant.intelligence-platform.svc.cluster.local:6333"
