@@ -79,13 +79,15 @@ The Makefile automatically:
 - All parameters created as SecureString (encrypted)
 
 ### 6. `07-add-private-repo.sh`
-**Purpose:** Add private Git repository credentials to ArgoCD  
-**Usage:** `./07-add-private-repo.sh <repo-url> <username> <token>`  
-**When:** Called automatically by master bootstrap (reads from `.env.ssm`)  
+**Purpose:** ⚠️ **DEPRECATED** - Emergency fallback for adding repository credentials
+**Usage:** `./07-add-private-repo.sh <repo-url> <username> <token>`
+**When:** Emergency use only (credentials should be managed via ExternalSecrets)
 **What it does:**
-- Creates ArgoCD repository secret
-- Enables ArgoCD to access private repositories
-- Master bootstrap reads `ARGOCD_PRIVATE_REPO_*` variables from `.env.ssm`
+- Creates ArgoCD repository secret imperatively
+- ⚠️ Not GitOps-native - use only if ExternalSecrets fail
+
+**Normal workflow:** Repository credentials are synced from AWS SSM via ExternalSecrets.
+See: [Private Repository Architecture](../../docs/architecture/private-repository-architecture.md)
 
 ### 7. `04-add-worker-node.sh`
 **Purpose:** Add a worker node to existing cluster  
@@ -126,7 +128,7 @@ After bootstrap:
 ## Configuration Files
 
 ### `.env.ssm` (gitignored)
-Contains secrets for SSM Parameter Store and private repositories:
+Contains secrets for SSM Parameter Store:
 ```bash
 # SSM Parameters
 /zerotouch/prod/kagent/openai_api_key=sk-...
@@ -134,13 +136,19 @@ Contains secrets for SSM Parameter Store and private repositories:
 /zerotouch/prod/agent-executor/anthropic_api_key=sk-ant-...
 /zerotouch/prod/platform/ghcr/username=your-github-username
 /zerotouch/prod/platform/ghcr/password=ghp_...
-/zerotouch/prod/platform/github/username=your-github-username
-/zerotouch/prod/platform/github/token=ghp_...
 
-# Private Git Repositories (for ArgoCD)
-ARGOCD_PRIVATE_REPO_1=https://github.com/arun4infra/zerotouch-tenants.git
-ARGOCD_PRIVATE_REPO_2=https://github.com/arun4infra/bizmatters.git
+# ArgoCD Private Repository Credentials (synced via ExternalSecrets)
+/zerotouch/prod/argocd/repos/zerotouch-tenants/url=https://github.com/arun4infra/zerotouch-tenants.git
+/zerotouch/prod/argocd/repos/zerotouch-tenants/username=arun4infra
+/zerotouch/prod/argocd/repos/zerotouch-tenants/password=ghp_xxxxx
+
+/zerotouch/prod/argocd/repos/bizmatters/url=https://github.com/arun4infra/bizmatters.git
+/zerotouch/prod/argocd/repos/bizmatters/username=arun4infra
+/zerotouch/prod/argocd/repos/bizmatters/password=ghp_xxxxx
 ```
+
+**Note:** Repository credentials are managed via ExternalSecrets, not imperative scripts.
+See: [Private Repository Architecture](../../docs/architecture/private-repository-architecture.md)
 
 ### `environments/<ENV>/talos-values.yaml` (gitignored)
 Environment-specific configuration:

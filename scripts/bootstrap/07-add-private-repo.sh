@@ -186,8 +186,19 @@ fi
 
 # Main execution logic
 echo ""
+echo -e "${YELLOW}╔══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${YELLOW}║   DEPRECATION NOTICE                                         ║${NC}"
+echo -e "${YELLOW}║   This script is deprecated and only for emergency use.     ║${NC}"
+echo -e "${YELLOW}║   Repository credentials are managed via ExternalSecrets.   ║${NC}"
+echo -e "${YELLOW}║                                                              ║${NC}"
+echo -e "${YELLOW}║   Normal workflow:                                           ║${NC}"
+echo -e "${YELLOW}║   1. Add SSM parameters: /zerotouch/prod/argocd/repos/...   ║${NC}"
+echo -e "${YELLOW}║   2. Create ExternalSecret manifest in Git                  ║${NC}"
+echo -e "${YELLOW}║   3. ArgoCD syncs automatically                              ║${NC}"
+echo -e "${YELLOW}╚══════════════════════════════════════════════════════════════╝${NC}"
+echo ""
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║   ArgoCD Private Repository Configuration                   ║${NC}"
+echo -e "${BLUE}║   ArgoCD Private Repository Configuration (Emergency)        ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 

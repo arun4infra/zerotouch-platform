@@ -4,7 +4,7 @@ metadata:
   name: tenant-applications
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "99"  # Deploy after all platform components
+    argocd.argoproj.io/sync-wave: "100"  # Large gap ensures all repo credentials are ready (wave 2)
 spec:
   generators:
     - git:
@@ -24,7 +24,7 @@ spec:
       source:
         repoURL: '{{repoURL}}'
         targetRevision: '{{targetRevision}}'
-        path: '{{manifestPath}}'
+        path: '{{path}}'
         directory:
           recurse: true
       destination:

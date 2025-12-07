@@ -517,58 +517,62 @@ Verify parameters:
 
 EOF
 
-# Step 4.7: Configure ArgoCD Repository Credentials (for Tenant Registry)
-echo -e "${YELLOW}[4.7/5] Configuring ArgoCD Repository Credentials...${NC}"
+# Step 4.7: Wait for ArgoCD Repository Credentials to Sync from SSM
+echo -e "${YELLOW}[4.7/5] Waiting for ArgoCD Repository Credentials...${NC}"
 echo "────────────────────────────────────────────────────────────────"
 
-# Invoke the dedicated add-private-repo script in auto mode
-if "$SCRIPT_DIR/07-add-private-repo.sh" --auto; then
-    echo -e "${GREEN}✓ Repository credentials configured${NC}"
-else
-    # Check if tenant ApplicationSet exists (requires private repo access)
-    if [ -f "$SCRIPT_DIR/../../bootstrap/components/99-tenants.yaml" ]; then
-        # FAIL FAST: Tenant ApplicationSet exists but credentials failed
-        echo -e "${RED}✗ ERROR: Tenant ApplicationSet requires GitHub credentials${NC}"
-        echo ""
-        echo -e "${RED}The bootstrap includes 99-tenants.yaml which requires private repository access${NC}"
-        echo ""
-        echo -e "${YELLOW}Option 1: Add credentials to .env.ssm (RECOMMENDED):${NC}"
-        echo -e "  ${GREEN}cp .env.ssm.example .env.ssm${NC}"
-        echo -e "  ${GREEN}# Edit .env.ssm and set:${NC}"
-        echo -e "  ${GREEN}#   /zerotouch/prod/platform/github/username=your-username${NC}"
-        echo -e "  ${GREEN}#   /zerotouch/prod/platform/github/token=ghp_xxxxx${NC}"
-        echo -e "  ${GREEN}#   ARGOCD_PRIVATE_REPO_1=https://github.com/org/repo.git${NC}"
-        echo -e "  ${GREEN}./scripts/bootstrap/01-master-bootstrap.sh $SERVER_IP $ROOT_PASSWORD${NC}"
-        echo ""
-        echo -e "${YELLOW}Option 2: Add credentials manually after bootstrap:${NC}"
-        echo -e "  ${GREEN}./scripts/bootstrap/07-add-private-repo.sh --auto${NC}"
-        echo ""
-        exit 1
+echo -e "${BLUE}ℹ  Repository credentials are synced from AWS SSM via ExternalSecrets${NC}"
+echo -e "${BLUE}⏳ Waiting for ExternalSecret to sync registry credentials...${NC}"
+
+# Wait for ExternalSecret to be ready
+if kubectl_retry wait --for=condition=Ready externalsecret/repo-zerotouch-tenants \
+  -n argocd --timeout=120s 2>/dev/null; then
+
+    # Verify the secret was created
+    if kubectl_retry get secret repo-zerotouch-tenants -n argocd &>/dev/null; then
+        echo -e "${GREEN}✓ Registry repository credentials synced from SSM${NC}"
     else
-        echo -e "${YELLOW}⚠️  No private repositories configured${NC}"
-        echo -e "${BLUE}ℹ  To add private repository credentials later:${NC}"
-        echo -e "   ${GREEN}./scripts/bootstrap/07-add-private-repo.sh --auto${NC}"
-        echo -e "   ${GREEN}# or manually:${NC}"
-        echo -e "   ${GREEN}./scripts/bootstrap/07-add-private-repo.sh <repo-url> <username> <token>${NC}"
-        echo ""
+        echo -e "${RED}✗ ExternalSecret ready but secret not found${NC}"
+        echo -e "${YELLOW}Check: kubectl describe externalsecret repo-zerotouch-tenants -n argocd${NC}"
+        exit 1
     fi
+else
+    echo -e "${RED}✗ Failed to sync repository credentials from SSM${NC}"
+    echo ""
+    echo -e "${YELLOW}Troubleshooting:${NC}"
+    echo -e "  1. Verify AWS SSM parameters exist:"
+    echo -e "     ${GREEN}aws ssm get-parameter --name /zerotouch/prod/argocd/repos/zerotouch-tenants/url${NC}"
+    echo -e "  2. Check ExternalSecret status:"
+    echo -e "     ${GREEN}kubectl get externalsecret repo-zerotouch-tenants -n argocd -o yaml${NC}"
+    echo -e "  3. Check ESO ClusterSecretStore:"
+    echo -e "     ${GREEN}kubectl get clustersecretstore aws-parameter-store -o yaml${NC}"
+    echo ""
+    echo -e "${YELLOW}Emergency fallback:${NC}"
+    echo -e "  ${GREEN}./scripts/bootstrap/07-add-private-repo.sh --auto${NC}"
+    echo ""
+    exit 1
 fi
 
 cat >> "$CREDENTIALS_FILE" << EOF
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ARGOCD REPOSITORY CREDENTIALS
+ARGOCD REPOSITORY CREDENTIALS (ExternalSecrets)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Private repositories are configured from: .env.ssm
+Repository credentials are synced from AWS SSM via ExternalSecrets.
 
 To add more private repositories:
-  1. Edit .env.ssm
-  2. Add: ARGOCD_PRIVATE_REPO_N=https://github.com/org/repo.git
-  3. Re-run bootstrap or add manually:
-     ./scripts/bootstrap/07-add-private-repo.sh <repo-url> <username> <token>
+  1. Add SSM parameters:
+     /zerotouch/prod/argocd/repos/<repo-name>/url
+     /zerotouch/prod/argocd/repos/<repo-name>/username
+     /zerotouch/prod/argocd/repos/<repo-name>/password
+
+  2. Create ExternalSecret in zerotouch-tenants/repositories/<repo-name>.yaml
+
+  3. ArgoCD syncs automatically
 
 Verify:
-  kubectl get secret -n argocd | grep repo-
+  kubectl get externalsecret -n argocd
+  kubectl get secret -n argocd -l argocd.argoproj.io/secret-type=repository
 
 EOF
 
