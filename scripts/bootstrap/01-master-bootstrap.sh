@@ -521,84 +521,37 @@ EOF
 echo -e "${YELLOW}[4.7/5] Configuring ArgoCD Repository Credentials...${NC}"
 echo "────────────────────────────────────────────────────────────────"
 
-# Check if tenant ApplicationSet exists (requires private repo access)
-TENANT_APPSET_EXISTS=false
-if [ -f "$SCRIPT_DIR/../../bootstrap/components/99-tenants.yaml" ]; then
-    TENANT_APPSET_EXISTS=true
-    echo -e "${BLUE}Found tenant ApplicationSet (99-tenants.yaml)${NC}"
-fi
-
-# Try to get GitHub credentials from environment variables first, then from .env.ssm
-if [ -z "$GITHUB_USERNAME" ] || [ -z "$GITHUB_TOKEN" ]; then
-    if [ -f "$SCRIPT_DIR/../../.env.ssm" ]; then
-        echo -e "${BLUE}Reading GitHub credentials from .env.ssm...${NC}"
-        GITHUB_USERNAME=$(grep "^/zerotouch/prod/platform/github/username=" "$SCRIPT_DIR/../../.env.ssm" | cut -d'=' -f2)
-        GITHUB_TOKEN=$(grep "^/zerotouch/prod/platform/github/token=" "$SCRIPT_DIR/../../.env.ssm" | cut -d'=' -f2)
-    fi
-fi
-
-# Check if we have GitHub credentials from either source
-if [ -n "$GITHUB_USERNAME" ] && [ -n "$GITHUB_TOKEN" ]; then
-    echo -e "${BLUE}Found GitHub credentials${NC}"
-    
-    # Read private repositories from .env.ssm
-    ENV_SSM_FILE="$SCRIPT_DIR/../../.env.ssm"
-    if [ -f "$ENV_SSM_FILE" ]; then
-        echo -e "${BLUE}Reading private repositories from .env.ssm...${NC}"
-        
-        # Extract all ARGOCD_PRIVATE_REPO_* variables
-        PRIVATE_REPOS=$(grep "^ARGOCD_PRIVATE_REPO_" "$ENV_SSM_FILE" | cut -d'=' -f2)
-        
-        if [ -n "$PRIVATE_REPOS" ]; then
-            REPO_COUNT=$(echo "$PRIVATE_REPOS" | wc -l | tr -d ' ')
-            echo -e "${BLUE}Found $REPO_COUNT private repository/repositories${NC}"
-            
-            # Add each repository
-            while IFS= read -r repo_url; do
-                if [ -n "$repo_url" ]; then
-                    echo -e "${BLUE}Adding repository: $repo_url${NC}"
-                    "$SCRIPT_DIR/07-add-private-repo.sh" "$repo_url" "$GITHUB_USERNAME" "$GITHUB_TOKEN"
-                fi
-            done <<< "$PRIVATE_REPOS"
-        else
-            echo -e "${YELLOW}⚠️  No private repositories defined in .env.ssm${NC}"
-            echo -e "${BLUE}ℹ  Add repositories with: ARGOCD_PRIVATE_REPO_1=https://github.com/org/repo.git${NC}"
-        fi
-    else
-        echo -e "${YELLOW}⚠️  .env.ssm file not found${NC}"
-    fi
-    
+# Invoke the dedicated add-private-repo script in auto mode
+if "$SCRIPT_DIR/07-add-private-repo.sh" --auto; then
     echo -e "${GREEN}✓ Repository credentials configured${NC}"
-elif [ "$TENANT_APPSET_EXISTS" = true ]; then
-    # FAIL FAST: Tenant ApplicationSet exists but no credentials provided
-    echo -e "${RED}✗ ERROR: Tenant ApplicationSet requires GitHub credentials${NC}"
-    echo ""
-    echo -e "${RED}The bootstrap includes 99-tenants.yaml which requires access to:${NC}"
-    echo -e "${RED}  https://github.com/arun4infra/zerotouch-tenants.git${NC}"
-    echo ""
-    echo -e "${YELLOW}Option 1: Add credentials to .env.ssm (RECOMMENDED):${NC}"
-    echo -e "  ${GREEN}cp .env.ssm.example .env.ssm${NC}"
-    echo -e "  ${GREEN}# Edit .env.ssm and set:${NC}"
-    echo -e "  ${GREEN}#   /zerotouch/prod/platform/github/username=your-username${NC}"
-    echo -e "  ${GREEN}#   /zerotouch/prod/platform/github/token=ghp_xxxxx${NC}"
-    echo -e "  ${GREEN}./scripts/bootstrap/01-master-bootstrap.sh $SERVER_IP $ROOT_PASSWORD${NC}"
-    echo ""
-    echo -e "${YELLOW}Option 2: Use environment variables:${NC}"
-    echo -e "  ${GREEN}export GITHUB_USERNAME=your-username${NC}"
-    echo -e "  ${GREEN}export GITHUB_TOKEN=ghp_xxxxx${NC}"
-    echo -e "  ${GREEN}./scripts/bootstrap/01-master-bootstrap.sh $SERVER_IP $ROOT_PASSWORD${NC}"
-    echo ""
-    echo -e "${YELLOW}Option 3: Add credentials manually after bootstrap:${NC}"
-    echo -e "  ${GREEN}./scripts/bootstrap/07-add-private-repo.sh \\${NC}"
-    echo -e "  ${GREEN}    https://github.com/arun4infra/zerotouch-tenants.git \\${NC}"
-    echo -e "  ${GREEN}    <username> <token>${NC}"
-    echo ""
-    exit 1
 else
-    echo -e "${YELLOW}⚠️  GitHub credentials not provided${NC}"
-    echo -e "${BLUE}ℹ  To add private repository credentials for ArgoCD:${NC}"
-    echo -e "   ${GREEN}./scripts/bootstrap/07-add-private-repo.sh <repo-url> <username> <token>${NC}"
-    echo ""
+    # Check if tenant ApplicationSet exists (requires private repo access)
+    if [ -f "$SCRIPT_DIR/../../bootstrap/components/99-tenants.yaml" ]; then
+        # FAIL FAST: Tenant ApplicationSet exists but credentials failed
+        echo -e "${RED}✗ ERROR: Tenant ApplicationSet requires GitHub credentials${NC}"
+        echo ""
+        echo -e "${RED}The bootstrap includes 99-tenants.yaml which requires private repository access${NC}"
+        echo ""
+        echo -e "${YELLOW}Option 1: Add credentials to .env.ssm (RECOMMENDED):${NC}"
+        echo -e "  ${GREEN}cp .env.ssm.example .env.ssm${NC}"
+        echo -e "  ${GREEN}# Edit .env.ssm and set:${NC}"
+        echo -e "  ${GREEN}#   /zerotouch/prod/platform/github/username=your-username${NC}"
+        echo -e "  ${GREEN}#   /zerotouch/prod/platform/github/token=ghp_xxxxx${NC}"
+        echo -e "  ${GREEN}#   ARGOCD_PRIVATE_REPO_1=https://github.com/org/repo.git${NC}"
+        echo -e "  ${GREEN}./scripts/bootstrap/01-master-bootstrap.sh $SERVER_IP $ROOT_PASSWORD${NC}"
+        echo ""
+        echo -e "${YELLOW}Option 2: Add credentials manually after bootstrap:${NC}"
+        echo -e "  ${GREEN}./scripts/bootstrap/07-add-private-repo.sh --auto${NC}"
+        echo ""
+        exit 1
+    else
+        echo -e "${YELLOW}⚠️  No private repositories configured${NC}"
+        echo -e "${BLUE}ℹ  To add private repository credentials later:${NC}"
+        echo -e "   ${GREEN}./scripts/bootstrap/07-add-private-repo.sh --auto${NC}"
+        echo -e "   ${GREEN}# or manually:${NC}"
+        echo -e "   ${GREEN}./scripts/bootstrap/07-add-private-repo.sh <repo-url> <username> <token>${NC}"
+        echo ""
+    fi
 fi
 
 cat >> "$CREDENTIALS_FILE" << EOF
