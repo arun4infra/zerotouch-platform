@@ -4,7 +4,7 @@ metadata:
   name: repo-zerotouch-tenants
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "1"  # After ESO (wave 0)
+    argocd.argoproj.io/sync-wave: "10"  # After ESO CRDs are installed (wave 0)
 spec:
   refreshInterval: 1h
   secretStoreRef:
