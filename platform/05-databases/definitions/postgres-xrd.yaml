@@ -48,9 +48,13 @@ spec:
                 connectionSecretName:
                   type: string
                   description: "Name of the connection secret to create"
+                credentialsSecretName:
+                  type: string
+                  description: "Name of app-provided secret with 'username' and 'password' keys for database bootstrap"
               required:
                 - size
                 - connectionSecretName
+                - credentialsSecretName
             status:
               type: object
               properties:
