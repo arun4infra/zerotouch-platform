@@ -37,23 +37,76 @@ This directory contains template files for the `zerotouch-tenants` repository.
    git push origin main
    ```
 
-4. **Configure ArgoCD Credentials**
+4. **Configure Repository Credentials via ExternalSecrets**
+
+   Repository credentials are synced from AWS SSM, not added imperatively.
+
+   **In zerotouch-platform repo:**
    ```bash
-   # In zerotouch-platform repo
    cd zerotouch-platform
-   
-   # Add tenant registry credentials
-   ./scripts/bootstrap/06-add-private-repo.sh \
-     https://github.com/arun4infra/zerotouch-tenants.git \
-     <github-username> \
-     <github-token>
-   
-   # Add bizmatters repo credentials
-   ./scripts/bootstrap/06-add-private-repo.sh \
-     https://github.com/arun4infra/bizmatters.git \
-     <github-username> \
-     <github-token>
+
+   # Edit .env.ssm with repository credentials
+   cat >> .env.ssm <<EOF
+   /zerotouch/prod/argocd/repos/zerotouch-tenants/url=https://github.com/arun4infra/zerotouch-tenants.git
+   /zerotouch/prod/argocd/repos/zerotouch-tenants/username=arun4infra
+   /zerotouch/prod/argocd/repos/zerotouch-tenants/password=ghp_xxxxx
+
+   /zerotouch/prod/argocd/repos/bizmatters/url=https://github.com/arun4infra/bizmatters.git
+   /zerotouch/prod/argocd/repos/bizmatters/username=arun4infra
+   /zerotouch/prod/argocd/repos/bizmatters/password=ghp_xxxxx
+   EOF
+
+   # Inject to SSM
+   ./scripts/bootstrap/06-inject-ssm-parameters.sh
    ```
+
+   **In zerotouch-tenants repo:**
+   ```bash
+   cd zerotouch-tenants
+
+   # Create ExternalSecret for bizmatters repo
+   mkdir -p repositories
+   cat > repositories/bizmatters-repo.yaml <<EOF
+   apiVersion: external-secrets.io/v1beta1
+   kind: ExternalSecret
+   metadata:
+     name: repo-bizmatters
+     namespace: argocd
+   spec:
+     refreshInterval: 1h
+     secretStoreRef:
+       name: aws-parameter-store
+       kind: ClusterSecretStore
+     target:
+       name: repo-bizmatters
+       template:
+         metadata:
+           labels:
+             argocd.argoproj.io/secret-type: repository
+         data:
+           type: git
+           url: "{{ .url }}"
+           username: "{{ .username }}"
+           password: "{{ .password }}"
+     data:
+       - secretKey: url
+         remoteRef:
+           key: /zerotouch/prod/argocd/repos/bizmatters/url
+       - secretKey: username
+         remoteRef:
+           key: /zerotouch/prod/argocd/repos/bizmatters/username
+       - secretKey: password
+         remoteRef:
+           key: /zerotouch/prod/argocd/repos/bizmatters/password
+   EOF
+
+   git add repositories/
+   git commit -m "Add bizmatters repository credentials"
+   git push
+   ```
+
+   ExternalSecrets sync automatically during bootstrap.
+   See: [Private Repository Architecture](https://github.com/arun4infra/zerotouch-platform/blob/main/docs/architecture/private-repository-architecture.md)
 
 5. **Deploy ApplicationSet**
    ```bash

@@ -88,34 +88,68 @@ git commit -m "Initial commit: Tenant registry structure"
 git push origin main
 ```
 
-### 2.2 Configure ArgoCD Repository Credentials
+### 2.2 Configure ArgoCD Repository Credentials via ExternalSecrets
 
 **CRITICAL**: Add credentials BEFORE deploying ApplicationSet to avoid sync failures.
+
+Repository credentials are managed via ExternalSecrets syncing from AWS SSM.
+
+**Step 1: Add SSM Parameters**
+
+Edit `.env.ssm` in the platform repo:
 
 ```bash
 cd zerotouch-platform
 
-# Add tenant registry credentials
-./scripts/bootstrap/06-add-private-repo.sh \
-  https://github.com/arun4infra/zerotouch-tenants.git \
-  <github-username> \
-  <github-token>
+cat >> .env.ssm <<EOF
+# Tenant Registry Credentials
+/zerotouch/prod/argocd/repos/zerotouch-tenants/url=https://github.com/arun4infra/zerotouch-tenants.git
+/zerotouch/prod/argocd/repos/zerotouch-tenants/username=arun4infra
+/zerotouch/prod/argocd/repos/zerotouch-tenants/password=ghp_xxxxx
 
-# Add bizmatters repository credentials
-./scripts/bootstrap/06-add-private-repo.sh \
-  https://github.com/arun4infra/bizmatters.git \
-  <github-username> \
-  <github-token>
-
-# Verify secrets created
-kubectl get secret -n argocd | grep repo-
+# Bizmatters Repository Credentials
+/zerotouch/prod/argocd/repos/bizmatters/url=https://github.com/arun4infra/bizmatters.git
+/zerotouch/prod/argocd/repos/bizmatters/username=arun4infra
+/zerotouch/prod/argocd/repos/bizmatters/password=ghp_xxxxx
+EOF
 ```
 
-Expected output:
+**Step 2: Inject to AWS SSM**
+
+```bash
+./scripts/bootstrap/06-inject-ssm-parameters.sh
+
+# Verify
+aws ssm get-parameter --name /zerotouch/prod/argocd/repos/zerotouch-tenants/url
+aws ssm get-parameter --name /zerotouch/prod/argocd/repos/bizmatters/url
+```
+
+**Step 3: ExternalSecrets Sync (Automatic)**
+
+During bootstrap, ExternalSecrets automatically:
+1. Read credentials from SSM
+2. Create ArgoCD repository secrets
+3. Label secrets with `argocd.argoproj.io/secret-type=repository`
+
+**Verify:**
+```bash
+# Check ExternalSecrets synced
+kubectl get externalsecret -n argocd
+
+# Check repository secrets created
+kubectl get secret -n argocd -l argocd.argoproj.io/secret-type=repository
+
+# Verify with ArgoCD
+argocd repo list
+```
+
+Expected secrets:
 ```
 repo-zerotouch-tenants
 repo-bizmatters
 ```
+
+**Architecture:** See [Private Repository Architecture](../../../docs/architecture/private-repository-architecture.md) for detailed flow.
 
 ### 2.3 Deploy ApplicationSet
 

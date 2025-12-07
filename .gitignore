@@ -1,6 +1,7 @@
 !bootstrap/talos/*
 !bootstrap/talos-templates/
 environments/*/talos-values.yaml
+environments/*/talos-values.yaml.bak
 environments/*/*.secret.yaml
 .env
 .env.ssm
