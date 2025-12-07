@@ -9,8 +9,8 @@ SCRIPTS_DIR := scripts/bootstrap
 help:  ## Show this help
 	@echo "BizMatters Infrastructure - Bootstrap Automation"
 	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $1, $2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 bootstrap:  ## Full cluster bootstrap (ENV=dev|staging|prod)
 	@echo "╔══════════════════════════════════════════════════════════════╗"
@@ -22,6 +22,7 @@ bootstrap:  ## Full cluster bootstrap (ENV=dev|staging|prod)
 		echo "Copy environments/$(ENV)/talos-values.yaml.example and fill in values"; \
 		exit 1; \
 	fi
+	@echo "Logging to: bootstrap-$(ENV).log"
 	@VALUES=$$($(SCRIPTS_DIR)/parse-values.sh $(ENV)); \
 	CP_IP=$$(echo "$$VALUES" | sed -n '1p'); \
 	CP_PASS=$$(echo "$$VALUES" | sed -n '2p'); \
@@ -31,7 +32,7 @@ bootstrap:  ## Full cluster bootstrap (ENV=dev|staging|prod)
 	$(SCRIPTS_DIR)/01-master-bootstrap.sh \
 		"$$CP_IP" "$$CP_PASS" \
 		--worker-nodes "$$WORKER_NAME:$$WORKER_IP" \
-		--worker-password "$$WORKER_PASS"
+		--worker-password "$$WORKER_PASS" 2>&1 | tee bootstrap-$(ENV).log
 
 embed-cilium:  ## Embed Cilium manifest in control plane config
 	@echo "Embedding Cilium CNI in Talos control plane config..."
