@@ -116,8 +116,9 @@ spec:
                 bootstrap:
                   initdb:
                     database: postgres
-                    owner: postgres
-                    # Use app-provided credentials secret for database bootstrap
+                    # CNPG uses the 'username' from the secret as the database owner
+                    # Secret must have 'username' and 'password' keys
+                    # Do NOT set 'owner' here - let CNPG use the username from secret
                     secret:
                       name: placeholder-credentials
                 # Node affinity to schedule on worker nodes with database label
