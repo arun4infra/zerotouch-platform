@@ -321,8 +321,10 @@ done
 
 echo "" >&2
 if [[ "$AUTO_YES" == "false" ]]; then
-    read -p "$(echo -e "${YELLOW}Continue with rescue mode activation for all servers? [y/N]:${NC} ")" -n 1 -r >&2
+    read -p "$(echo -e "${YELLOW}Continue with rescue mode activation for all servers? [Y/n]:${NC} ")" -r >&2
     echo >&2
+    # Default to Yes if empty response
+    REPLY=${REPLY:-Y}
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         log_warn "Operation cancelled"
         exit 0
