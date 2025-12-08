@@ -1,0 +1,108 @@
+# Full-Featured EventDrivenService Claim
+# This example demonstrates all available features including:
+# - Multiple secrets from different sources (Crossplane + ESO)
+# - Init container for database migrations
+# - Private container registry with image pull secrets
+# - Medium resource allocation
+
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: full-featured-worker
+  namespace: production
+spec:
+  # Container image from private registry
+  image: ghcr.io/org/full-featured-worker:v2.1.0
+  
+  # Resource size (medium allocation for typical workloads)
+  # medium: 500m-2000m CPU, 1Gi-4Gi memory
+  size: medium
+  
+  # NATS JetStream configuration
+  nats:
+    # NATS server URL (using default)
+    url: nats://nats.nats.svc:4222
+    
+    # JetStream stream name
+    stream: PRODUCTION_JOBS
+    
+    # Consumer group name
+    consumer: full-featured-workers
+  
+  # Hybrid Secret Approach: Multiple secrets from different sources
+  # All secrets are mounted via envFrom (bulk mounting - all keys become environment variables)
+  
+  # Secret 1: Database credentials (Crossplane-generated)
+  # Created by PostgresInstance claim with writeConnectionSecretToRef
+  # Keys: endpoint, port, database, username, password
+  secret1Name: full-featured-worker-db-conn
+  
+  # Secret 2: Cache credentials (Crossplane-generated)
+  # Created by DragonflyInstance claim with writeConnectionSecretToRef
+  # Keys: endpoint, port, password
+  secret2Name: full-featured-worker-cache-conn
+  
+  # Secret 3: Application secrets (ESO-synced from AWS SSM)
+  # Keys: OPENAI_API_KEY, ANTHROPIC_API_KEY, STRIPE_API_KEY
+  secret3Name: full-featured-worker-llm-keys
+  
+  # Secret 4: Additional application config (ESO-synced)
+  # Keys: WEBHOOK_SECRET, ENCRYPTION_KEY
+  secret4Name: full-featured-worker-app-config
+  
+  # Note: secret5Name is available if needed (up to 5 secrets supported)
+  
+  # Image pull secrets for private container registry
+  imagePullSecrets:
+    - name: ghcr-pull-secret
+  
+  # Init container for database migrations
+  # Runs before main container starts
+  # Uses same image as main container
+  # Has access to same secrets (database credentials available)
+  initContainer:
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        echo "Running database migrations..."
+        cd /app && ./scripts/ci/run-migrations.sh
+        echo "Migrations completed successfully"
+
+# Resources Created:
+# - ServiceAccount (full-featured-worker)
+# - Deployment with:
+#   - Init container (runs migrations)
+#   - Main container (processes NATS messages)
+#   - 4 secrets mounted via envFrom
+#   - Resource limits: 500m-2000m CPU, 1Gi-4Gi memory
+#   - Health probes: /health (liveness), /ready (readiness)
+#   - Security context: runAsNonRoot, drop all capabilities
+# - Service (ClusterIP:8080)
+# - ScaledObject (KEDA autoscaling 1-10 replicas based on NATS queue depth)
+
+# Prerequisites:
+# 1. PostgresInstance claim created: full-featured-worker-db
+# 2. DragonflyInstance claim created: full-featured-worker-cache
+# 3. ExternalSecret created: full-featured-worker-llm-keys
+# 4. ExternalSecret created: full-featured-worker-app-config
+# 5. ExternalSecret created: ghcr-pull-secret
+# 6. NATS stream created: PRODUCTION_JOBS
+
+# Health Endpoints Required:
+# - GET /health (liveness probe)
+# - GET /ready (readiness probe)
+
+# Metrics Endpoint Recommended:
+# - GET /metrics (Prometheus scraping)
+
+# Environment Variables Available in Container:
+# From secret1Name (database):
+#   - endpoint, port, database, username, password
+# From secret2Name (cache):
+#   - endpoint, port, password
+# From secret3Name (LLM keys):
+#   - OPENAI_API_KEY, ANTHROPIC_API_KEY, STRIPE_API_KEY
+# From secret4Name (app config):
+#   - WEBHOOK_SECRET, ENCRYPTION_KEY
+# From NATS config:
+#   - NATS_URL, NATS_STREAM_NAME, NATS_CONSUMER_GROUP

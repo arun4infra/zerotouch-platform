@@ -128,17 +128,7 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Apply standard labels
   - _Requirements: 12, 15_
 
-- [-] 3.11 Build and deploy custom Crossplane function
-  - Navigate to `platform/04-apis/functions/eventdrivenservice/`
-  - Verify AWS SSM parameters exist for GHCR credentials
-  - Run `./build-and-push.sh` to build and push function image
-  - Apply Function package to cluster: `kubectl apply -f package.yaml`
-  - Verify function pod is running in crossplane-system namespace
-  - Check function logs for any errors
-  - **Note:** This step is REQUIRED before the composition can process secretRefs and initContainer
-  - _Requirements: 2, 6, 8_
-
-- [ ] 4. Create schema publication script
+- [x] 4. Create schema publication script
   - Create file `scripts/publish-schema.sh`
   - Extract OpenAPI v3 schema from XRD CRD
   - Write to `platform/04-apis/schemas/eventdrivenservice.schema.json`
@@ -155,14 +145,14 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Make script executable
   - _Requirements: 21_
 
-- [ ] 6. Create example claims
+- [x] 6. Create example claims
   - Create directory `platform/04-apis/examples/`
   - Create minimal-claim.yaml (image + NATS only, no secrets)
   - Create full-claim.yaml (image + NATS + database + cache + LLM keys + init container)
   - Create agent-executor-claim.yaml (reference implementation)
   - _Requirements: 16, 17_
 
-- [ ] 7. Write comprehensive API documentation
+- [x] 7. Write comprehensive API documentation
   - Update `platform/04-apis/README.md` with complete API documentation
   - Document XRD schema with field descriptions
   - Include all example claims (minimal, full, agent-executor)
@@ -172,7 +162,7 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Add IDE integration instructions (VSCode YAML extension)
   - _Requirements: 16, 18_
 
-- [ ] 7.1 Document error handling patterns
+- [x] 7.1 Document error handling patterns
   - Add comprehensive troubleshooting section to README.md
   - Document ImagePullBackOff: wrong imagePullSecrets or missing secret
   - Document CreateContainerConfigError: secret not found, Crossplane claim not created yet
@@ -183,7 +173,7 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Include resolution steps for each error type
   - _Requirements: 20_
 
-- [ ] 7.2 Update bootstrap sequence documentation
+- [x] 7.2 Update bootstrap sequence documentation
   - Update `scripts/bootstrap/BOOTSTRAP-SEQUENCE.md`
   - Document the 04-apis layer in platform layers section
   - Explain EventDrivenService API purpose and sync-wave ordering

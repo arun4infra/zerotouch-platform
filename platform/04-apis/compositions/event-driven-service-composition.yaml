@@ -34,13 +34,13 @@ spec:
                     automountServiceAccountToken: false
             patches:
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.name
+                fromFieldPath: spec.claimRef.name
                 toFieldPath: spec.forProvider.manifest.metadata.name
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.name
+                fromFieldPath: spec.claimRef.name
                 toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.labels[crossplane.io/claim-namespace]
+                fromFieldPath: spec.claimRef.namespace
                 toFieldPath: spec.forProvider.manifest.metadata.namespace
 
           # Resource 2: Deployment
@@ -140,45 +140,31 @@ spec:
             patches:
               # Patch name
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.name
+                fromFieldPath: spec.claimRef.name
                 toFieldPath: spec.forProvider.manifest.metadata.name
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.labels[crossplane.io/claim-namespace]
+                fromFieldPath: spec.claimRef.namespace
                 toFieldPath: spec.forProvider.manifest.metadata.namespace
               # Patch labels
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.name
+                fromFieldPath: spec.claimRef.name
                 toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.name
+                fromFieldPath: spec.claimRef.name
                 toFieldPath: spec.forProvider.manifest.spec.selector.matchLabels[app.kubernetes.io/name]
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.name
+                fromFieldPath: spec.claimRef.name
                 toFieldPath: spec.forProvider.manifest.spec.template.metadata.labels[app.kubernetes.io/name]
               # Patch ServiceAccount reference
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.name
+                fromFieldPath: spec.claimRef.name
                 toFieldPath: spec.forProvider.manifest.spec.template.spec.serviceAccountName
               # Patch image
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.image
                 toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].image
-              # Patch imagePullPolicy based on tag
-              - type: FromCompositeFieldPath
-                fromFieldPath: spec.image
-                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].imagePullPolicy
-                transforms:
-                  - type: string
-                    string:
-                      type: Regexp
-                      regexp:
-                        match: ':latest$'
-                        group: 0
-                  - type: map
-                    map:
-                      ":latest": "Always"
-                policy:
-                  fromFieldPath: Optional
+              # Note: imagePullPolicy defaults to IfNotPresent in base manifest
+              # For :latest tags, users should explicitly set imagePullPolicy in their container runtime
               # Patch resource sizing based on size enum
               # CPU requests
               - type: FromCompositeFieldPath
@@ -307,17 +293,17 @@ spec:
             patches:
               # Patch name
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.name
+                fromFieldPath: spec.claimRef.name
                 toFieldPath: spec.forProvider.manifest.metadata.name
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.labels[crossplane.io/claim-namespace]
+                fromFieldPath: spec.claimRef.namespace
                 toFieldPath: spec.forProvider.manifest.metadata.namespace
               # Patch labels
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.name
+                fromFieldPath: spec.claimRef.name
                 toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.name
+                fromFieldPath: spec.claimRef.name
                 toFieldPath: spec.forProvider.manifest.spec.selector[app.kubernetes.io/name]
 
           # Resource 4: KEDA ScaledObject
@@ -355,7 +341,7 @@ spec:
             patches:
               # Patch name (with -scaler suffix)
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.name
+                fromFieldPath: spec.claimRef.name
                 toFieldPath: spec.forProvider.manifest.metadata.name
                 transforms:
                   - type: string
@@ -363,15 +349,15 @@ spec:
                       type: Format
                       fmt: "%s-scaler"
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.labels[crossplane.io/claim-namespace]
+                fromFieldPath: spec.claimRef.namespace
                 toFieldPath: spec.forProvider.manifest.metadata.namespace
               # Patch labels
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.name
+                fromFieldPath: spec.claimRef.name
                 toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
               # Patch scaleTargetRef to Deployment name
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.name
+                fromFieldPath: spec.claimRef.name
                 toFieldPath: spec.forProvider.manifest.spec.scaleTargetRef.name
               # Patch NATS stream
               - type: FromCompositeFieldPath

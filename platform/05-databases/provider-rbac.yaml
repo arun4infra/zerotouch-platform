@@ -9,6 +9,7 @@ rules:
       - secrets
       - services
       - configmaps
+      - serviceaccounts
     verbs:
       - "*"
   - apiGroups:
@@ -16,6 +17,12 @@ rules:
     resources:
       - deployments
       - statefulsets
+    verbs:
+      - "*"
+  - apiGroups:
+      - keda.sh
+    resources:
+      - scaledobjects
     verbs:
       - "*"
   - apiGroups:
