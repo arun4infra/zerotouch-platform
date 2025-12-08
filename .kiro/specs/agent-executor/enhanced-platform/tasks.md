@@ -180,7 +180,7 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Add to platform architecture overview
   - _Requirements: 14, 16_
 
-- [ ] 8. Create schema validation test suite
+- [x] 8. Create schema validation test suite
   - Create file `platform/04-apis/tests/schema-validation.test.sh`
   - Create test fixtures directory `platform/04-apis/tests/fixtures/`
   - Write test for valid minimal claim
@@ -190,7 +190,7 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Make test script executable
   - _Requirements: 21_
 
-- [ ] 9. Checkpoint 1: Validate XRD and schema publication
+- [x] 9. Checkpoint 1: Validate XRD and schema publication
   - Run schema publication script to extract schema from XRD
   - Verify JSON schema file created at correct location
   - Run validation script against all example claims
@@ -198,7 +198,7 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Verify invalid examples fail with clear error messages
   - **Deliverable:** Working schema validation with passing test suite
 
-- [ ] 10. Create basic composition verification script
+- [x] 10. Create basic composition verification script
   - Create file `platform/04-apis/tests/verify-composition.sh`
   - Script checks if Composition exists in cluster
   - Script validates Composition references correct XRD
@@ -206,14 +206,14 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Make script executable
   - _Requirements: 17_
 
-- [ ] 11. Checkpoint 2: Verify Composition structure
+- [x] 11. Checkpoint 2: Verify Composition structure
   - Apply XRD and Composition to cluster
   - Run composition verification script
   - Verify all 4 resource templates present (ServiceAccount, Deployment, Service, ScaledObject)
   - Verify Composition uses correct function (patch-and-transform)
   - **Deliverable:** Composition deployed and structurally validated
 
-- [ ] 11.1 Create EventDrivenService API verification script
+- [x] 11.1 Create EventDrivenService API verification script
   - Create file `scripts/bootstrap/15-verify-eventdrivenservice-api.sh`
   - Verify platform-apis Application exists and is synced
   - Verify EventDrivenService XRD (CRD) is installed
@@ -222,7 +222,7 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Make script executable
   - _Requirements: 14, 17, 21_
 
-- [ ] 12. Create minimal claim deployment test
+- [x] 12. Create minimal claim deployment test
   - Create test script `platform/04-apis/tests/test-minimal-deployment.sh`
   - Script applies minimal-claim.yaml to test namespace
   - Script waits for resources to be created (timeout 2 minutes)

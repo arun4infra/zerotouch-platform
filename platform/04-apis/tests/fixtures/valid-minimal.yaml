@@ -1,0 +1,13 @@
+# Valid minimal claim for testing
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: test-minimal
+  namespace: test
+spec:
+  image: ghcr.io/test/minimal:v1.0.0
+  size: small
+  nats:
+    url: nats://nats.nats.svc:4222
+    stream: TEST_STREAM
+    consumer: test-consumer

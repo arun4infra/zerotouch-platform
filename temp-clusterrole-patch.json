@@ -1,0 +1,24 @@
+{
+  "rules": [
+    {
+      "apiGroups": [""],
+      "resources": ["secrets", "services", "configmaps", "serviceaccounts"],
+      "verbs": ["*"]
+    },
+    {
+      "apiGroups": ["apps"],
+      "resources": ["deployments", "statefulsets"],
+      "verbs": ["*"]
+    },
+    {
+      "apiGroups": ["keda.sh"],
+      "resources": ["scaledobjects"],
+      "verbs": ["*"]
+    },
+    {
+      "apiGroups": ["postgresql.cnpg.io"],
+      "resources": ["clusters", "backups", "scheduledbackups", "poolers"],
+      "verbs": ["*"]
+    }
+  ]
+}
