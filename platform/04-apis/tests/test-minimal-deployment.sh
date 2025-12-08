@@ -365,18 +365,19 @@ if kubectl get service "${EXPECTED_SERVICE}" -n "${TEST_NAMESPACE}" &>/dev/null;
         validation_errors+=("Service port mismatch: expected 8080, got ${SERVICE_PORT}")
     fi
     
-    if [[ "${TARGET_PORT}" != "8080" ]]; then
+    # Target port can be numeric (8080) or named (http)
+    if [[ "${TARGET_PORT}" != "8080" ]] && [[ "${TARGET_PORT}" != "http" ]]; then
         validation_passed=false
-        validation_errors+=("Target port mismatch: expected 8080, got ${TARGET_PORT}")
+        validation_errors+=("Target port mismatch: expected 8080 or http, got ${TARGET_PORT}")
     fi
     
-    # Check selector
-    SELECTOR_APP=$(kubectl get service "${EXPECTED_SERVICE}" -n "${TEST_NAMESPACE}" -o jsonpath='{.spec.selector.app}' 2>/dev/null || echo "")
-    echo "Selector app:   ${SELECTOR_APP} (expected: ${CLAIM_NAME})"
+    # Check selector (using Kubernetes recommended label)
+    SELECTOR_APP=$(kubectl get service "${EXPECTED_SERVICE}" -n "${TEST_NAMESPACE}" -o jsonpath='{.spec.selector.app\.kubernetes\.io/name}' 2>/dev/null || echo "")
+    echo "Selector app.kubernetes.io/name:   ${SELECTOR_APP} (expected: ${CLAIM_NAME})"
     
     if [[ "${SELECTOR_APP}" != "${CLAIM_NAME}" ]]; then
         validation_passed=false
-        validation_errors+=("Selector mismatch: expected app=${CLAIM_NAME}, got app=${SELECTOR_APP}")
+        validation_errors+=("Selector mismatch: expected app.kubernetes.io/name=${CLAIM_NAME}, got app.kubernetes.io/name=${SELECTOR_APP}")
     fi
     
     echo ""
@@ -477,27 +478,27 @@ run_check \
 validation_passed=true
 validation_errors=()
 
-# Check Deployment labels
+# Check Deployment labels (using Kubernetes recommended labels)
 if kubectl get deployment "${EXPECTED_DEPLOYMENT}" -n "${TEST_NAMESPACE}" &>/dev/null; then
-    DEPLOY_APP_LABEL=$(kubectl get deployment "${EXPECTED_DEPLOYMENT}" -n "${TEST_NAMESPACE}" -o jsonpath='{.metadata.labels.app}' 2>/dev/null || echo "")
+    DEPLOY_APP_LABEL=$(kubectl get deployment "${EXPECTED_DEPLOYMENT}" -n "${TEST_NAMESPACE}" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/name}' 2>/dev/null || echo "")
     
     if [[ "${DEPLOY_APP_LABEL}" != "${CLAIM_NAME}" ]]; then
         validation_passed=false
-        validation_errors+=("Deployment missing app=${CLAIM_NAME} label")
+        validation_errors+=("Deployment missing app.kubernetes.io/name=${CLAIM_NAME} label")
     else
-        echo "✓ Deployment has correct app label"
+        echo "✓ Deployment has correct app.kubernetes.io/name label"
     fi
 fi
 
-# Check Service labels
+# Check Service labels (using Kubernetes recommended labels)
 if kubectl get service "${EXPECTED_SERVICE}" -n "${TEST_NAMESPACE}" &>/dev/null; then
-    SERVICE_APP_LABEL=$(kubectl get service "${EXPECTED_SERVICE}" -n "${TEST_NAMESPACE}" -o jsonpath='{.metadata.labels.app}' 2>/dev/null || echo "")
+    SERVICE_APP_LABEL=$(kubectl get service "${EXPECTED_SERVICE}" -n "${TEST_NAMESPACE}" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/name}' 2>/dev/null || echo "")
     
     if [[ "${SERVICE_APP_LABEL}" != "${CLAIM_NAME}" ]]; then
         validation_passed=false
-        validation_errors+=("Service missing app=${CLAIM_NAME} label")
+        validation_errors+=("Service missing app.kubernetes.io/name=${CLAIM_NAME} label")
     else
-        echo "✓ Service has correct app label"
+        echo "✓ Service has correct app.kubernetes.io/name label"
     fi
 fi
 

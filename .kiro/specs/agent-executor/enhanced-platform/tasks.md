@@ -232,7 +232,7 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Make script executable
   - _Requirements: 17_
 
-- [ ] 13. Checkpoint 3: Test minimal claim deployment
+- [x] 13. Checkpoint 3: Test minimal claim deployment
   - Run minimal claim deployment test
   - Verify all 4 resources created successfully
   - Verify Deployment has correct image
@@ -241,7 +241,7 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Verify resource labels applied correctly
   - **Deliverable:** Minimal EventDrivenService claim successfully provisions resources
 
-- [ ] 14. Create full claim deployment test
+- [x] 14. Create full claim deployment test
   - Create test script `platform/04-apis/tests/test-full-deployment.sh`
   - Script applies full-claim.yaml with all features (secrets, init container, size)
   - Script verifies resource sizing matches size specification
@@ -252,7 +252,7 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Make script executable
   - _Requirements: 17_
 
-- [ ] 15. Checkpoint 4: Test full claim with all features
+- [x] 15. Checkpoint 4: Test full claim with all features
   - Run full claim deployment test
   - Verify resource requests/limits match size: medium
   - Verify all secretRefs mounted correctly (individual keys + envFrom)
@@ -261,7 +261,7 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Verify NATS environment variables set correctly
   - **Deliverable:** Full-featured EventDrivenService claim works with all options
 
-- [ ] 16. Create KEDA configuration verification script
+- [x] 16. Create KEDA configuration verification script
   - Create test script `platform/04-apis/tests/verify-keda-config.sh`
   - Script checks ScaledObject trigger configuration
   - Script verifies nats-headless endpoint used (not nats)
@@ -323,7 +323,7 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Check pod logs for successful message processing
   - **Deliverable:** Deployed service functionally processes messages
 
-- [ ] 22. Create autoscaling test script
+- [x] 22. Create autoscaling test script
   - Create test script `platform/04-apis/tests/test-autoscaling.sh`
   - Script publishes 50 test messages to NATS
   - Script monitors pod count over time
@@ -333,7 +333,7 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Make script executable
   - _Requirements: 17_
 
-- [ ] 23. Checkpoint 8: KEDA autoscaling verification
+- [x] 23. Checkpoint 8: KEDA autoscaling verification
   - Run autoscaling test script
   - Verify pods scale up from 1 to multiple replicas
   - Verify scaling responds to queue depth

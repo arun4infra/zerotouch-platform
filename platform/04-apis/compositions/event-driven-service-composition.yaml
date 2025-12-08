@@ -97,14 +97,19 @@ spec:
                               envFrom:
                                 - secretRef:
                                     name: placeholder-secret1
+                                    optional: true
                                 - secretRef:
                                     name: placeholder-secret2
+                                    optional: true
                                 - secretRef:
                                     name: placeholder-secret3
+                                    optional: true
                                 - secretRef:
                                     name: placeholder-secret4
+                                    optional: true
                                 - secretRef:
                                     name: placeholder-secret5
+                                    optional: true
                               resources:
                                 requests:
                                   cpu: "500m"
