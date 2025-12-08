@@ -1,8 +1,8 @@
-# Design Document: AgentExecutor Platform API
+# Design Document: EventDrivenService Platform API
 
 ## 1. Overview
 
-This design document describes the architecture for creating a reusable AgentExecutor platform API in the zerotouch-platform repository. The API enables consumers to deploy event-driven Python services with NATS message consumption, KEDA autoscaling, and integration with PostgreSQL and Dragonfly.
+This design document describes the architecture for creating a reusable EventDrivenService platform API in the zerotouch-platform repository. The API enables consumers to deploy event-driven services with NATS message consumption and KEDA autoscaling.
 
 ### 1.1 Design Goals
 
@@ -45,13 +45,13 @@ This design document describes the architecture for creating a reusable AgentExe
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │         platform/04-apis/ (Sync Wave 1) - NEW             │  │
 │  │  ┌────────────────────────────────────────────────────┐  │  │
-│  │  │ XRD: XAgentExecutor                                │  │  │
+│  │  │ XRD: XEventDrivenService                           │  │  │
 │  │  │ - Group: platform.bizmatters.io                    │  │  │
-│  │  │ - Claim: AgentExecutor                             │  │  │
-│  │  │ - Fields: image, size, natsUrl, secrets, etc.     │  │  │
+│  │  │ - Claim: EventDrivenService                        │  │  │
+│  │  │ - Fields: image, nats, secretName, initContainer  │  │  │
 │  │  └────────────────────────────────────────────────────┘  │  │
 │  │  ┌────────────────────────────────────────────────────┐  │  │
-│  │  │ Composition: agent-executor-composition            │  │  │
+│  │  │ Composition: event-driven-service-composition      │  │  │
 │  │  │ Creates:                                           │  │  │
 │  │  │ - Deployment (init + main container)              │  │  │
 │  │  │ - Service (port 8080)                             │  │  │
@@ -76,13 +76,15 @@ This design document describes the architecture for creating a reusable AgentExe
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │         platform/claims/intelligence-deepagents/          │  │
 │  │  ┌────────────────────────────────────────────────────┐  │  │
-│  │  │ Claim: agent-executor-claim.yaml                   │  │  │
+│  │  │ Claim: event-driven-service-claim.yaml             │  │  │
 │  │  │ apiVersion: platform.bizmatters.io/v1alpha1        │  │  │
-│  │  │ kind: AgentExecutor                                │  │  │
+│  │  │ kind: EventDrivenService                           │  │  │
 │  │  │ spec:                                              │  │  │
-│  │  │   image: ghcr.io/private/agent-executor:v1.0.0    │  │  │
+│  │  │   image: ghcr.io/private/my-service:v1.0.0        │  │  │
 │  │  │   size: medium                                     │  │  │
-│  │  │   natsUrl: nats://nats.nats.svc:4222               │  │  │
+│  │  │   nats:                                            │  │  │
+│  │  │     stream: MY_STREAM                              │  │  │
+│  │  │     consumer: my-workers                           │  │  │
 │  │  └────────────────────────────────────────────────────┘  │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────┘
@@ -94,10 +96,10 @@ This design document describes the architecture for creating a reusable AgentExe
 │                                                                   │
 │  Crossplane sees Claim → Provisions Resources                    │
 │  ┌────────────────────────────────────────────────────────┐    │
-│  │ Deployment: agent-executor                             │    │
-│  │ Service: agent-executor                                │    │
-│  │ KEDA ScaledObject: agent-executor-scaler               │    │
-│  │ ServiceAccount: agent-executor                         │    │
+│  │ Deployment: my-service                                 │    │
+│  │ Service: my-service                                    │    │
+│  │ KEDA ScaledObject: my-service-scaler                   │    │
+│  │ ServiceAccount: my-service                             │    │
 │  └────────────────────────────────────────────────────────┘    │
 └───────────────────────────────────────────────────────────────┘
 ```
@@ -169,22 +171,22 @@ spec:
       - CreateNamespace=true
 ```
 
-### 3.2 AgentExecutor XRD
+### 3.2 EventDrivenService XRD
 
 ```yaml
-# platform/04-apis/definitions/xagentexecutors.yaml
+# platform/04-apis/definitions/xeventdrivenservices.yaml
 apiVersion: apiextensions.crossplane.io/v1
 kind: CompositeResourceDefinition
 metadata:
-  name: xagentexecutors.platform.bizmatters.io
+  name: xeventdrivenservices.platform.bizmatters.io
 spec:
   group: platform.bizmatters.io
   names:
-    kind: XAgentExecutor
-    plural: xagentexecutors
+    kind: XEventDrivenService
+    plural: xeventdrivenservices
   claimNames:
-    kind: AgentExecutor
-    plural: agentexecutors
+    kind: EventDrivenService
+    plural: eventdrivenservices
   versions:
     - name: v1alpha1
       served: true
@@ -198,43 +200,67 @@ spec:
               properties:
                 image:
                   type: string
-                  description: "Container image (e.g., ghcr.io/org/service:v1.0.0)"
+                  description: "Container image"
                 size:
                   type: string
-                  description: "Resource size: small (250m-1000m CPU, 512Mi-2Gi RAM), medium (500m-2000m CPU, 1Gi-4Gi RAM), large (1000m-4000m CPU, 2Gi-8Gi RAM)"
                   enum: [small, medium, large]
                   default: medium
-                natsUrl:
+                  description: "Resource size: small (250m-1000m CPU, 512Mi-2Gi RAM), medium (500m-2000m CPU, 1Gi-4Gi RAM), large (1000m-4000m CPU, 2Gi-8Gi RAM)"
+                nats:
+                  type: object
+                  required:
+                    - stream
+                    - consumer
+                  properties:
+                    url:
+                      type: string
+                      default: "nats://nats.nats.svc:4222"
+                      description: "NATS server URL"
+                    stream:
+                      type: string
+                      description: "NATS JetStream stream name"
+                    consumer:
+                      type: string
+                      description: "NATS consumer group name"
+                scaling:
+                  type: object
+                  properties:
+                    minReplicas:
+                      type: integer
+                      default: 1
+                    maxReplicas:
+                      type: integer
+                      default: 10
+                    lagThreshold:
+                      type: string
+                      default: "5"
+                      description: "Queue lag threshold for scaling"
+                secretName:
                   type: string
-                  description: "NATS server URL"
-                  default: "nats://nats.nats.svc:4222"
-                natsStreamName:
-                  type: string
-                  description: "NATS JetStream stream name to consume from"
-                natsConsumerGroup:
-                  type: string
-                  description: "NATS consumer group name for load balancing"
-                postgresConnectionSecret:
-                  type: string
-                  description: "Name of secret containing PostgreSQL credentials (keys: POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)"
-                  default: "postgres-connection"
-                dragonflyConnectionSecret:
-                  type: string
-                  description: "Name of secret containing Dragonfly credentials (keys: DRAGONFLY_HOST, DRAGONFLY_PORT, DRAGONFLY_PASSWORD)"
-                  default: "dragonfly-connection"
-                llmKeysSecret:
-                  type: string
-                  description: "Name of secret containing LLM API keys (keys: OPENAI_API_KEY, ANTHROPIC_API_KEY)"
-                  default: "llm-keys"
+                  description: "Name of secret containing all environment variables (mounted via envFrom)"
                 imagePullSecrets:
                   type: array
-                  description: "List of secret names for pulling private images"
                   items:
-                    type: string
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                  description: "List of secrets for pulling private images"
+                initContainer:
+                  type: object
+                  description: "Optional init container for migrations or setup"
+                  properties:
+                    image:
+                      type: string
+                      description: "Init container image (defaults to main image if not specified)"
+                    command:
+                      type: array
+                      items:
+                        type: string
+                      description: "Command to run in init container"
               required:
                 - image
-                - natsStreamName
-                - natsConsumerGroup
+                - nats
 ```
 
 ### 3.3 AgentExecutor Composition
@@ -506,21 +532,26 @@ The composition creates four main resources:
 ```yaml
 # Consumer creates this in their private repo
 apiVersion: platform.bizmatters.io/v1alpha1
-kind: AgentExecutor
+kind: EventDrivenService
 metadata:
   name: my-service
   namespace: my-namespace
 spec:
   image: ghcr.io/myorg/my-service:v1.0.0
   size: medium
-  natsUrl: nats://nats.nats.svc:4222
-  natsStreamName: MY_SERVICE_STREAM
-  natsConsumerGroup: my-service-workers
-  postgresConnectionSecret: my-postgres-secret
-  dragonflyConnectionSecret: my-dragonfly-secret
-  llmKeysSecret: my-llm-keys
+  nats:
+    url: nats://nats.nats.svc:4222
+    stream: MY_SERVICE_STREAM
+    consumer: my-service-workers
+  scaling:
+    minReplicas: 1
+    maxReplicas: 10
+    lagThreshold: "5"
+  secretName: my-service-config  # Created by ExternalSecret
   imagePullSecrets:
-    - ghcr-pull-secret
+    - name: ghcr-pull-secret
+  initContainer:
+    command: ["/bin/sh", "-c", "scripts/ci/run-migrations.sh"]
 ```
 
 ## 7. References

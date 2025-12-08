@@ -122,13 +122,13 @@ done
 # Task 4.8: Verify Crossplane Secrets
 print_header "Task 4.8: Verify Crossplane-Generated Secrets"
 
-CROSSPLANE_SECRETS=("agent-executor-postgres" "agent-executor-dragonfly")
+CROSSPLANE_SECRETS=("agent-executor-db-conn" "agent-executor-cache-conn")
 for secret in "${CROSSPLANE_SECRETS[@]}"; do
     if kubectl get secret "$secret" -n intelligence-deepagents &>/dev/null; then
         print_success "Crossplane secret '$secret' exists"
         
         # Verify secret keys
-        if [ "$secret" = "agent-executor-postgres" ]; then
+        if [ "$secret" = "agent-executor-db-conn" ]; then
             KEYS=$(kubectl get secret "$secret" -n intelligence-deepagents -o jsonpath='{.data}' 2>/dev/null | jq -r 'keys[]' 2>/dev/null)
             if echo "$KEYS" | grep -q "endpoint" && echo "$KEYS" | grep -q "password"; then
                 print_success "Secret '$secret' has correct keys"
@@ -228,10 +228,10 @@ if [ "$POD_COUNT" -gt 0 ]; then
     # Check pod logs for startup message
     POD_NAME=$(kubectl get pods -n intelligence-deepagents -l app=agent-executor -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
     if [ -n "$POD_NAME" ]; then
-        if kubectl logs "$POD_NAME" -n intelligence-deepagents -c agent-executor --tail=50 2>/dev/null | grep -q "agent_executor_service_starting"; then
-            print_success "Pod logs show service started"
+        if kubectl logs "$POD_NAME" -n intelligence-deepagents -c agent-executor --tail=50 2>/dev/null | grep -q "readiness_check_passed"; then
+            print_success "Pod logs show service is ready"
         else
-            print_warning "Service startup message not found in logs"
+            print_warning "Readiness check message not found in logs"
             ((WARNINGS++))
         fi
     fi

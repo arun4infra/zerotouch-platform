@@ -1,14 +1,14 @@
-# Requirements Document: AgentExecutor Platform API
+# Requirements Document: EventDrivenService Platform API
 
 ## Introduction
 
-This specification defines the requirements for creating a reusable AgentExecutor platform API in the zerotouch-platform repository. The AgentExecutor API enables consumers to deploy event-driven Python services that process NATS messages with KEDA autoscaling, PostgreSQL persistence, and Dragonfly streaming capabilities.
+This specification defines the requirements for creating a reusable EventDrivenService platform API in the zerotouch-platform repository. The EventDrivenService API enables consumers to deploy event-driven services that process NATS messages with KEDA autoscaling.
 
-This is a **platform-level specification** that defines the infrastructure machinery (XRD, Composition, NATS) without any application-specific logic. The platform is designed to be open-source and reusable by any consumer who wants to deploy similar event-driven services.
+This is a **platform-level specification** that defines the infrastructure machinery (XRD, Composition, NATS) without any application-specific logic. The platform is designed to be open-source and reusable by any consumer who wants to deploy event-driven services consuming from NATS JetStream.
 
 ## Glossary
 
-- **AgentExecutor API**: A Crossplane XRD that defines how consumers can request event-driven service deployments
+- **EventDrivenService API**: A Crossplane XRD that defines how consumers can request event-driven service deployments
 - **Platform Repository**: The public zerotouch-platform repository containing infrastructure definitions
 - **Consumer**: Any developer or organization using the platform to deploy their services
 - **XRD**: Crossplane Composite Resource Definition - defines the API contract
@@ -47,15 +47,15 @@ This is a **platform-level specification** that defines the infrastructure machi
 
 ### Requirement 3
 
-**User Story:** As a platform engineer, I want an AgentExecutor XRD defined in the 04-apis layer, so that consumers have a declarative API for deploying event-driven services.
+**User Story:** As a platform engineer, I want an EventDrivenService XRD defined in the 04-apis layer, so that consumers have a declarative API for deploying event-driven services.
 
 #### Acceptance Criteria
 
-1. THE XRD SHALL be defined at platform/04-apis/definitions/xagentexecutors.yaml
+1. THE XRD SHALL be defined at platform/04-apis/definitions/xeventdrivenservices.yaml
 2. THE XRD SHALL use group platform.bizmatters.io with API version v1alpha1
-3. THE XRD SHALL define kind XAgentExecutor for composite resources
-4. THE XRD SHALL define kind AgentExecutor for namespace-scoped claims
-5. THE XRD spec SHALL include fields: image, size, natsUrl, postgresConnectionSecret, dragonflyConnectionSecret, llmKeysSecret, imagePullSecrets
+3. THE XRD SHALL define kind XEventDrivenService for composite resources
+4. THE XRD SHALL define kind EventDrivenService for namespace-scoped claims
+5. THE XRD spec SHALL include fields: image, size, nats (url, stream, consumer), secretName, imagePullSecrets, initContainer (optional)
 
 ### Requirement 4
 
@@ -71,15 +71,15 @@ This is a **platform-level specification** that defines the infrastructure machi
 
 ### Requirement 5
 
-**User Story:** As a platform consumer, I want to reference existing secrets for database and API credentials, so that I can manage secrets independently from service deployment.
+**User Story:** As a platform consumer, I want to reference a single secret containing all my service configuration, so that I can manage all environment variables in one place.
 
 #### Acceptance Criteria
 
-1. THE XRD SHALL define postgresConnectionSecret field for PostgreSQL credentials
-2. THE XRD SHALL define dragonflyConnectionSecret field for Dragonfly credentials
-3. THE XRD SHALL define llmKeysSecret field for LLM API keys
-4. THE XRD SHALL provide default secret names that consumers can override
-5. THE XRD SHALL document the expected keys in each secret
+1. THE XRD SHALL define a secretName field (string) for referencing a Kubernetes secret
+2. THE Composition SHALL mount this secret using envFrom to inject all keys as environment variables
+3. THE XRD SHALL document that consumers should bundle all config (database URLs, API keys, etc.) into a single secret
+4. THE platform documentation SHALL provide examples using ExternalSecrets Operator to sync from AWS SSM
+5. WHERE secretName is not specified THEN the service SHALL run without secret injection
 
 ### Requirement 6
 
@@ -95,11 +95,11 @@ This is a **platform-level specification** that defines the infrastructure machi
 
 ### Requirement 7
 
-**User Story:** As a platform engineer, I want an AgentExecutor Composition that provisions all required resources, so that consumers get a complete deployment from a single claim.
+**User Story:** As a platform engineer, I want an EventDrivenService Composition that provisions all required resources, so that consumers get a complete deployment from a single claim.
 
 #### Acceptance Criteria
 
-1. THE Composition SHALL be defined at platform/04-apis/compositions/agent-executor-composition.yaml
+1. THE Composition SHALL be defined at platform/04-apis/compositions/event-driven-service-composition.yaml
 2. THE Composition SHALL create a Deployment with init container and main container
 3. THE Composition SHALL create a Service exposing port 8080
 4. THE Composition SHALL create a KEDA ScaledObject for autoscaling
@@ -111,23 +111,23 @@ This is a **platform-level specification** that defines the infrastructure machi
 
 #### Acceptance Criteria
 
-1. THE Composition SHALL configure an init container in the Deployment
-2. THE init container SHALL use the same image as the main container
-3. THE init container SHALL execute command: ["/bin/sh", "-c", "scripts/ci/run-migrations.sh"]
-4. THE init container SHALL mount the same secrets as the main container
-5. WHEN migrations fail THEN the pod SHALL not start and SHALL report the error
+1. THE XRD SHALL define an optional initContainer object with image and command fields
+2. WHEN initContainer.image is not specified THEN the Composition SHALL use the main container image
+3. WHEN initContainer.command is specified THEN the Composition SHALL create an init container with that command
+4. THE init container SHALL have access to the same secret via envFrom
+5. WHEN init container fails THEN the pod SHALL not start and SHALL report the error
 
 ### Requirement 9
 
-**User Story:** As a platform consumer, I want the main container configured with environment variables from secrets, so that my application can access databases and APIs securely.
+**User Story:** As a platform consumer, I want the main container configured with environment variables from a secret, so that my application can access required services securely.
 
 #### Acceptance Criteria
 
-1. THE Composition SHALL mount PostgreSQL credentials as environment variables
-2. THE Composition SHALL mount Dragonfly credentials as environment variables
-3. THE Composition SHALL mount LLM API keys as environment variables
-4. THE Composition SHALL set NATS_URL environment variable from the claim spec
-5. THE environment variables SHALL follow standard naming conventions (POSTGRES_HOST, POSTGRES_PORT, etc.)
+1. THE Composition SHALL mount the secret specified in secretName using envFrom
+2. ALL keys in the referenced secret SHALL be available as environment variables
+3. THE Composition SHALL set NATS_URL environment variable from the nats.url field in the claim spec
+4. WHERE secretName is not provided THEN only NATS_URL SHALL be set
+5. THE consumer SHALL be responsible for creating the secret with appropriate key names for their application
 
 ### Requirement 10
 
@@ -161,9 +161,9 @@ This is a **platform-level specification** that defines the infrastructure machi
 
 1. THE Composition SHALL configure KEDA to monitor a NATS stream specified by the consumer
 2. THE Composition SHALL configure KEDA to monitor a consumer group specified by the consumer
-3. THE XRD SHALL define natsStreamName field for stream configuration
-4. THE XRD SHALL define natsConsumerGroup field for consumer group configuration
-5. THE KEDA configuration SHALL use the natsUrl from the claim spec
+3. THE XRD SHALL define nats.stream field for stream configuration
+4. THE XRD SHALL define nats.consumer field for consumer group configuration
+5. THE KEDA configuration SHALL use the nats.url from the claim spec
 
 ### Requirement 13
 
@@ -215,7 +215,7 @@ This is a **platform-level specification** that defines the infrastructure machi
 
 ### Requirement 17
 
-**User Story:** As a platform consumer, I want comprehensive API documentation, so that I can understand how to use the AgentExecutor API without reading implementation code.
+**User Story:** As a platform consumer, I want comprehensive API documentation, so that I can understand how to use the EventDrivenService API without reading implementation code.
 
 #### Acceptance Criteria
 
