@@ -343,6 +343,7 @@ spec:
                             stream: placeholder
                             consumer: placeholder
                             lagThreshold: "5"
+                            useStreamMsgCount: "true"
             patches:
               # Patch name (with -scaler suffix)
               - type: FromCompositeFieldPath
