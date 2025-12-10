@@ -131,11 +131,8 @@ fi
         exit 1
     fi
 
-    echo -e "${GREEN}✓ AWS CLI configured${NC}"
-    echo -e "${GREEN}✓ Region: $AWS_REGION${NC}"
-else
-    echo -e "${GREEN}✓ Preview mode - creating Kubernetes secrets${NC}"
-fi
+echo -e "${GREEN}✓ AWS CLI configured${NC}"
+echo -e "${GREEN}✓ Region: $AWS_REGION${NC}"
 echo ""
 
 if [ "$DRY_RUN" = true ]; then
