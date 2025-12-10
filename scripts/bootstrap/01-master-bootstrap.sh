@@ -106,46 +106,7 @@ fi
 # PRODUCTION MODE SETUP
 # ============================================================================
 if [ "$MODE" = "production" ]; then
-    CREDENTIALS_FILE="$SCRIPT_DIR/.bootstrap-credentials-$(date +%Y%m%d-%H%M%S).txt"
-    
-    # Check if cluster is already bootstrapped
-    if kubectl cluster-info &>/dev/null; then
-        echo -e "${YELLOW}⚠️  WARNING: Kubernetes cluster is already accessible${NC}"
-        echo -e "${YELLOW}   This script is designed for initial bootstrap only.${NC}"
-        echo ""
-        echo -e "${BLUE}Current cluster:${NC}"
-        kubectl get nodes 2>/dev/null || true
-        echo ""
-        echo -e "${YELLOW}If you need to:${NC}"
-        echo -e "  - Add repository credentials: ${GREEN}./scripts/bootstrap/13-configure-repo-credentials.sh${NC}"
-        echo -e "  - Inject secrets: ${GREEN}./scripts/bootstrap/07-inject-eso-secrets.sh${NC}"
-        echo -e "  - Add worker nodes: ${GREEN}./scripts/bootstrap/05-add-worker-nodes.sh${NC}"
-        echo ""
-        read -p "Do you want to continue anyway? This may cause issues! (y/N): " -n 1 -r
-        echo ""
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${GREEN}Aborted. Use individual scripts for post-bootstrap tasks.${NC}"
-            exit 0
-        fi
-        echo -e "${YELLOW}Continuing with bootstrap (you've been warned!)...${NC}"
-        echo ""
-    fi
-    
-    echo -e "${GREEN}Server IP:${NC} $SERVER_IP"
-    echo -e "${GREEN}Credentials will be saved to:${NC} $CREDENTIALS_FILE"
-    echo ""
-    
-    # Initialize credentials file
-    cat > "$CREDENTIALS_FILE" << EOF
-╔══════════════════════════════════════════════════════════════╗
-║   BizMatters Infrastructure - Bootstrap Credentials         ║
-║   Generated: $(date)                            ║
-╚══════════════════════════════════════════════════════════════╝
-
-Server IP: $SERVER_IP
-Bootstrap Date: $(date)
-
-EOF
+    CREDENTIALS_FILE=$("$SCRIPT_DIR/production/setup-production.sh" "$SERVER_IP" "$ROOT_PASSWORD" "$WORKER_NODES" "$WORKER_PASSWORD")
 fi
 
 # ============================================================================
@@ -161,18 +122,11 @@ if [ "$MODE" = "production" ]; then
     echo -e "${YELLOW}[2/13] Installing Talos OS...${NC}"
     "$SCRIPT_DIR/03-install-talos.sh" --server-ip "$SERVER_IP" --user root --password "$ROOT_PASSWORD" --yes
 
-    cat >> "$CREDENTIALS_FILE" << EOF
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TALOS CREDENTIALS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Talos Config: bootstrap/talos/talosconfig
+    "$SCRIPT_DIR/production/add-credentials.sh" "$CREDENTIALS_FILE" "TALOS CREDENTIALS" "Talos Config: bootstrap/talos/talosconfig
 Control Plane Config: bootstrap/talos/nodes/cp01-main/config.yaml
 
 Access Talos:
-  talosctl --talosconfig bootstrap/talos/talosconfig -n $SERVER_IP version
-
-EOF
+  talosctl --talosconfig bootstrap/talos/talosconfig -n $SERVER_IP version"
 
     # Step 3: Bootstrap Talos cluster
     echo -e "${YELLOW}[3/13] Bootstrapping Talos cluster...${NC}"
@@ -199,20 +153,20 @@ echo -e "${YELLOW}[6/13] Injecting ESO secrets...${NC}"
 
 # Step 7: Inject SSM Parameters (BEFORE ArgoCD)
 echo -e "${YELLOW}[7/13] Injecting SSM parameters...${NC}"
-"$SCRIPT_DIR/08-inject-ssm-parameters.sh"
+if [ "$MODE" = "preview" ]; then
+    # In preview mode, generate .env.ssm and create Kubernetes secrets directly
+    "$SCRIPT_DIR/08-inject-ssm-parameters.sh" --preview-mode
+    "$SCRIPT_DIR/preview/create-k8s-secrets.sh"
+else
+    # In production mode, inject into AWS SSM Parameter Store
+    "$SCRIPT_DIR/08-inject-ssm-parameters.sh"
+fi
 
 if [ "$MODE" = "production" ]; then
-    cat >> "$CREDENTIALS_FILE" << EOF
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-AWS SSM PARAMETER STORE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Parameters injected from .env.ssm to AWS SSM Parameter Store
+    "$SCRIPT_DIR/production/add-credentials.sh" "$CREDENTIALS_FILE" "AWS SSM PARAMETER STORE" "Parameters injected from .env.ssm to AWS SSM Parameter Store
 
 Verify parameters:
-  aws ssm get-parameters-by-path --path /zerotouch/prod --region ap-south-1
-
-EOF
+  aws ssm get-parameters-by-path --path /zerotouch/prod --region ap-south-1"
 fi
 
 # Step 8: Install ArgoCD
@@ -239,12 +193,7 @@ fi
 ARGOCD_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d || echo "NOT_GENERATED")
 
 if [ "$MODE" = "production" ]; then
-    cat >> "$CREDENTIALS_FILE" << EOF
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ARGOCD CREDENTIALS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Username: admin
+    "$SCRIPT_DIR/production/add-credentials.sh" "$CREDENTIALS_FILE" "ARGOCD CREDENTIALS" "Username: admin
 Password: $ARGOCD_PASSWORD
 
 Access ArgoCD UI:
@@ -252,9 +201,7 @@ Access ArgoCD UI:
   Open: https://localhost:8080
 
 Access via CLI:
-  argocd login localhost:8080 --username admin --password '$ARGOCD_PASSWORD'
-
-EOF
+  argocd login localhost:8080 --username admin --password '$ARGOCD_PASSWORD'"
 else
     echo ""
     echo -e "${GREEN}ArgoCD Credentials:${NC}"
@@ -271,18 +218,11 @@ if [ "$MODE" = "production" ]; then
         echo -e "${BLUE}ℹ  You can configure manually: ./scripts/bootstrap/13-configure-repo-credentials.sh --auto${NC}"
     }
 
-    cat >> "$CREDENTIALS_FILE" << EOF
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ARGOCD REPOSITORY CREDENTIALS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Repository credentials managed via ExternalSecrets from AWS SSM
+    "$SCRIPT_DIR/production/add-credentials.sh" "$CREDENTIALS_FILE" "ARGOCD REPOSITORY CREDENTIALS" "Repository credentials managed via ExternalSecrets from AWS SSM
 
 Verify:
   kubectl get secret -n argocd -l argocd.argoproj.io/secret-type=repository
-  kubectl get externalsecret -n argocd
-
-EOF
+  kubectl get externalsecret -n argocd"
 else
     echo -e "${BLUE}[12/13] Skipping repository credentials configuration (preview mode)${NC}"
 fi
