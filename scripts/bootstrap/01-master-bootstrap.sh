@@ -170,12 +170,6 @@ echo -e "${YELLOW}[8/14] Installing ArgoCD...${NC}"
 echo -e "${YELLOW}[9/14] Waiting for platform-bootstrap...${NC}"
 "$SCRIPT_DIR/10-wait-platform-bootstrap.sh"
 
-# Step 9.5: Cleanup preview resources (preview mode only)
-if [ "$MODE" = "preview" ]; then
-    echo -e "${YELLOW}[9.5/14] Cleaning up preview resources...${NC}"
-    "$SCRIPT_DIR/helpers/cleanup-preview-resources.sh"
-fi
-
 # Step 10: Verify ESO
 echo -e "${YELLOW}[10/14] Verifying ESO...${NC}"
 "$SCRIPT_DIR/11-verify-eso.sh"

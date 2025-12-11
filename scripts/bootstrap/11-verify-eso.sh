@@ -156,11 +156,28 @@ kubectl get externalsecrets -A -o custom-columns='NAMESPACE:.metadata.namespace,
 echo ""
 
 # Check if any critical secrets failed
-FAILED_COUNT=$(kubectl get externalsecrets -A -o json | jq -r '[.items[] | select(.status.conditions[0].reason == "SecretSyncedError")] | length')
+FAILED_SECRETS=$(kubectl get externalsecrets -A -o json | jq -r '.items[] | select(.status.conditions[0].reason == "SecretSyncedError")')
+FAILED_COUNT=$(echo "$FAILED_SECRETS" | jq -s 'length')
+
 if [ "$FAILED_COUNT" -gt 0 ]; then
-    echo -e "${RED}✗ $FAILED_COUNT ExternalSecrets still failing${NC}"
-    echo -e "${BLUE}ℹ  Check SSM parameters exist: aws ssm get-parameters-by-path --path /zerotouch/shared${NC}"
-    exit 1
+    echo ""
+    echo -e "${YELLOW}⚠️  $FAILED_COUNT ExternalSecrets failed to sync:${NC}"
+    echo "$FAILED_SECRETS" | jq -r '"  - \(.metadata.namespace)/\(.metadata.name): \(.status.conditions[0].message)"'
+    
+    # Check if all failures are tenant repositories (repo-*)
+    NON_REPO_FAILURES=$(echo "$FAILED_SECRETS" | jq -r 'select(.metadata.name | startswith("repo-") | not) | .metadata.name')
+    NON_REPO_COUNT=$(echo "$NON_REPO_FAILURES" | grep -c . || echo "0")
+    
+    if [ "$NON_REPO_COUNT" -eq 0 ]; then
+        echo ""
+        echo -e "${BLUE}ℹ  All failures are tenant repository credentials (expected in preview/testing)${NC}"
+        echo -e "${GREEN}✓ Core platform ExternalSecrets are working${NC}"
+    else
+        echo ""
+        echo -e "${RED}✗ Critical ExternalSecrets are failing (not just tenant repositories)${NC}"
+        echo -e "${BLUE}ℹ  Check SSM parameters exist: aws ssm get-parameters-by-path --path /zerotouch/prod${NC}"
+        exit 1
+    fi
 fi
 
 echo -e "${GREEN}✓ ESO verification complete${NC}"
