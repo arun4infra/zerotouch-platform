@@ -160,31 +160,67 @@ while IFS='|' read -r name sync health; do
         echo -e "  ❌ $name: $sync / $health"
         echo ""
         
-        # Get full application details
-        APP_YAML=$(kubectl get application "$name" -n argocd -o yaml 2>/dev/null)
+        # Get detailed status using kubectl and jq
+        APP_JSON=$(kubectl get application "$name" -n argocd -o json 2>/dev/null)
         
         # Print ALL conditions
         echo -e "     ${YELLOW}Conditions:${NC}"
-        echo "$APP_YAML" | yq eval '.status.conditions[] | "       - Type: \(.type), Status: \(.status), Message: \(.message // "none")"' - 2>/dev/null || echo "       (no conditions)"
+        CONDITIONS_OUT=$(echo "$APP_JSON" | jq -r '.status.conditions[]? | "       - \(.type): \(.message // "no message")"' 2>/dev/null)
+        if [ -n "$CONDITIONS_OUT" ]; then
+            echo "$CONDITIONS_OUT"
+        else
+            echo "       (no conditions)"
+        fi
         
         # Print operation state
         echo -e "     ${YELLOW}Operation State:${NC}"
-        echo "$APP_YAML" | yq eval '.status.operationState | "       Phase: \(.phase // "none"), Message: \(.message // "none")"' - 2>/dev/null || echo "       (no operation state)"
+        OP_PHASE=$(echo "$APP_JSON" | jq -r '.status.operationState.phase // "none"' 2>/dev/null)
+        OP_MSG=$(echo "$APP_JSON" | jq -r '.status.operationState.message // "none"' 2>/dev/null)
+        echo "       Phase: $OP_PHASE"
+        if [ "$OP_MSG" != "none" ]; then
+            echo "       Message: $OP_MSG"
+        fi
         
         # For OutOfSync, show what's out of sync
         if [[ "$sync" == "OutOfSync" ]]; then
             echo -e "     ${RED}Out of Sync Resources:${NC}"
-            echo "$APP_YAML" | yq eval '.status.resources[] | select(.status == "OutOfSync") | "       - \(.kind)/\(.name): \(.message // "no message")"' - 2>/dev/null | head -5 || echo "       (no details)"
+            OUTOFSYNC=$(echo "$APP_JSON" | jq -r '.status.resources[]? | select(.status == "OutOfSync") | "       - \(.kind)/\(.name): \(.message // "no message")"' 2>/dev/null | head -5)
+            if [ -n "$OUTOFSYNC" ]; then
+                echo "$OUTOFSYNC"
+            else
+                echo "       (no out of sync resources found)"
+            fi
         fi
         
         # For Degraded health, show ALL degraded resources with full details
         if [[ "$health" == "Degraded" ]]; then
             echo -e "     ${RED}Degraded Resources:${NC}"
-            echo "$APP_YAML" | yq eval '.status.resources[] | select(.health.status == "Degraded") | "       - \(.kind)/\(.name) in \(.namespace): \(.health.message // "no message")"' - 2>/dev/null || echo "       (no degraded resources found)"
+            DEGRADED=$(echo "$APP_JSON" | jq -r '.status.resources[]? | select(.health.status == "Degraded") | "       - \(.kind)/\(.name) in \(.namespace): \(.health.message // "no message")"' 2>/dev/null)
+            if [ -n "$DEGRADED" ]; then
+                echo "$DEGRADED"
+            else
+                echo "       (no degraded resources found)"
+            fi
             
             # Also check for progressing resources
             echo -e "     ${YELLOW}Progressing Resources:${NC}"
-            echo "$APP_YAML" | yq eval '.status.resources[] | select(.health.status == "Progressing") | "       - \(.kind)/\(.name) in \(.namespace): \(.health.message // "no message")"' - 2>/dev/null || echo "       (no progressing resources)"
+            PROGRESSING=$(echo "$APP_JSON" | jq -r '.status.resources[]? | select(.health.status == "Progressing") | "       - \(.kind)/\(.name) in \(.namespace): \(.health.message // "no message")"' 2>/dev/null)
+            if [ -n "$PROGRESSING" ]; then
+                echo "$PROGRESSING"
+            else
+                echo "       (no progressing resources)"
+            fi
+            
+            # Get pod status for degraded apps
+            echo -e "     ${YELLOW}Pod Status:${NC}"
+            PODS=$(echo "$APP_JSON" | jq -r '.status.resources[]? | select(.kind == "Pod") | "\(.namespace)/\(.name): \(.health.status // "Unknown")"' 2>/dev/null | head -5)
+            if [ -n "$PODS" ]; then
+                echo "$PODS" | while read -r pod; do
+                    echo "       - $pod"
+                done
+            else
+                echo "       (no pods found)"
+            fi
         fi
         
         echo ""
