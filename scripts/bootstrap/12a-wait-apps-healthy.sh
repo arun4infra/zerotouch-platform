@@ -42,6 +42,7 @@ done
 PREVIEW_OPTIONAL_APPS=(
     "cilium"                    # Kind uses kindnet instead
     "argocd-repo-credentials"   # Tenant repo credentials fail without SSM params
+    "intelligence"              # AI/documentation layer - resource intensive, not needed for core functionality
 )
 
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
