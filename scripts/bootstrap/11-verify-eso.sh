@@ -98,6 +98,11 @@ echo -e "${BLUE}   Found $TOTAL ExternalSecrets${NC}"
 # Annotate each to trigger re-sync
 SYNC_TIMESTAMP=$(date +%s)
 while IFS='|' read -r namespace name; do
+    # Skip resources without a namespace (e.g., ClusterSecretStore)
+    if [ -z "$namespace" ] || [ "$namespace" = "null" ]; then
+        continue
+    fi
+    
     if kubectl annotate externalsecret "$name" -n "$namespace" \
         force-sync="$SYNC_TIMESTAMP" --overwrite 2>/dev/null; then
         echo -e "   ${GREEN}✓${NC} Triggered: $namespace/$name"
