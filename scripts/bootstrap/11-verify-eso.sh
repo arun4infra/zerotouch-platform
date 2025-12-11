@@ -165,8 +165,7 @@ if [ "$FAILED_COUNT" -gt 0 ]; then
     echo "$FAILED_SECRETS" | jq -r '"  - \(.metadata.namespace)/\(.metadata.name): \(.status.conditions[0].message)"'
     
     # Check if all failures are tenant repositories (repo-*)
-    NON_REPO_FAILURES=$(echo "$FAILED_SECRETS" | jq -r 'select(.metadata.name | startswith("repo-") | not) | .metadata.name')
-    NON_REPO_COUNT=$(echo "$NON_REPO_FAILURES" | grep -c . || echo "0")
+    NON_REPO_COUNT=$(echo "$FAILED_SECRETS" | jq -r '[.[] | select(.metadata.name | startswith("repo-") | not)] | length')
     
     if [ "$NON_REPO_COUNT" -eq 0 ]; then
         echo ""
