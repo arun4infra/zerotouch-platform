@@ -18,7 +18,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configuration
-MAX_WAIT=180  # 3 minutes max wait for secrets to sync
+MAX_WAIT=100  # 100 seconds max wait for secrets to sync
 CHECK_INTERVAL=10
 
 # Kubectl retry function
@@ -139,13 +139,17 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
         exit 0
     fi
     
-    # Some failed - show details
-    if [ "$FAILED" -gt 0 ] && [ "$PENDING" -eq 0 ]; then
-        echo ""
-        echo -e "${RED}✗ $FAILED ExternalSecrets failed to sync:${NC}"
-        echo "$SECRETS_JSON" | jq -r '.items[] | select(.status.conditions[0].reason == "SecretSyncedError") | "  - \(.metadata.namespace)/\(.metadata.name): \(.status.conditions[0].message)"'
-        echo ""
-        # Don't exit yet - give more time for retry
+    # Early exit: If only repo-* ExternalSecrets are pending/failed, we can stop waiting
+    if [ "$PENDING" -gt 0 ] || [ "$FAILED" -gt 0 ]; then
+        # Check if all pending/failed are tenant repositories
+        NON_REPO_PENDING=$(echo "$SECRETS_JSON" | jq '[.items[] | select(.status.conditions[0].reason != "SecretSynced") | select(.metadata.name | startswith("repo-") | not)] | length')
+        
+        if [ "$NON_REPO_PENDING" -eq 0 ]; then
+            echo ""
+            echo -e "${BLUE}ℹ  Only tenant repository ExternalSecrets are pending/failed${NC}"
+            echo -e "${GREEN}✓ All core platform ExternalSecrets synced - continuing${NC}"
+            break
+        fi
     fi
 done
 
@@ -156,16 +160,16 @@ kubectl get externalsecrets -A -o custom-columns='NAMESPACE:.metadata.namespace,
 echo ""
 
 # Check if any critical secrets failed
-FAILED_SECRETS=$(kubectl get externalsecrets -A -o json | jq -r '.items[] | select(.status.conditions[0].reason == "SecretSyncedError")')
-FAILED_COUNT=$(echo "$FAILED_SECRETS" | jq -s 'length')
+FAILED_SECRETS_JSON=$(kubectl get externalsecrets -A -o json | jq '[.items[] | select(.status.conditions[0].reason == "SecretSyncedError")]')
+FAILED_COUNT=$(echo "$FAILED_SECRETS_JSON" | jq 'length')
 
 if [ "$FAILED_COUNT" -gt 0 ]; then
     echo ""
     echo -e "${YELLOW}⚠️  $FAILED_COUNT ExternalSecrets failed to sync:${NC}"
-    echo "$FAILED_SECRETS" | jq -r '"  - \(.metadata.namespace)/\(.metadata.name): \(.status.conditions[0].message)"'
+    echo "$FAILED_SECRETS_JSON" | jq -r '.[] | "  - \(.metadata.namespace)/\(.metadata.name): \(.status.conditions[0].message)"'
     
     # Check if all failures are tenant repositories (repo-*)
-    NON_REPO_COUNT=$(echo "$FAILED_SECRETS" | jq -r '[.[] | select(.metadata.name | startswith("repo-") | not)] | length')
+    NON_REPO_COUNT=$(echo "$FAILED_SECRETS_JSON" | jq '[.[] | select(.metadata.name | startswith("repo-") | not)] | length')
     
     if [ "$NON_REPO_COUNT" -eq 0 ]; then
         echo ""
