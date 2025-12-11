@@ -158,18 +158,36 @@ while IFS='|' read -r name sync health; do
         echo -e "  ✅ $name: $sync / $health"
     else
         echo -e "  ❌ $name: $sync / $health"
+        echo ""
         
-        # Print conditions/errors for failed apps
-        CONDITIONS=$(kubectl get application "$name" -n argocd -o jsonpath='{.status.conditions[*].message}' 2>/dev/null)
-        if [ -n "$CONDITIONS" ]; then
-            echo -e "     ${RED}Error: $CONDITIONS${NC}"
+        # Get full application details
+        APP_YAML=$(kubectl get application "$name" -n argocd -o yaml 2>/dev/null)
+        
+        # Print ALL conditions
+        echo -e "     ${YELLOW}Conditions:${NC}"
+        echo "$APP_YAML" | yq eval '.status.conditions[] | "       - Type: \(.type), Status: \(.status), Message: \(.message // "none")"' - 2>/dev/null || echo "       (no conditions)"
+        
+        # Print operation state
+        echo -e "     ${YELLOW}Operation State:${NC}"
+        echo "$APP_YAML" | yq eval '.status.operationState | "       Phase: \(.phase // "none"), Message: \(.message // "none")"' - 2>/dev/null || echo "       (no operation state)"
+        
+        # For OutOfSync, show what's out of sync
+        if [[ "$sync" == "OutOfSync" ]]; then
+            echo -e "     ${RED}Out of Sync Resources:${NC}"
+            echo "$APP_YAML" | yq eval '.status.resources[] | select(.status == "OutOfSync") | "       - \(.kind)/\(.name): \(.message // "no message")"' - 2>/dev/null | head -5 || echo "       (no details)"
         fi
         
-        # Print operation state if available
-        OP_STATE=$(kubectl get application "$name" -n argocd -o jsonpath='{.status.operationState.message}' 2>/dev/null)
-        if [ -n "$OP_STATE" ]; then
-            echo -e "     ${RED}Operation: $OP_STATE${NC}"
+        # For Degraded health, show ALL degraded resources with full details
+        if [[ "$health" == "Degraded" ]]; then
+            echo -e "     ${RED}Degraded Resources:${NC}"
+            echo "$APP_YAML" | yq eval '.status.resources[] | select(.health.status == "Degraded") | "       - \(.kind)/\(.name) in \(.namespace): \(.health.message // "no message")"' - 2>/dev/null || echo "       (no degraded resources found)"
+            
+            # Also check for progressing resources
+            echo -e "     ${YELLOW}Progressing Resources:${NC}"
+            echo "$APP_YAML" | yq eval '.status.resources[] | select(.health.status == "Progressing") | "       - \(.kind)/\(.name) in \(.namespace): \(.health.message // "no message")"' - 2>/dev/null || echo "       (no progressing resources)"
         fi
+        
+        echo ""
     fi
 done < <(echo "$APPS_JSON" | jq -r '.items[] | "\(.metadata.name)|\(.status.sync.status // "Unknown")|\(.status.health.status // "Unknown")"')
 
