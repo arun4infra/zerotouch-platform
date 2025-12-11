@@ -31,6 +31,27 @@ echo -e "${BLUE}║   Setup Preview Cluster                                     
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
+# Exclude components not needed in preview mode BEFORE any setup
+echo -e "${BLUE}Excluding components not needed for preview mode...${NC}"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Exclude tenant components (require SSM credentials that services don't have)
+if [ -f "$REPO_ROOT/bootstrap/root.yaml" ]; then
+    sed -i.bak "s|include: '{00-\*,10-\*,11-\*}.yaml'|include: '{00-*,10-*}.yaml'|" "$REPO_ROOT/bootstrap/root.yaml"
+    rm -f "$REPO_ROOT/bootstrap/root.yaml.bak"
+    echo -e "${GREEN}✓ Tenant components excluded from bootstrap${NC}"
+fi
+
+# Exclude Cilium (Kind has its own CNI - kindnet)
+if [ -f "$REPO_ROOT/platform/01-foundation/cilium.yaml" ]; then
+    mv "$REPO_ROOT/platform/01-foundation/cilium.yaml" "$REPO_ROOT/platform/01-foundation/cilium.yaml.disabled"
+    echo -e "${GREEN}✓ Cilium excluded (using Kind's default networking)${NC}"
+elif [ -f "$REPO_ROOT/platform/01-foundation/cilium.yaml.disabled" ]; then
+    echo -e "${GREEN}✓ Cilium already excluded${NC}"
+fi
+
+echo ""
+
 # Validate AWS credentials
 if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
     echo -e "${RED}Error: AWS credentials required${NC}"
@@ -94,24 +115,7 @@ echo -e "${GREEN}✓ Nodes labeled${NC}"
 
 echo ""
 
-# Exclude components not needed in preview mode
-echo -e "${BLUE}Excluding components not needed for preview mode...${NC}"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-
-# Exclude tenant components (require SSM credentials that services don't have)
-if [ -f "$REPO_ROOT/bootstrap/root.yaml" ]; then
-    sed -i.bak "s|include: '{00-\*,10-\*,11-\*}.yaml'|include: '{00-*,10-*}.yaml'|" "$REPO_ROOT/bootstrap/root.yaml"
-    rm -f "$REPO_ROOT/bootstrap/root.yaml.bak"
-    echo -e "${GREEN}✓ Tenant components excluded from bootstrap${NC}"
-fi
-
-# Exclude Cilium (Kind has its own CNI - kindnet)
-if [ -f "$REPO_ROOT/platform/01-foundation/cilium.yaml" ]; then
-    mv "$REPO_ROOT/platform/01-foundation/cilium.yaml" "$REPO_ROOT/platform/01-foundation/cilium.yaml.disabled"
-    echo -e "${GREEN}✓ Cilium excluded (using Kind's default networking)${NC}"
-elif [ -f "$REPO_ROOT/platform/01-foundation/cilium.yaml.disabled" ]; then
-    echo -e "${GREEN}✓ Cilium already excluded${NC}"
-fi
+# Preview-specific exclusions and setup complete
 
 echo ""
 echo -e "${GREEN}✓ Preview cluster setup complete${NC}"
