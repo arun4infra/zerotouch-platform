@@ -46,7 +46,8 @@ else
 fi
 
 # 2. Update ArgoCD Applications to use local file:// URLs instead of GitHub
-"$SCRIPT_DIR/ensure-preview-urls.sh" --force
+# NOTE: Commented out as preview files already have correct file:// URLs pre-configured
+# "$SCRIPT_DIR/ensure-preview-urls.sh" --force
 
 # 3. Update Kind config to mount local repo
 echo -e "${BLUE}Updating Kind config to mount local repo...${NC}"
