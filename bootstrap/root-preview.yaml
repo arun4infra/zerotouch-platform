@@ -6,7 +6,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/arun4infra/zerotouch-infra.git
+    repoURL: file:///repo
     targetRevision: HEAD
     path: bootstrap
     directory:
