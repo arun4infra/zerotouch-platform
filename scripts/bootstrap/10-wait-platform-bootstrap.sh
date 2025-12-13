@@ -51,17 +51,41 @@ TIMEOUT=300
 ELAPSED=0
 
 while [ $ELAPSED -lt $TIMEOUT ]; do
-    SYNC_STATUS=$(kubectl_retry get application platform-bootstrap -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
-    HEALTH_STATUS=$(kubectl_retry get application platform-bootstrap -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Unknown")
-    
-    if [ "$SYNC_STATUS" = "Synced" ] && [ "$HEALTH_STATUS" = "Healthy" ]; then
-        echo -e "${GREEN}✓ platform-bootstrap synced successfully${NC}"
-        echo ""
-        exit 0
-    fi
-    
-    if [ "$SYNC_STATUS" = "OutOfSync" ] || [ "$HEALTH_STATUS" = "Degraded" ]; then
-        echo -e "${YELLOW}⚠️  Status: $SYNC_STATUS / $HEALTH_STATUS - waiting...${NC}"
+    # Check if platform-bootstrap application exists
+    if kubectl_retry get application platform-bootstrap -n argocd >/dev/null 2>&1; then
+        SYNC_STATUS=$(kubectl_retry get application platform-bootstrap -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
+        HEALTH_STATUS=$(kubectl_retry get application platform-bootstrap -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Unknown")
+        
+        echo -e "${BLUE}platform-bootstrap found: $SYNC_STATUS / $HEALTH_STATUS${NC}"
+        
+        if [ "$SYNC_STATUS" = "Synced" ] && [ "$HEALTH_STATUS" = "Healthy" ]; then
+            echo -e "${GREEN}✓ platform-bootstrap synced successfully${NC}"
+            echo ""
+            exit 0
+        fi
+        
+        if [ "$SYNC_STATUS" = "OutOfSync" ] || [ "$HEALTH_STATUS" = "Degraded" ]; then
+            echo -e "${YELLOW}⚠️  Status: $SYNC_STATUS / $HEALTH_STATUS - waiting...${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠️  platform-bootstrap application not found yet${NC}"
+        
+        # Show all applications for debugging
+        echo -e "${BLUE}Current applications:${NC}"
+        kubectl_retry get applications -n argocd -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status 2>/dev/null || echo "Failed to get applications"
+        
+        # Check platform-root status specifically
+        if kubectl_retry get application platform-root -n argocd >/dev/null 2>&1; then
+            ROOT_SYNC=$(kubectl_retry get application platform-root -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
+            ROOT_HEALTH=$(kubectl_retry get application platform-root -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Unknown")
+            echo -e "${BLUE}platform-root status: $ROOT_SYNC / $ROOT_HEALTH${NC}"
+            
+            # Show platform-root sync details if it has issues
+            if [ "$ROOT_SYNC" != "Synced" ]; then
+                echo -e "${YELLOW}platform-root sync details:${NC}"
+                kubectl_retry describe application platform-root -n argocd | grep -A 10 -B 5 "Sync\|Error\|Message" || echo "Failed to get details"
+            fi
+        fi
     fi
     
     sleep 10
