@@ -4,6 +4,8 @@ set -e
 # ArgoCD Bootstrap Script
 # Installs ArgoCD and kicks off GitOps deployment
 # Prerequisites: Talos cluster must be running and kubectl configured
+# Usage: ./09-install-argocd.sh [MODE]
+#   MODE: "production" or "preview" (optional, defaults to auto-detection)
 
 # Colors for output
 RED='\033[0;31m'
@@ -18,6 +20,9 @@ ARGOCD_NAMESPACE="argocd"
 ROOT_APP_PATH="bootstrap/root.yaml"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Parse mode parameter
+MODE="${1:-auto}"
 
 # Function to print colored messages
 log_info() {
@@ -78,15 +83,26 @@ else
     kubectl create namespace "$ARGOCD_NAMESPACE"
 fi
 
-if kubectl get nodes -o jsonpath='{.items[*].spec.taints[?(@.key=="node-role.kubernetes.io/control-plane")]}' | grep -q "control-plane"; then
-    log_info "Applying ArgoCD manifests with control-plane tolerations (version: $ARGOCD_VERSION)..."
+# Determine deployment mode
+if [ "$MODE" = "preview" ]; then
+    log_info "Applying ArgoCD manifests for preview mode (Kind cluster, version: $ARGOCD_VERSION)..."
+    kubectl apply -k "$REPO_ROOT/bootstrap/argocd/preview"
+elif [ "$MODE" = "production" ]; then
+    log_info "Applying ArgoCD manifests for production mode (Talos cluster, version: $ARGOCD_VERSION)..."
     kubectl apply -k "$REPO_ROOT/bootstrap/argocd"
 else
-    log_info "Applying ArgoCD manifests for Kind cluster (version: $ARGOCD_VERSION)..."
-    kubectl apply -k "$REPO_ROOT/bootstrap/argocd/preview"
+    # Auto-detection fallback
+    log_info "Auto-detecting cluster type..."
+    if kubectl get nodes -o jsonpath='{.items[*].spec.taints[?(@.key=="node-role.kubernetes.io/control-plane")]}' | grep -q "control-plane"; then
+        log_info "Detected Talos cluster - applying ArgoCD manifests with control-plane tolerations (version: $ARGOCD_VERSION)..."
+        kubectl apply -k "$REPO_ROOT/bootstrap/argocd"
+    else
+        log_info "Detected Kind cluster - applying ArgoCD manifests for preview mode (version: $ARGOCD_VERSION)..."
+        kubectl apply -k "$REPO_ROOT/bootstrap/argocd/preview"
+    fi
 fi
 
-log_info "✓ ArgoCD manifests applied with control-plane tolerations"
+log_info "✓ ArgoCD manifests applied successfully"
 
 # Step 2: Wait for ArgoCD to be ready
 log_info ""

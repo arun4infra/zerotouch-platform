@@ -194,7 +194,7 @@ fi
 
 # Step 8: Install ArgoCD
 echo -e "${YELLOW}[8/14] Installing ArgoCD...${NC}"
-"$SCRIPT_DIR/09-install-argocd.sh"
+"$SCRIPT_DIR/09-install-argocd.sh" "$MODE"
 
 # Step 9: Wait for platform-bootstrap
 echo -e "${YELLOW}[9/14] Waiting for platform-bootstrap...${NC}"
