@@ -36,32 +36,7 @@ echo ""
 echo -e "${BLUE}Preview mode configured${NC}"
 echo ""
 # 3. Update ArgoCD Applications to use local file:// URLs instead of GitHub
-echo -e "${BLUE}Updating ArgoCD manifests to use local filesystem...${NC}"
-GITHUB_URL="https://github.com/arun4infra/zerotouch-platform.git"
-LOCAL_URL="file:///repo"
-
-# Find and replace GitHub URL with local URL in all bootstrap yaml files
-for file in "$REPO_ROOT"/bootstrap/*.yaml "$REPO_ROOT"/bootstrap/components/*.yaml "$REPO_ROOT"/bootstrap/components-tenants/*.yaml; do
-    if [ -f "$file" ]; then
-        if grep -q "$GITHUB_URL" "$file" 2>/dev/null; then
-            sed -i.bak "s|$GITHUB_URL|$LOCAL_URL|g" "$file"
-            rm -f "$file.bak"
-            echo -e "  ${GREEN}✓${NC} Updated: $(basename "$file")"
-        fi
-    fi
-done
-
-# Also remove targetRevision since local files don't have branches
-for file in "$REPO_ROOT"/bootstrap/*.yaml "$REPO_ROOT"/bootstrap/components/*.yaml "$REPO_ROOT"/bootstrap/components-tenants/*.yaml; do
-    if [ -f "$file" ]; then
-        if grep -q "targetRevision:" "$file" 2>/dev/null; then
-            sed -i.bak '/targetRevision:/d' "$file"
-            rm -f "$file.bak"
-        fi
-    fi
-done
-
-echo -e "${GREEN}✓ ArgoCD manifests updated for local filesystem sync${NC}"
+"$SCRIPT_DIR/ensure-preview-urls.sh" --force
 
 # 4. Update Kind config to mount local repo
 echo -e "${BLUE}Updating Kind config to mount local repo...${NC}"
