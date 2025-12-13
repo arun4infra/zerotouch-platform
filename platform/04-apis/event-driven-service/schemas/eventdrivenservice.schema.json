@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform.bizmatters.io/schemas/eventdrivenservice.schema.json",
+  "title": "EventDrivenService",
+  "description": "Schema for EventDrivenService API - deploys NATS JetStream consumer services with KEDA autoscaling",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "platform.bizmatters.io/v1alpha1",
+      "description": "API version for EventDrivenService"
+    },
+    "kind": {
+      "type": "string",
+      "const": "EventDrivenService",
+      "description": "Resource kind"
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+          "minLength": 1,
+          "maxLength": 253,
+          "description": "Name of the EventDrivenService resource"
+        },
+        "namespace": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+          "minLength": 1,
+          "maxLength": 63,
+          "description": "Namespace for the EventDrivenService resource"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Labels to apply to the resource"
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Annotations to apply to the resource"
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "description": "EventDrivenService specification for deploying NATS JetStream consumer services with KEDA autoscaling",
+      "required": [
+        "image",
+        "nats"
+      ],
+      "properties": {
+        "image": {
+          "type": "string",
+          "description": "Container image reference (registry/repository:tag or registry/repository@sha256:digest)",
+          "pattern": "^[a-z0-9]+((\\.|_|__|-+)[a-z0-9]+)*(\\/[a-z0-9]+((\\.|_|__|-+)[a-z0-9]+)*)*(:[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}|@sha256:[a-f0-9]{64})?$",
+          "example": "ghcr.io/org/my-service:v1.0.0"
+        },
+        "size": {
+          "type": "string",
+          "description": "Resource size allocation (small: 250m-1000m CPU, 512Mi-2Gi memory; medium: 500m-2000m CPU, 1Gi-4Gi memory; large: 1000m-4000m CPU, 2Gi-8Gi memory)",
+          "enum": [
+            "small",
+            "medium",
+            "large"
+          ],
+          "default": "medium"
+        },
+        "nats": {
+          "type": "object",
+          "description": "NATS JetStream configuration",
+          "required": [
+            "stream",
+            "consumer"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "NATS server URL for client connections",
+              "default": "nats://nats.nats.svc:4222",
+              "pattern": "^nats://[a-z0-9.-]+:[0-9]+$"
+            },
+            "stream": {
+              "type": "string",
+              "description": "JetStream stream name (must exist before deployment)",
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[A-Z0-9_]+$",
+              "example": "AGENT_EXECUTION"
+            },
+            "consumer": {
+              "type": "string",
+              "description": "Consumer group name for this service",
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[a-z0-9-]+$",
+              "example": "agent-executor-workers"
+            }
+          }
+        },
+        "secret1Name": {
+          "type": "string",
+          "description": "First secret name to mount via envFrom (typically database credentials)",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+          "example": "my-service-db-conn"
+        },
+        "secret2Name": {
+          "type": "string",
+          "description": "Second secret name to mount via envFrom (typically cache credentials)",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+          "example": "my-service-cache-conn"
+        },
+        "secret3Name": {
+          "type": "string",
+          "description": "Third secret name to mount via envFrom (typically application secrets)",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+          "example": "my-service-llm-keys"
+        },
+        "secret4Name": {
+          "type": "string",
+          "description": "Fourth secret name to mount via envFrom (optional)",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "secret5Name": {
+          "type": "string",
+          "description": "Fifth secret name to mount via envFrom (optional)",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "imagePullSecrets": {
+          "type": "array",
+          "description": "Array of image pull secret names for private container registries",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name of the image pull secret",
+                "minLength": 1,
+                "maxLength": 253,
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+                "example": "ghcr-pull-secret"
+              }
+            }
+          }
+        },
+        "initContainer": {
+          "type": "object",
+          "description": "Optional init container configuration for database migrations or pre-start tasks (uses same image as main container)",
+          "required": [
+            "command"
+          ],
+          "properties": {
+            "command": {
+              "type": "array",
+              "description": "Command to execute in the init container",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              },
+              "example": [
+                "/bin/bash",
+                "-c"
+              ]
+            },
+            "args": {
+              "type": "array",
+              "description": "Arguments to pass to the command",
+              "items": {
+                "type": "string"
+              },
+              "example": [
+                "cd /app && ./scripts/ci/run-migrations.sh"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

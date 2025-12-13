@@ -1,15 +1,49 @@
 # Quick Start Guide
 
+## Prerequisites
+
+1. **AWS CLI configured** with credentials:
+   ```bash
+   aws configure
+   # The bootstrap will auto-fetch credentials from here
+   ```
+
+2. **Environment configuration** file created:
+   ```bash
+   cp environments/dev/talos-values.yaml.example environments/dev/talos-values.yaml
+   # Edit with your actual IPs and passwords
+   ```
+
+3. **Secrets file** created (optional, for SSM parameters):
+   ```bash
+   cp .env.ssm.example .env.ssm
+   # Edit with your actual secrets and private repo URLs
+   ```
+
 ## New Cluster Setup
 
-### Step 1: Bootstrap Cluster
+### Step 1: Populate SSM Parameters (Optional)
 
-**Option A: With AWS credentials (recommended)**
+If you have secrets to inject into AWS SSM:
 ```bash
-# Export AWS credentials
-export AWS_ACCESS_KEY_ID="your-key-id"
-export AWS_SECRET_ACCESS_KEY="your-secret-key"
+./scripts/bootstrap/06-inject-ssm-parameters.sh
+```
 
+### Step 2: Bootstrap Cluster
+
+**Recommended: Use Makefile**
+```bash
+# Bootstrap dev environment
+make bootstrap ENV=dev
+
+# Or use shortcuts
+make dev-bootstrap
+make staging-bootstrap  
+make prod-bootstrap
+```
+
+**Alternative: Direct script invocation**
+```bash
 # Single node cluster
 ./scripts/bootstrap/01-master-bootstrap.sh <server-ip> <root-password>
 
@@ -19,14 +53,13 @@ export AWS_SECRET_ACCESS_KEY="your-secret-key"
   --worker-password <worker-password>
 ```
 
-**Option B: Inject credentials manually after bootstrap**
-```bash
-# Bootstrap without credentials
-./scripts/bootstrap/01-master-bootstrap.sh <server-ip> <root-password>
-
-# Then inject ESO credentials
-./scripts/bootstrap/03-inject-secrets.sh <AWS_ACCESS_KEY_ID> <AWS_SECRET_ACCESS_KEY>
-```
+**What happens automatically:**
+- ✅ Talos OS installation and cluster bootstrap
+- ✅ ArgoCD installation with control-plane tolerations
+- ✅ ESO credentials injected from AWS CLI
+- ✅ Private Git repositories configured from `.env.ssm`
+- ✅ Platform components deployed via ArgoCD
+- ✅ Credentials file generated
 
 ### Step 3: Verify Deployment
 ```bash
@@ -55,22 +88,32 @@ kubectl port-forward -n argocd svc/argocd-server 8080:443
 ## Bootstrap Script Sequence
 
 1. **01-master-bootstrap.sh** - Orchestrates entire setup
+   - Checks if cluster already exists (warns before destructive operations)
    - Calls 02-install-talos-rescue.sh (installs Talos)
-   - Bootstraps Kubernetes cluster
-   - Calls 03-install-argocd.sh (installs ArgoCD)
+   - Bootstraps Kubernetes cluster (etcd + 180s stabilization wait)
+   - Calls 03-install-argocd.sh (installs ArgoCD with kustomize)
+   - Applies root Application (platform-bootstrap)
    - **Waits for platform-bootstrap to sync** (with timeout)
    - **Verifies all child Applications are created**
-   - **Auto-injects ESO credentials** (if AWS env vars are set)
+   - Installs worker nodes (if specified)
+   - **Auto-injects ESO credentials** from AWS CLI (`aws configure`)
    - **Waits for ESO to become ready**
-   - **Fails fast** if sync errors occur
+   - **Auto-configures private Git repositories** from `.env.ssm` (ARGOCD_PRIVATE_REPO_*)
+   - **Fails fast** if tenant ApplicationSet exists but no GitHub credentials
+   - Generates credentials file with all access information
 
-2. **03-inject-secrets.sh** - ESO credential injection
-   - Can be called automatically by master script (if AWS env vars set)
-   - Or run manually after bootstrap
-   - Injects AWS credentials for ESO
+2. **05-inject-secrets.sh** - ESO credential injection
+   - Auto-fetches from AWS CLI by default (no arguments needed)
+   - Or accepts manual credentials: `./05-inject-secrets.sh <KEY_ID> <SECRET>`
+   - Called automatically by master script
    - Enables secret sync from AWS SSM Parameter Store
 
-3. **04-add-worker-node.sh** - Optional, for scaling
+3. **07-add-private-repo.sh** - Private repository configuration
+   - Called automatically by master script (reads from `.env.ssm`)
+   - Or run manually: `./07-add-private-repo.sh <repo-url> <username> <token>`
+   - Enables ArgoCD to access private Git repositories
+
+4. **04-add-worker-node.sh** - Optional, for scaling
    - Adds additional worker nodes
    - Calls 02-install-talos-rescue.sh internally
 
@@ -104,11 +147,38 @@ kubectl get externalsecret -A
 
 ## Important Files
 
+**Generated during bootstrap:**
 - `bootstrap/talos/talosconfig` - Talos cluster config
+- `bootstrap/talos/nodes/*/config.yaml` - Node-specific Talos configs
 - `~/.kube/config` - Kubernetes config
-- `bootstrap/secrets/eso-bootstrap-secret.yaml` - ESO credentials (created by inject-secrets.sh)
+- `scripts/bootstrap/bootstrap-credentials/*.txt` - All access credentials
+
+**Configuration (gitignored):**
+- `environments/<ENV>/talos-values.yaml` - Environment-specific config (IPs, passwords)
+- `.env.ssm` - Secrets and private repo URLs
+
+**Centralized config (committed):**
+- `bootstrap/config.yaml` - Git repo URL and TARGET_REVISION
+- `bootstrap/argocd/kustomization.yaml` - ArgoCD with control-plane tolerations
 
 ## AWS SSM Parameters Required
 
-Ensure these exist in AWS SSM Parameter Store:
+Ensure these exist in AWS SSM Parameter Store (use `06-inject-ssm-parameters.sh`):
 - `/zerotouch/prod/kagent/openai_api_key` - OpenAI API key for kagent
+- `/zerotouch/prod/agent-executor/openai_api_key` - OpenAI API key for agent-executor
+- `/zerotouch/prod/agent-executor/anthropic_api_key` - Anthropic API key
+- `/zerotouch/prod/platform/ghcr/username` - GitHub username for GHCR
+- `/zerotouch/prod/platform/ghcr/password` - GitHub token for GHCR
+- `/zerotouch/prod/platform/github/username` - GitHub username for ArgoCD
+- `/zerotouch/prod/platform/github/token` - GitHub token for ArgoCD
+
+## Private Git Repositories
+
+Configure in `.env.ssm`:
+```bash
+ARGOCD_PRIVATE_REPO_1=https://github.com/arun4infra/zerotouch-tenants.git
+ARGOCD_PRIVATE_REPO_2=https://github.com/arun4infra/bizmatters.git
+# Add more as needed: ARGOCD_PRIVATE_REPO_3, etc.
+```
+
+The master bootstrap script will automatically add these to ArgoCD.

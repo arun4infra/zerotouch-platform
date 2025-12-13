@@ -1,0 +1,13 @@
+# Bootstrap Configuration
+# This file contains global configuration for the bootstrap process
+# Update TARGET_REVISION to change the branch/tag for all platform components
+
+# Git repository configuration
+REPO_URL: https://github.com/arun4infra/zerotouch-platform.git
+TARGET_REVISION: feature/agent-executor
+
+# To switch back to main branch for production:
+# TARGET_REVISION: main
+
+# To use a specific tag/release:
+# TARGET_REVISION: v1.0.0

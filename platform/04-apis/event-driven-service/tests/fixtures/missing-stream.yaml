@@ -1,0 +1,13 @@
+# Invalid claim - missing required field nats.stream
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: test-missing-stream
+  namespace: test
+spec:
+  image: ghcr.io/test/missing:v1.0.0
+  size: small
+  nats:
+    url: nats://nats.nats.svc:4222
+    # stream is missing - this is required
+    consumer: test-consumer

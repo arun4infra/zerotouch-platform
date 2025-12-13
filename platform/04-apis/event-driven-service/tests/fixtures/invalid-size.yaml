@@ -1,0 +1,13 @@
+# Invalid claim - size must be small, medium, or large
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: test-invalid-size
+  namespace: test
+spec:
+  image: ghcr.io/test/invalid:v1.0.0
+  size: xlarge  # Invalid: must be small, medium, or large
+  nats:
+    url: nats://nats.nats.svc:4222
+    stream: TEST_STREAM
+    consumer: test-consumer

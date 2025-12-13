@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: crossplane-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    chart: crossplane
+    repoURL: https://charts.crossplane.io/stable
+    targetRevision: 1.16.0
+    helm:
+      parameters:
+        - name: "args[0]"
+          value: "--enable-composition-revisions"
+      # Preview mode: No tolerations needed for Kind clusters
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: crossplane-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

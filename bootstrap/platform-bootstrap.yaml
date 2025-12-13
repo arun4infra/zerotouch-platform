@@ -9,7 +9,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/arun4infra/zerotouch-platform.git
-    targetRevision: feat/migrate-secrets-to-eso
+    targetRevision: feature/agent-executor
     path: bootstrap/components
     directory:
       recurse: true

@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: file:///repo
+    path: bootstrap
+    directory:
+      recurse: false
+      include: '{00-eso-bootstrap-preview,10-platform-bootstrap-preview,11-*}.yaml'  # Use preview bootstrap
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

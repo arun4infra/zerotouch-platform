@@ -16,6 +16,34 @@ spec:
         installCRDs: true
         webhook:
           create: true
+        
+        # Run on control plane
+        tolerations:
+          - key: node-role.kubernetes.io/control-plane
+            operator: Exists
+            effect: NoSchedule
+        
+        nodeSelector:
+          node-role.kubernetes.io/control-plane: ""
+        
+        # Apply same tolerations to webhook
+        webhook:
+          create: true
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+              effect: NoSchedule
+          nodeSelector:
+            node-role.kubernetes.io/control-plane: ""
+        
+        # Apply same tolerations to cert-controller
+        certController:
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+              effect: NoSchedule
+          nodeSelector:
+            node-role.kubernetes.io/control-plane: ""
   destination:
     server: https://kubernetes.default.svc
     namespace: external-secrets

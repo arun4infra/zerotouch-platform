@@ -10,6 +10,10 @@ spec:
   claimNames:
     kind: DragonflyInstance
     plural: dragonflyinstances
+  connectionSecretKeys:
+    - endpoint
+    - port
+    - password
   versions:
     - name: v1alpha1
       served: true

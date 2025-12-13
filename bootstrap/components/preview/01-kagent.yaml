@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kagent
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    chart: kagent
+    repoURL: ghcr.io/kagent-dev/kagent/helm
+    targetRevision: 0.7.4
+    helm:
+      parameters:
+        - name: providers.default
+          value: openAI
+      values: |
+        # Preview mode: No nodeSelector needed for Kind clusters
+        agents:
+          nodeSelector: {}
+        controller:
+          nodeSelector: {}
+        # Disable kmcp controller - platform uses RemoteMCPServer (v1alpha2) instead of MCPServer (v1alpha1)
+        kmcp:
+          enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kagent
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

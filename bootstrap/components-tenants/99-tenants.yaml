@@ -1,0 +1,50 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: tenant-applications
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "100"  # Large gap ensures all repo credentials are ready (wave 2)
+spec:
+  generators:
+    - git:
+        repoURL: https://github.com/arun4infra/zerotouch-tenants.git
+        revision: main
+        files:
+          - path: tenants/*/config.yaml
+  template:
+    metadata:
+      name: '{{tenant}}'
+      namespace: argocd
+      labels:
+        tenant: '{{tenant}}'
+        managed-by: applicationset
+      annotations:
+        # Ignore Crossplane-generated resources (Composites, Secrets) that aren't in Git
+        argocd.argoproj.io/compare-options: IgnoreExtraneous
+    spec:
+      project: default
+      source:
+        repoURL: '{{repoURL}}'
+        targetRevision: '{{targetRevision}}'
+        path: '{{appPath}}'
+        directory:
+          recurse: true
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - PrunePropagationPolicy=foreground
+          - PruneLast=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m

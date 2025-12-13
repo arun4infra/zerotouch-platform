@@ -1,16 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: platform-bootstrap
+  name: platform-root
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: https://github.com/arun4infra/zerotouch-platform.git
-    targetRevision: main
-    path: bootstrap/components
+    targetRevision: feature/agent-executor
+    path: bootstrap
     directory:
-      recurse: true
+      recurse: false
+      include: '{00-*,10-*,11-*}.yaml'
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
@@ -19,5 +20,4 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      - ServerSideApply=true
-      - RespectIgnoreDifferences=true
+      - CreateNamespace=true

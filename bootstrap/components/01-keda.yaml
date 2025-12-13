@@ -15,6 +15,11 @@ spec:
       values: |
         operator:
           logLevel: info
+        # Allow KEDA to run on control plane nodes
+        tolerations:
+          - key: node-role.kubernetes.io/control-plane
+            operator: Exists
+            effect: NoSchedule
   destination:
     server: https://kubernetes.default.svc
     namespace: keda

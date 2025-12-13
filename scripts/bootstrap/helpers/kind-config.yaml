@@ -1,0 +1,18 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: zerotouch-preview
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # NATS client port
+      - containerPort: 30080
+        hostPort: 4222
+        protocol: TCP
+      # PostgreSQL port
+      - containerPort: 30432
+        hostPort: 5432
+        protocol: TCP
+      # Dragonfly (Redis-compatible) port
+      - containerPort: 30379
+        hostPort: 6379
+        protocol: TCP

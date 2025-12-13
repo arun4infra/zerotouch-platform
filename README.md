@@ -161,21 +161,38 @@ export AWS_SECRET_ACCESS_KEY="your-secret"
 
 Secrets are stored in **AWS Systems Manager Parameter Store** and synced to the cluster via External Secrets Operator (ESO).
 
-**Required Parameters:**
-- `/zerotouch/prod/kagent/openai_api_key` - OpenAI API key for Kagent agents
+#### Automated SSM Injection (Recommended)
 
-**Setup:**
+The platform provides a generic script to inject all secrets from a single file:
+
 ```bash
-# Store secrets in AWS Parameter Store
-aws ssm put-parameter \
-  --name /zerotouch/prod/kagent/openai_api_key \
-  --value "sk-..." \
-  --type SecureString
+# 1. Create secrets file from template
+cp .env.ssm.example .env.ssm
 
-# Inject ESO credentials into cluster
-./scripts/bootstrap/03-inject-secrets.sh <AWS_ACCESS_KEY_ID> <AWS_SECRET_ACCESS_KEY>
+# 2. Edit .env.ssm with your actual secrets
+vim .env.ssm
 
-# Verify secrets are syncing
+# 3. Inject all parameters to AWS SSM (SecureString type)
+./scripts/bootstrap/06-inject-ssm-parameters.sh
+
+# 4. Inject ESO credentials into cluster (one-time)
+./scripts/bootstrap/05-inject-secrets.sh <AWS_ACCESS_KEY_ID> <AWS_SECRET_ACCESS_KEY>
+
+# 5. Verify secrets are syncing
 kubectl get externalsecret -A
 kubectl get clustersecretstore aws-parameter-store
 ```
+
+**`.env.ssm` Format:**
+```bash
+# Each line: /path/to/parameter=value
+/zerotouch/prod/kagent/openai_api_key=sk-your-key-here
+/zerotouch/prod/agent-executor/postgres/password=secure_password
+/zerotouch/prod/agent-executor/openai_api_key=sk-your-key-here
+```
+
+**Benefits:**
+- Single source of truth for all secrets
+- Idempotent (can run multiple times)
+- Generic (works for any service)
+- Secure (`.env.ssm` is gitignored, parameters encrypted at rest)

@@ -1,0 +1,33 @@
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: repo-zerotouch-tenants
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"  # After ESO CRDs are installed (wave 0)
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-parameter-store
+    kind: ClusterSecretStore
+  target:
+    name: repo-zerotouch-tenants
+    template:
+      metadata:
+        labels:
+          argocd.argoproj.io/secret-type: repository
+      data:
+        type: git
+        url: "{{ .url }}"
+        username: "{{ .username }}"
+        password: "{{ .password }}"
+  data:
+    - secretKey: url
+      remoteRef:
+        key: /zerotouch/prod/argocd/repos/zerotouch-tenants/url
+    - secretKey: username
+      remoteRef:
+        key: /zerotouch/prod/argocd/repos/zerotouch-tenants/username
+    - secretKey: password
+      remoteRef:
+        key: /zerotouch/prod/argocd/repos/zerotouch-tenants/password

@@ -1,0 +1,83 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nats
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    chart: nats
+    repoURL: https://nats-io.github.io/k8s/helm/charts/
+    targetRevision: 1.2.6
+    helm:
+      valuesObject:
+        config:
+          jetstream:
+            enabled: true
+            fileStore:
+              enabled: true
+              dir: /data
+              maxSize: 10Gi
+              pvc:
+                enabled: true
+                size: 10Gi
+                storageClassName: local-path
+            memoryStore:
+              enabled: true
+              maxSize: 1Gi
+          cluster:
+            enabled: false
+        container:
+          image:
+            repository: nats
+            tag: 2.10.22-alpine
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+        natsBox:
+          enabled: true
+        statefulSet:
+          patch:
+            - op: add
+              path: /spec/template/spec/tolerations
+              value:
+                - key: node-role.kubernetes.io/control-plane
+                  operator: Exists
+                  effect: NoSchedule
+            - op: add
+              path: /spec/template/spec/affinity
+              value:
+                nodeAffinity:
+                  requiredDuringSchedulingIgnoredDuringExecution:
+                    nodeSelectorTerms:
+                      - matchExpressions:
+                          - key: node-role.kubernetes.io/control-plane
+                            operator: Exists
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nats
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      name: nats
+      jqPathExpressions:
+        - .spec.volumeClaimTemplates[]?.metadata.creationTimestamp
+        - .spec.volumeClaimTemplates[]?.status

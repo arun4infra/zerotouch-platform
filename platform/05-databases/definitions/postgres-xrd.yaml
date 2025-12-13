@@ -10,6 +10,12 @@ spec:
   claimNames:
     kind: PostgresInstance
     plural: postgresinstances
+  connectionSecretKeys:
+    - endpoint
+    - port
+    - username
+    - password
+    - database
   versions:
     - name: v1alpha1
       served: true

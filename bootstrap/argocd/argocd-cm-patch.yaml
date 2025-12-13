@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+data:
+  # Exclude Crossplane-generated composite resources from ArgoCD tracking
+  # These X* resources are dynamically created by Crossplane when Claims are applied
+  # ArgoCD should only manage the Claims, not the Composites
+  resource.exclusions: |
+    - apiGroups:
+        - platform.bizmatters.io
+      kinds:
+        - XEventDrivenService
+      clusters:
+        - "*"
+    - apiGroups:
+        - database.bizmatters.io
+      kinds:
+        - XPostgresInstance
+        - XDragonflyInstance
+      clusters:
+        - "*"

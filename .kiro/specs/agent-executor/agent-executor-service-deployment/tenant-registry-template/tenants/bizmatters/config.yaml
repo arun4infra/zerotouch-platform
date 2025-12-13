@@ -1,0 +1,17 @@
+# Bizmatters Tenant Configuration
+# Deploys agent-executor service from bizmatters repository
+
+# Tenant identifier - used as ArgoCD Application name
+tenant: bizmatters-workloads
+
+# Bizmatters repository URL
+repoURL: https://github.com/arun4infra/bizmatters.git
+
+# Branch to sync (main branch for production)
+targetRevision: main
+
+# Path to agent-executor platform manifests
+path: services/agent_executor/platform/claims/intelligence-deepagents
+
+# Target namespace (will be created if doesn't exist)
+namespace: intelligence-deepagents

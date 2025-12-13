@@ -6,7 +6,9 @@ metadata:
   labels:
     app.kubernetes.io/name: qdrant-mcp
 spec:
-  replicas: 1
+  # Temporarily disabled - mcp-server-qdrant has a bug with fastmcp ctx parameter
+  # Re-enable after rebuilding ghcr.io/arun4infra/mcp-server-qdrant:main with fixed Dockerfile
+  replicas: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: qdrant-mcp
@@ -20,7 +22,7 @@ spec:
       containers:
         - name: qdrant-mcp
           image: ghcr.io/arun4infra/mcp-server-qdrant:main
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           env:
             - name: QDRANT_URL
               value: "http://qdrant.intelligence-platform.svc.cluster.local:6333"

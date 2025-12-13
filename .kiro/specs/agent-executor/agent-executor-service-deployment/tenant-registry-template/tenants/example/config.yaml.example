@@ -1,0 +1,53 @@
+# Example Tenant Configuration
+# Copy this file to create a new tenant: cp -r tenants/example tenants/<tenant-name>
+
+# Tenant identifier - used as ArgoCD Application name
+# Convention: <org-name>-workloads
+tenant: example-workloads
+
+# Git repository URL containing tenant's Kubernetes manifests
+# Must be accessible by ArgoCD (credentials configured separately)
+repoURL: https://github.com/example-org/example-repo.git
+
+# Git branch, tag, or commit to sync
+# Recommended: use 'main' or 'production' branch
+targetRevision: main
+
+# Path within repository to Kubernetes manifests
+# Can point to service-specific directory or root
+path: services/example-service/platform
+
+# Optional: Target namespace for resources
+# If omitted, defaults to "default"
+# Note: Namespace will be created if it doesn't exist (CreateNamespace=true)
+namespace: example-namespace
+
+# ============================================================================
+# Additional Notes
+# ============================================================================
+#
+# 1. Repository Credentials:
+#    Before creating this tenant config, ensure ArgoCD has credentials:
+#    ./scripts/bootstrap/06-add-private-repo.sh <repoURL> <user> <token>
+#
+# 2. Sync Policy:
+#    - Automated sync enabled (prune=true, selfHeal=true)
+#    - Resources will be automatically created, updated, and deleted
+#    - Failed syncs will retry with exponential backoff
+#
+# 3. Manifest Structure:
+#    The 'path' should contain valid Kubernetes YAML manifests:
+#    - Deployments, Services, ConfigMaps, Secrets, etc.
+#    - Can include subdirectories (ArgoCD recursively scans)
+#    - Use sync-waves for ordering (argocd.argoproj.io/sync-wave)
+#
+# 4. Multi-Service Tenants:
+#    To deploy multiple services from one tenant:
+#    - Option A: Create multiple tenant configs (one per service)
+#    - Option B: Use a single path with all services (less granular control)
+#
+# 5. Security:
+#    - This repository (zerotouch-tenants) is private
+#    - Tenant repositories can be public or private
+#    - Secrets should use External Secrets Operator (ESO) or Sealed Secrets
+#    - Never commit plaintext secrets to Git

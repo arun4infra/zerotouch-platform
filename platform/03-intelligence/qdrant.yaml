@@ -32,15 +32,6 @@ spec:
       labels:
         app: qdrant
     spec:
-      nodeSelector:
-        workload.bizmatters.dev/intelligence: "true"
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: node-role.kubernetes.io/control-plane
-                operator: DoesNotExist
       containers:
         - name: qdrant
           image: qdrant/qdrant:v1.16.0

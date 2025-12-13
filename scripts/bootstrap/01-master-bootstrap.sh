@@ -1,13 +1,11 @@
 #!/bin/bash
 # Master Bootstrap Script for BizMatters Infrastructure
-# Usage: ./00-master-bootstrap.sh <server-ip> <root-password> [--worker-nodes <list>]
+# Usage: 
+#   Production: ./01-master-bootstrap.sh <server-ip> <root-password> [--worker-nodes <list>]
+#   Preview:    ./01-master-bootstrap.sh --mode preview
 #
-# This script orchestrates the complete cluster bootstrap process:
-# 1. Talos installation on control plane
-# 2. Foundation layer deployment
-# 3. ArgoCD bootstrap
-# 4. Worker node installation (if specified)
-# 5. Post-reboot verification
+# This script orchestrates the complete cluster bootstrap process by calling
+# numbered scripts in sequence. All logic is in the individual scripts.
 
 set -e
 
@@ -18,29 +16,51 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Default mode
+MODE="production"
+SERVER_IP=""
+ROOT_PASSWORD=""
+WORKER_NODES=""
+WORKER_PASSWORD=""
+
 # Parse arguments
-if [ "$#" -lt 2 ]; then
-    echo -e "${RED}Usage: $0 <server-ip> <root-password> [--worker-nodes <list>] [--worker-password <password>]${NC}"
+if [ "$#" -eq 0 ]; then
+    echo -e "${RED}Usage:${NC}"
+    echo -e "  ${GREEN}Production:${NC} $0 <server-ip> <root-password> [--worker-nodes <list>] [--worker-password <password>]"
+    echo -e "  ${GREEN}Preview:${NC}    $0 --mode preview"
     echo ""
     echo "Arguments:"
-    echo "  <server-ip>         Control plane server IP"
-    echo "  <root-password>     Root password for rescue mode"
+    echo "  <server-ip>         Control plane server IP (production mode)"
+    echo "  <root-password>     Root password for rescue mode (production mode)"
+    echo "  --mode preview      Run in preview mode (GitHub Actions/Kind cluster)"
     echo "  --worker-nodes      Optional: Comma-separated list of worker nodes (name:ip format)"
     echo "  --worker-password   Optional: Worker node rescue password (if different from control plane)"
     echo ""
     echo "Examples:"
-    echo "  Single node:  $0 46.62.218.181 MyS3cur3P@ssw0rd"
-    echo "  Multi-node:   $0 46.62.218.181 MyS3cur3P@ssw0rd --worker-nodes worker01-db:95.216.151.243 --worker-password WorkerP@ss"
+    echo "  Production single node:  $0 46.62.218.181 MyS3cur3P@ssw0rd"
+    echo "  Production multi-node:   $0 46.62.218.181 MyS3cur3P@ssw0rd --worker-nodes worker01-db:95.216.151.243"
+    echo "  Preview (CI/CD):         $0 --mode preview"
     exit 1
 fi
 
-SERVER_IP="$1"
-ROOT_PASSWORD="$2"
-WORKER_NODES=""
-WORKER_PASSWORD=""
+# Check if first argument is --mode
+if [ "$1" = "--mode" ]; then
+    MODE="$2"
+    shift 2
+else
+    # Production mode - require server-ip and password
+    if [ "$#" -lt 2 ]; then
+        echo -e "${RED}Error: Production mode requires <server-ip> and <root-password>${NC}"
+        echo -e "Usage: $0 <server-ip> <root-password> [--worker-nodes <list>]"
+        echo -e "   or: $0 --mode preview"
+        exit 1
+    fi
+    SERVER_IP="$1"
+    ROOT_PASSWORD="$2"
+    shift 2
+fi
 
-# Parse optional worker nodes parameter
-shift 2
+# Parse remaining optional arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         --worker-nodes)
@@ -58,191 +78,163 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Validate worker nodes format if provided
+if [ -n "$WORKER_NODES" ]; then
+    echo -e "${BLUE}Validating worker nodes format...${NC}"
+    
+    # Split by comma and validate each entry
+    IFS=',' read -ra WORKER_ARRAY <<< "$WORKER_NODES"
+    for worker_entry in "${WORKER_ARRAY[@]}"; do
+        # Check if entry contains colon (name:ip format)
+        if [[ ! "$worker_entry" =~ ^[a-zA-Z0-9_-]+:[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo -e "${RED}Error: Invalid worker node format: '$worker_entry'${NC}"
+            echo -e "${RED}Expected format: name:ip (e.g., worker01:95.216.151.243)${NC}"
+            echo ""
+            echo -e "${YELLOW}Examples:${NC}"
+            echo -e "  Single worker:   --worker-nodes worker01:95.216.151.243"
+            echo -e "  Multiple workers: --worker-nodes worker01:95.216.151.243,worker02:95.216.151.244"
+            echo ""
+            exit 1
+        fi
+    done
+    
+    echo -e "${GREEN}✓ Worker nodes format validated${NC}"
+fi
+
 # If worker password not specified, use control plane password
-if [ -z "$WORKER_PASSWORD" ]; then
+if [ -z "$WORKER_PASSWORD" ] && [ -n "$ROOT_PASSWORD" ]; then
     WORKER_PASSWORD="$ROOT_PASSWORD"
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CREDENTIALS_FILE="$SCRIPT_DIR/.bootstrap-credentials-$(date +%Y%m%d-%H%M%S).txt"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   BizMatters Infrastructure - Master Bootstrap Script      ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "${GREEN}Server IP:${NC} $SERVER_IP"
-echo -e "${GREEN}Credentials will be saved to:${NC} $CREDENTIALS_FILE"
+echo -e "${GREEN}Mode:${NC} $MODE"
 echo ""
 
-# Initialize credentials file
-cat > "$CREDENTIALS_FILE" << EOF
-╔══════════════════════════════════════════════════════════════╗
-║   BizMatters Infrastructure - Bootstrap Credentials         ║
-║   Generated: $(date)                            ║
-╚══════════════════════════════════════════════════════════════╝
+# ============================================================================
+# PREVIEW MODE SETUP
+# ============================================================================
+if [ "$MODE" = "preview" ]; then
+    echo -e "${BLUE}Running in PREVIEW mode (GitHub Actions/Kind)${NC}"
+    echo ""
+    "$SCRIPT_DIR/helpers/setup-preview.sh"
+fi
 
-Server IP: $SERVER_IP
-Bootstrap Date: $(date)
+# ============================================================================
+# PRODUCTION MODE SETUP
+# ============================================================================
+if [ "$MODE" = "production" ]; then
+    echo -e "${BLUE}Setting up production environment...${NC}"
+    CREDENTIALS_FILE=$("$SCRIPT_DIR/helpers/setup-production.sh" "$SERVER_IP" "$ROOT_PASSWORD" "$WORKER_NODES" "$WORKER_PASSWORD" --yes)
+    echo -e "${GREEN}✓ Credentials file: $CREDENTIALS_FILE${NC}"
+    
+    if [ -z "$CREDENTIALS_FILE" ] || [ ! -f "$CREDENTIALS_FILE" ]; then
+        echo -e "${RED}Error: Failed to create credentials file${NC}"
+        exit 1
+    fi
+fi
 
-EOF
+# ============================================================================
+# BOOTSTRAP SEQUENCE - All logic is in numbered scripts
+# ============================================================================
 
-# Step 1: Install Talos
-echo -e "${YELLOW}[1/5] Installing Talos OS...${NC}"
-echo "────────────────────────────────────────────────────────────────"
-cd "$SCRIPT_DIR"
-./02-install-talos-rescue.sh --server-ip "$SERVER_IP" --user root --password "$ROOT_PASSWORD" --yes
+if [ "$MODE" = "production" ]; then
+    # Step 1: Embed Cilium in Talos config
+    echo -e "${YELLOW}[1/14] Embedding Cilium CNI...${NC}"
+    "$SCRIPT_DIR/02-embed-cilium.sh"
 
-echo -e "\n${GREEN}✓ Talos installation complete${NC}\n"
+    # Step 2: Install Talos OS
+    echo -e "${YELLOW}[2/14] Installing Talos OS...${NC}"
+    "$SCRIPT_DIR/03-install-talos.sh" --server-ip "$SERVER_IP" --user root --password "$ROOT_PASSWORD" --yes
 
-cat >> "$CREDENTIALS_FILE" << EOF
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TALOS CREDENTIALS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # Step 3: Bootstrap Talos cluster
+    echo -e "${YELLOW}[3/14] Bootstrapping Talos cluster...${NC}"
+    "$SCRIPT_DIR/04-bootstrap-talos.sh" "$SERVER_IP"
 
-Talos Config: bootstrap/talos/talosconfig
+    "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "TALOS CREDENTIALS" "Talos Config: bootstrap/talos/talosconfig
 Control Plane Config: bootstrap/talos/nodes/cp01-main/config.yaml
-Worker Config: bootstrap/talos/worker.yaml
 
 Access Talos:
-  talosctl --talosconfig bootstrap/talos/talosconfig -n $SERVER_IP version
+  talosctl --talosconfig bootstrap/talos/talosconfig -n $SERVER_IP version"
 
-EOF
+    # Step 4: Add Worker Nodes (if specified)
+    if [ -n "$WORKER_NODES" ]; then
+        echo -e "${YELLOW}[4/14] Adding worker nodes...${NC}"
+        "$SCRIPT_DIR/05-add-worker-nodes.sh" "$WORKER_NODES" "$WORKER_PASSWORD"
+    else
+        echo -e "${BLUE}[4/14] No worker nodes specified - single node cluster${NC}"
+    fi
 
-# Step 1.5: Bootstrap Talos (apply config, bootstrap etcd, get kubeconfig)
-echo -e "${YELLOW}[1.5/5] Bootstrapping Talos cluster...${NC}"
-echo "────────────────────────────────────────────────────────────────"
-echo -e "${BLUE}⏳ Waiting 3 minutes for Talos to boot...${NC}"
-sleep 180
-
-cd "$SCRIPT_DIR/../../bootstrap/talos"
-
-echo -e "${BLUE}Applying Talos configuration...${NC}"
-if ! talosctl apply-config --insecure \
-  --nodes "$SERVER_IP" \
-  --endpoints "$SERVER_IP" \
-  --file nodes/cp01-main/config.yaml; then
-    echo -e "${RED}Failed to apply Talos config. Waiting 30s and retrying...${NC}"
-    sleep 30
-    talosctl apply-config --insecure \
-      --nodes "$SERVER_IP" \
-      --endpoints "$SERVER_IP" \
-      --file nodes/cp01-main/config.yaml
+    # Step 5: Wait for Cilium CNI
+    echo -e "${YELLOW}[5/14] Waiting for Cilium CNI...${NC}"
+    "$SCRIPT_DIR/06-wait-cilium.sh"
+else
+    echo -e "${BLUE}[1-5/14] Skipping Talos installation (preview mode uses Kind)${NC}"
 fi
 
-echo -e "${BLUE}Waiting 30 seconds for config to apply...${NC}"
-sleep 30
+# Step 6: Inject ESO Secrets
+echo -e "${YELLOW}[6/14] Injecting ESO secrets...${NC}"
+"$SCRIPT_DIR/07-inject-eso-secrets.sh"
 
-echo -e "${BLUE}Bootstrapping etcd cluster...${NC}"
-talosctl bootstrap \
-  --nodes "$SERVER_IP" \
-  --endpoints "$SERVER_IP" \
-  --talosconfig talosconfig
+# Step 7: Inject SSM Parameters (BEFORE ArgoCD)
+echo -e "${YELLOW}[7/14] Injecting SSM parameters...${NC}"
+"$SCRIPT_DIR/08-inject-ssm-parameters.sh"
 
-echo -e "${BLUE}Waiting 60 seconds for cluster to stabilize...${NC}"
-sleep 60
+if [ "$MODE" = "production" ]; then
+    "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "AWS SSM PARAMETER STORE" "Parameters injected from .env.ssm to AWS SSM Parameter Store
 
-echo -e "${BLUE}Fetching kubeconfig...${NC}"
-talosctl kubeconfig \
-  --nodes "$SERVER_IP" \
-  --endpoints "$SERVER_IP" \
-  --talosconfig talosconfig \
-  --force
-
-echo -e "${BLUE}Verifying cluster...${NC}"
-kubectl get nodes
-
-echo -e "\n${GREEN}✓ Talos cluster bootstrapped successfully${NC}\n"
-
-cd "$SCRIPT_DIR"
-
-# Step 2: Foundation Layer (managed by ArgoCD)
-echo -e "${YELLOW}[2/5] Foundation Layer (will be deployed by ArgoCD)...${NC}"
-echo "────────────────────────────────────────────────────────────────"
-echo -e "${BLUE}ℹ  Foundation components (Crossplane, KEDA, Kagent) will be deployed by ArgoCD${NC}"
-echo -e "${BLUE}   after bootstrap completes via platform-bootstrap Application${NC}"
-
-cat >> "$CREDENTIALS_FILE" << EOF
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FOUNDATION LAYER (ArgoCD Managed)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Components deployed via ArgoCD:
-  - External Secrets Operator (ESO)
-  - Crossplane (Infrastructure Provisioning)
-  - KEDA (Event-driven Autoscaling)
-  - Kagent (AI Agent Platform)
-
-Kubeconfig: ~/.kube/config
-
-Access Cluster:
-  kubectl get nodes
-  kubectl get pods -A
-
-EOF
-
-# Step 3: Bootstrap ArgoCD
-echo -e "${YELLOW}[3/5] Bootstrapping ArgoCD...${NC}"
-echo "────────────────────────────────────────────────────────────────"
-./03-install-argocd.sh
-
-echo -e "\n${GREEN}✓ ArgoCD installed${NC}\n"
-
-# Step 3.1: Wait for platform-bootstrap to sync
-echo -e "${BLUE}⏳ Waiting for platform-bootstrap to sync (timeout: 5 minutes)...${NC}"
-TIMEOUT=300
-ELAPSED=0
-while [ $ELAPSED -lt $TIMEOUT ]; do
-    SYNC_STATUS=$(kubectl get application platform-bootstrap -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
-    HEALTH_STATUS=$(kubectl get application platform-bootstrap -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Unknown")
-    
-    if [ "$SYNC_STATUS" = "Synced" ] && [ "$HEALTH_STATUS" = "Healthy" ]; then
-        echo -e "${GREEN}✓ platform-bootstrap synced successfully${NC}"
-        break
-    fi
-    
-    if [ "$SYNC_STATUS" = "OutOfSync" ] || [ "$HEALTH_STATUS" = "Degraded" ]; then
-        echo -e "${YELLOW}⚠️  Status: $SYNC_STATUS / $HEALTH_STATUS - waiting...${NC}"
-    fi
-    
-    sleep 10
-    ELAPSED=$((ELAPSED + 10))
-done
-
-if [ $ELAPSED -ge $TIMEOUT ]; then
-    echo -e "${RED}✗ Timeout waiting for platform-bootstrap to sync${NC}"
-    echo -e "${YELLOW}Check status: kubectl describe application platform-bootstrap -n argocd${NC}"
-    exit 1
+Verify parameters:
+  aws ssm get-parameters-by-path --path /zerotouch/prod --region ap-south-1"
 fi
 
-# Step 3.2: Verify child Applications were created
-echo -e "${BLUE}Verifying child Applications...${NC}"
-sleep 10
-EXPECTED_APPS=("crossplane-operator" "external-secrets" "keda" "kagent" "intelligence" "foundation-config" "databases")
-MISSING_APPS=()
+# Step 8: Install ArgoCD
+echo -e "${YELLOW}[8/14] Installing ArgoCD...${NC}"
+"$SCRIPT_DIR/09-install-argocd.sh" "$MODE"
 
-for app in "${EXPECTED_APPS[@]}"; do
-    if ! kubectl get application "$app" -n argocd &>/dev/null; then
-        MISSING_APPS+=("$app")
-    fi
-done
+# Step 9: Wait for platform-bootstrap
+echo -e "${YELLOW}[9/14] Waiting for platform-bootstrap...${NC}"
+"$SCRIPT_DIR/10-wait-platform-bootstrap.sh"
 
-if [ ${#MISSING_APPS[@]} -gt 0 ]; then
-    echo -e "${RED}✗ Missing Applications: ${MISSING_APPS[*]}${NC}"
-    echo -e "${YELLOW}Check platform-bootstrap status: kubectl describe application platform-bootstrap -n argocd${NC}"
-    exit 1
+# Step 10: Verify ESO
+echo -e "${YELLOW}[10/14] Verifying ESO...${NC}"
+"$SCRIPT_DIR/11-verify-eso.sh"
+
+# Step 11: Verify child applications
+echo -e "${YELLOW}[11/14] Verifying child applications...${NC}"
+"$SCRIPT_DIR/12-verify-child-apps.sh"
+
+# Step 12: Fix Kind conflicts (preview mode only)
+if [ "$MODE" = "preview" ]; then
+    echo -e "${YELLOW}[12/14] Fixing Kind deployment conflicts...${NC}"
+    "$SCRIPT_DIR/helpers/fix-kind-conflicts.sh"
 fi
 
-echo -e "${GREEN}✓ All child Applications created${NC}\n"
+# Step 13: Wait for all apps to be healthy
+echo -e "${YELLOW}[13/15] Waiting for all applications to be healthy...${NC}"
+if [ "$MODE" = "preview" ]; then
+    "$SCRIPT_DIR/12a-wait-apps-healthy.sh" --timeout 600 --preview-mode
+else
+    "$SCRIPT_DIR/12a-wait-apps-healthy.sh" --timeout 600
+fi
+
+# Step 14: Wait for service dependencies
+echo -e "${YELLOW}[14/15] Waiting for platform services to be ready...${NC}"
+if [ "$MODE" = "preview" ]; then
+    "$SCRIPT_DIR/13-wait-service-dependencies.sh" --timeout 300 --preview-mode
+else
+    "$SCRIPT_DIR/13-wait-service-dependencies.sh" --timeout 300
+fi
 
 # Extract ArgoCD password
 ARGOCD_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d || echo "NOT_GENERATED")
 
-cat >> "$CREDENTIALS_FILE" << EOF
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ARGOCD CREDENTIALS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Username: admin
+if [ "$MODE" = "production" ]; then
+    "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "ARGOCD CREDENTIALS" "Username: admin
 Password: $ARGOCD_PASSWORD
 
 Access ArgoCD UI:
@@ -250,190 +242,45 @@ Access ArgoCD UI:
   Open: https://localhost:8080
 
 Access via CLI:
-  argocd login localhost:8080 --username admin --password '$ARGOCD_PASSWORD'
-
-EOF
-
-# Step 3.5: Install Worker Nodes (if specified)
-if [ -n "$WORKER_NODES" ]; then
-    echo -e "${YELLOW}[3.5/5] Installing Worker Nodes...${NC}"
-    echo "────────────────────────────────────────────────────────────────"
-    
-    # Parse worker nodes (format: name:ip,name:ip)
-    IFS=',' read -ra WORKERS <<< "$WORKER_NODES"
-    WORKER_COUNT=${#WORKERS[@]}
-    WORKER_NUM=1
-    
-    for worker in "${WORKERS[@]}"; do
-        IFS=':' read -r WORKER_NAME WORKER_IP <<< "$worker"
-        
-        echo -e "${BLUE}Installing worker node $WORKER_NUM/$WORKER_COUNT: $WORKER_NAME ($WORKER_IP)${NC}"
-        
-        # Install Talos on worker
-        ./02-install-talos-rescue.sh \
-            --server-ip "$WORKER_IP" \
-            --user root \
-            --password "$WORKER_PASSWORD" \
-            --yes
-        
-        echo -e "${BLUE}⏳ Waiting 3 minutes for worker to boot...${NC}"
-        sleep 180
-        
-        # Apply worker configuration
-        cd "$SCRIPT_DIR/../../bootstrap/talos"
-        echo -e "${BLUE}Applying worker configuration for $WORKER_NAME...${NC}"
-        
-        if ! talosctl apply-config --insecure \
-            --nodes "$WORKER_IP" \
-            --endpoints "$WORKER_IP" \
-            --file "nodes/$WORKER_NAME/config.yaml"; then
-            echo -e "${RED}Failed to apply config. Waiting 30s and retrying...${NC}"
-            sleep 30
-            talosctl apply-config --insecure \
-                --nodes "$WORKER_IP" \
-                --endpoints "$WORKER_IP" \
-                --file "nodes/$WORKER_NAME/config.yaml"
-        fi
-        
-        echo -e "${BLUE}Waiting 60 seconds for worker to join cluster...${NC}"
-        sleep 60
-        
-        # Verify node joined
-        echo -e "${BLUE}Verifying worker node joined cluster...${NC}"
-        kubectl get nodes
-        
-        cd "$SCRIPT_DIR"
-        
-        echo -e "${GREEN}✓ Worker node $WORKER_NAME installed${NC}\n"
-        
-        cat >> "$CREDENTIALS_FILE" << EOF
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-WORKER NODE: $WORKER_NAME
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Node IP: $WORKER_IP
-Config: bootstrap/talos/nodes/$WORKER_NAME/config.yaml
-
-EOF
-        
-        WORKER_NUM=$((WORKER_NUM + 1))
-    done
-    
-    echo -e "${GREEN}✓ All worker nodes installed${NC}\n"
+  argocd login localhost:8080 --username admin --password '$ARGOCD_PASSWORD'"
 else
-    echo -e "${BLUE}ℹ  No worker nodes specified - single node cluster${NC}\n"
-fi
-
-# Step 4: Inject ESO Bootstrap Secret
-echo -e "${YELLOW}[4/5] Injecting ESO Bootstrap Secret...${NC}"
-echo "────────────────────────────────────────────────────────────────"
-
-# Check if AWS credentials are provided via environment variables
-if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
-    echo -e "${BLUE}Using AWS credentials from environment variables${NC}"
-    ./05-inject-secrets.sh "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY"
-    
-    # Wait for ESO to sync
-    echo -e "${BLUE}⏳ Waiting for ESO to sync secrets (timeout: 2 minutes)...${NC}"
-    TIMEOUT=120
-    ELAPSED=0
-    while [ $ELAPSED -lt $TIMEOUT ]; do
-        STORE_STATUS=$(kubectl get clustersecretstore aws-parameter-store -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
-        
-        if [ "$STORE_STATUS" = "True" ]; then
-            echo -e "${GREEN}✓ ESO credentials configured and working${NC}"
-            break
-        fi
-        
-        sleep 10
-        ELAPSED=$((ELAPSED + 10))
-    done
-    
-    if [ $ELAPSED -ge $TIMEOUT ]; then
-        echo -e "${YELLOW}⚠️  ESO not ready yet - secrets may sync later${NC}"
-    fi
-else
-    echo -e "${YELLOW}⚠️  AWS credentials not provided via environment variables${NC}"
-    echo -e "${BLUE}ℹ  You need to manually inject AWS credentials for External Secrets Operator${NC}"
-    echo -e "${BLUE}   Run: ./scripts/bootstrap/05-inject-secrets.sh <AWS_ACCESS_KEY_ID> <AWS_SECRET_ACCESS_KEY>${NC}"
     echo ""
-    echo -e "${YELLOW}⚠️  IMPORTANT: ESO needs AWS credentials to sync secrets from Parameter Store${NC}"
+    echo -e "${GREEN}ArgoCD Credentials:${NC}"
+    echo -e "  Username: ${YELLOW}admin${NC}"
+    echo -e "  Password: ${YELLOW}$ARGOCD_PASSWORD${NC}"
     echo ""
 fi
 
-cat >> "$CREDENTIALS_FILE" << EOF
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECRETS MANAGEMENT (External Secrets Operator)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+if [ "$MODE" = "production" ]; then
+    # Step 15: Configure repository credentials
+    echo -e "${YELLOW}[15/15] Configuring repository credentials...${NC}"
+    "$SCRIPT_DIR/13-configure-repo-credentials.sh" --auto || {
+        echo -e "${YELLOW}⚠️  Repository credentials configuration had issues${NC}"
+        echo -e "${BLUE}ℹ  You can configure manually: ./scripts/bootstrap/13-configure-repo-credentials.sh --auto${NC}"
+    }
 
-ESO syncs secrets from AWS SSM Parameter Store.
+    "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "ARGOCD REPOSITORY CREDENTIALS" "Repository credentials managed via ExternalSecrets from AWS SSM
 
-Required AWS Parameters:
-  - /zerotouch/prod/kagent/openai_api_key
-
-Inject ESO credentials:
-  ./scripts/bootstrap/05-inject-secrets.sh <AWS_ACCESS_KEY_ID> <AWS_SECRET_ACCESS_KEY>
-
-Verify ESO is working:
-  kubectl get clustersecretstore aws-parameter-store
-  kubectl get externalsecret -A
-
-EOF
-
-cd "$SCRIPT_DIR"
-
-# Step 4.5: Database Layer (managed by ArgoCD)
-if [ -n "$WORKER_NODES" ]; then
-    echo -e "${YELLOW}[4.5/5] Database Layer (will be deployed by ArgoCD)...${NC}"
-    echo "────────────────────────────────────────────────────────────────"
-    echo -e "${BLUE}ℹ  Database layer will be deployed by ArgoCD via platform-bootstrap Application${NC}"
-    
-    
+Verify:
+  kubectl get secret -n argocd -l argocd.argoproj.io/secret-type=repository
+  kubectl get externalsecret -n argocd"
 else
-    echo -e "${BLUE}ℹ  Single node cluster - databases can be deployed later via ArgoCD${NC}\n"
+    echo -e "${BLUE}[15/15] Skipping repository credentials configuration (preview mode)${NC}"
 fi
 
-# Step 5: Post-reboot Verification (optional - only if needed)
-echo -e "${YELLOW}[5/5] Post-Reboot Verification${NC}"
-echo "────────────────────────────────────────────────────────────────"
-echo -e "${BLUE}ℹ  Run this manually after any server reboot:${NC}"
-echo -e "   ${GREEN}./scripts/bootstrap/post-reboot-verify.sh${NC}"
-echo ""
-
-cat >> "$CREDENTIALS_FILE" << EOF
-
-EOF
-
-# Final Summary
-echo ""
-echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║             Bootstrap Complete!                              ║${NC}"
-echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
-echo ""
-echo -e "${GREEN}✓ Talos OS installed and configured${NC}"
-if [ -n "$WORKER_NODES" ]; then
-    echo -e "${GREEN}✓ Worker nodes installed and joined cluster${NC}"
-fi
-echo -e "${GREEN}✓ ArgoCD bootstrapped and managing platform${NC}"
-echo -e "${YELLOW}⏳ Foundation layer and databases will be deployed by ArgoCD${NC}"
-echo ""
-echo -e "${YELLOW}📝 Credentials saved to:${NC}"
-echo -e "   ${GREEN}$CREDENTIALS_FILE${NC}"
-echo ""
-echo -e "${YELLOW}📌 Next Steps:${NC}"
-if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
-    echo -e "   1. ${RED}IMPORTANT:${NC} Inject ESO credentials: ${GREEN}./scripts/bootstrap/03-inject-secrets.sh <AWS_KEY> <AWS_SECRET>${NC}"
-    echo -e "   2. Review credentials file and ${RED}BACK UP${NC} important credentials"
-    echo -e "   3. Port-forward ArgoCD UI: ${GREEN}kubectl port-forward -n argocd svc/argocd-server 8080:443${NC}"
-    echo -e "   4. Validate cluster: ${GREEN}./scripts/validate-cluster.sh${NC}"
+# Final cluster validation (optional)
+if [ "$MODE" = "production" ]; then
+    echo -e "${YELLOW}Running final cluster validation...${NC}"
 else
-    echo -e "   1. Review credentials file and ${RED}BACK UP${NC} important credentials"
-    echo -e "   2. Port-forward ArgoCD UI: ${GREEN}kubectl port-forward -n argocd svc/argocd-server 8080:443${NC}"
-    echo -e "   3. Validate cluster: ${GREEN}./scripts/validate-cluster.sh${NC}"
+    echo -e "${BLUE}Skipping final cluster validation (preview mode)${NC}"
 fi
-echo ""
-echo -e "${BLUE}Happy deploying! 🚀${NC}"
-echo ""
+"$SCRIPT_DIR/99-validate-cluster.sh" || {
+    echo -e "${YELLOW}⚠️  Cluster validation found issues${NC}"
+    echo -e "${BLUE}ℹ  Check ArgoCD applications: kubectl get applications -n argocd${NC}"
+}
 
-# Display credentials file content
-cat "$CREDENTIALS_FILE"
+# ============================================================================
+# BOOTSTRAP COMPLETE
+# ============================================================================
+
+"$SCRIPT_DIR/99-bootstrap-complete.sh" "$MODE" "${CREDENTIALS_FILE:-}" "${SERVER_IP:-}" "${WORKER_NODES:-}"

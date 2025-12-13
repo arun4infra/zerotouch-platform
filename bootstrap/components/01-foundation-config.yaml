@@ -9,7 +9,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/arun4infra/zerotouch-platform.git
-    targetRevision: main
+    targetRevision: feature/agent-executor
     path: platform/01-foundation
   destination:
     server: https://kubernetes.default.svc

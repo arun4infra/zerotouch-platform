@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-repo-mount-patch
+  namespace: argocd
+data:
+  patch.yaml: |
+    spec:
+      template:
+        spec:
+          volumes:
+          - name: local-repo
+            hostPath:
+              path: /repo
+              type: Directory
+          containers:
+          - name: argocd-repo-server
+            volumeMounts:
+            - name: local-repo
+              mountPath: /repo
+              readOnly: true

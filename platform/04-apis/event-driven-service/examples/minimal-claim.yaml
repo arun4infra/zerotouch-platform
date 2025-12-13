@@ -1,0 +1,41 @@
+# Minimal EventDrivenService Claim
+# This example demonstrates the simplest possible deployment with just image and NATS configuration.
+# No secrets, no init container, no image pull secrets - suitable for public images and stateless workers.
+
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: simple-worker
+  namespace: workers
+spec:
+  # Container image (public registry, no authentication required)
+  # Using nginx for testing - it has health endpoints and will stay running
+  image: nginx:alpine
+  
+  # Resource size (small allocation for lightweight workers)
+  # small: 250m-1000m CPU, 512Mi-2Gi memory
+  size: small
+  
+  # NATS JetStream configuration
+  nats:
+    # NATS server URL (default: nats://nats.nats.svc:4222)
+    url: nats://nats.nats.svc:4222
+    
+    # JetStream stream name (must exist before deployment)
+    stream: SIMPLE_JOBS
+    
+    # Consumer group name for this service
+    consumer: simple-workers
+
+# Resources Created:
+# - Deployment (1 replica, KEDA-managed)
+# - Service (ClusterIP:8080)
+# - ScaledObject (1-10 replicas based on NATS queue depth)
+# - ServiceAccount
+
+# Health Endpoints Required:
+# - GET /health (liveness probe)
+# - GET /ready (readiness probe)
+
+# Metrics Endpoint Recommended:
+# - GET /metrics (Prometheus scraping)

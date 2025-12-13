@@ -1,0 +1,25 @@
+# Development/Kind environment patches
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../
+
+patches:
+  # PostgreSQL storage class patch for Kind
+  - target:
+      kind: Composition
+      name: postgres-instance
+    patch: |-
+      - op: replace
+        path: /spec/resources/0/base/spec/forProvider/manifest/spec/storage/storageClass
+        value: standard
+
+  # Dragonfly storage class patch for Kind  
+  - target:
+      kind: Composition
+      name: dragonfly-instance
+    patch: |-
+      - op: replace
+        path: /spec/resources/2/base/spec/forProvider/manifest/spec/volumeClaimTemplates/0/spec/storageClassName
+        value: standard

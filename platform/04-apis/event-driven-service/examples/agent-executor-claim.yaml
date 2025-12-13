@@ -1,0 +1,209 @@
+# Agent Executor EventDrivenService Claim
+# Reference implementation demonstrating migration from direct Kubernetes manifests
+# to the EventDrivenService platform API.
+#
+# This claim replaces 212 lines of explicit Kubernetes manifests with ~30 lines
+# while maintaining identical functionality and Zero-Touch compliance.
+#
+# Original manifests: bizmatters/services/agent_executor/platform/manifests/
+# Migration status: Validated, ready for deployment (deferred until 2nd NATS service)
+
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: agent-executor
+  namespace: intelligence-deepagents
+spec:
+  # Container image from private GitHub Container Registry
+  # Uses 'latest' tag for continuous deployment (imagePullPolicy: Always)
+  image: ghcr.io/arun4infra/agent-executor:latest
+  
+  # Resource size based on production tuning
+  # medium: 500m-2000m CPU, 1Gi-4Gi memory
+  # Proven allocation from current deployment
+  size: medium
+  
+  # NATS JetStream configuration
+  nats:
+    # NATS server URL (default cluster endpoint)
+    url: nats://nats.nats.svc:4222
+    
+    # JetStream stream for agent execution jobs
+    # Created by agent-executor Job on first deployment
+    stream: AGENT_EXECUTION
+    
+    # Consumer group name for agent-executor workers
+    # Enables horizontal scaling with work distribution
+    consumer: agent-executor-workers
+  
+  # Hybrid Secret Approach: Crossplane + ESO secrets
+  # All secrets mounted via envFrom (bulk mounting)
+  
+  # Secret 1: PostgreSQL database credentials (Crossplane-generated)
+  # Created by: PostgresInstance claim (agent-executor-db)
+  # Keys mounted as env vars: endpoint, port, database, username, password
+  # Application maps these to: POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
+  secret1Name: agent-executor-db-conn
+  
+  # Secret 2: Dragonfly cache credentials (Crossplane-generated)
+  # Created by: DragonflyInstance claim (agent-executor-cache)
+  # Keys mounted as env vars: endpoint, port, password
+  # Application maps these to: DRAGONFLY_HOST, DRAGONFLY_PORT, DRAGONFLY_PASSWORD
+  secret2Name: agent-executor-cache-conn
+  
+  # Secret 3: LLM API keys (ESO-synced from AWS SSM Parameter Store)
+  # Created by: ExternalSecret (agent-executor-llm-keys)
+  # Keys mounted as env vars: OPENAI_API_KEY, ANTHROPIC_API_KEY
+  # Synced from: /intelligence/agent-executor/openai_api_key, /intelligence/agent-executor/anthropic_api_key
+  secret3Name: agent-executor-llm-keys
+  
+  # Note: Supports up to 5 secrets (secret4Name, secret5Name available if needed)
+  
+  # Image pull secrets for private GitHub Container Registry
+  # Created by: ExternalSecret (ghcr-pull-secret)
+  # Synced from: AWS SSM Parameter Store
+  imagePullSecrets:
+    - name: ghcr-pull-secret
+  
+  # Init container for database migrations
+  # Runs Alembic migrations before main container starts
+  # Critical for schema updates during deployments
+  # Uses same image and secrets as main container
+  initContainer:
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        echo "Starting agent-executor database migrations..."
+        cd /app && ./scripts/ci/run-migrations.sh
+        echo "Migrations completed successfully"
+
+# Resources Created by Composition:
+# 
+# 1. ServiceAccount: agent-executor
+#    - Pod identity for Kubernetes RBAC
+#    - No special permissions (default pod execution only)
+#
+# 2. Deployment: agent-executor
+#    - Replicas: 1 (KEDA controls scaling)
+#    - Init Container:
+#      - Image: ghcr.io/arun4infra/agent-executor:latest
+#      - Command: Run Alembic migrations
+#      - Secrets: All 3 secrets mounted via envFrom
+#    - Main Container:
+#      - Image: ghcr.io/arun4infra/agent-executor:latest
+#      - Port: 8080 (HTTP)
+#      - Secrets: All 3 secrets mounted via envFrom
+#      - Resources:
+#        - Requests: 500m CPU, 1Gi memory
+#        - Limits: 2000m CPU, 4Gi memory
+#      - Security Context:
+#        - runAsNonRoot: true
+#        - runAsUser: 1000
+#        - allowPrivilegeEscalation: false
+#        - capabilities: drop [ALL]
+#        - seccompProfile: RuntimeDefault
+#      - Liveness Probe: GET /health:8080 (10s delay, 10s period, 5s timeout, 3 failures)
+#      - Readiness Probe: GET /ready:8080 (5s delay, 5s period, 3s timeout, 2 failures)
+#    - Image Pull Policy: Always (tag is 'latest')
+#    - Image Pull Secrets: ghcr-pull-secret
+#
+# 3. Service: agent-executor
+#    - Type: ClusterIP
+#    - Port: 8080 → targetPort: 8080
+#    - Selector: app.kubernetes.io/name=agent-executor
+#
+# 4. ScaledObject: agent-executor-scaler
+#    - Target: Deployment/agent-executor
+#    - Min Replicas: 1
+#    - Max Replicas: 10
+#    - Trigger: nats-jetstream
+#      - Endpoint: nats-headless.nats.svc.cluster.local:8222 (CRITICAL: uses headless service)
+#      - Account: $SYS
+#      - Stream: AGENT_EXECUTION
+#      - Consumer: agent-executor-workers
+#      - Lag Threshold: 5 messages
+#    - Behavior: Scales up when queue depth > 5, scales down when queue drains
+
+# Standard Labels Applied:
+# - app.kubernetes.io/name: agent-executor
+# - app.kubernetes.io/component: event-driven-worker
+# - app.kubernetes.io/managed-by: crossplane
+# - app.kubernetes.io/version: latest
+
+# Prerequisites (must exist before applying this claim):
+# 1. PostgresInstance claim: agent-executor-db
+#    - Location: bizmatters/services/agent_executor/platform/claims/intelligence-deepagents/agent-executor-db.yaml
+#    - Creates secret: agent-executor-db-conn
+#
+# 2. DragonflyInstance claim: agent-executor-cache
+#    - Location: bizmatters/services/agent_executor/platform/claims/intelligence-deepagents/agent-executor-cache.yaml
+#    - Creates secret: agent-executor-cache-conn
+#
+# 3. ExternalSecret: agent-executor-llm-keys
+#    - Location: bizmatters/services/agent_executor/platform/claims/intelligence-deepagents/agent-executor-llm-keys.yaml
+#    - Creates secret: agent-executor-llm-keys
+#
+# 4. ExternalSecret: ghcr-pull-secret
+#    - Location: bizmatters/platform/secrets/ghcr-pull-secret.yaml
+#    - Creates secret: ghcr-pull-secret
+#
+# 5. NATS Stream: AGENT_EXECUTION
+#    - Created by: agent-executor Job on first deployment
+#    - Stream config: Retention=WorkQueue, MaxAge=24h
+
+# Health Endpoints (implemented by agent-executor):
+# - GET /health → 200 OK (liveness probe)
+# - GET /ready → 200 OK if database, NATS, cache are reachable (readiness probe)
+
+# Metrics Endpoint (implemented by agent-executor):
+# - GET /metrics → Prometheus metrics
+#   - nats_messages_processed_total{status="success|error"}
+#   - nats_message_processing_duration_seconds (histogram)
+#   - agent_execution_duration_seconds (histogram)
+
+# Environment Variables Available in Container:
+# From secret1Name (database):
+#   - endpoint → POSTGRES_HOST
+#   - port → POSTGRES_PORT
+#   - database → POSTGRES_DB
+#   - username → POSTGRES_USER
+#   - password → POSTGRES_PASSWORD
+# From secret2Name (cache):
+#   - endpoint → DRAGONFLY_HOST
+#   - port → DRAGONFLY_PORT
+#   - password → DRAGONFLY_PASSWORD
+# From secret3Name (LLM keys):
+#   - OPENAI_API_KEY
+#   - ANTHROPIC_API_KEY
+# From NATS config:
+#   - NATS_URL=nats://nats.nats.svc:4222
+#   - NATS_STREAM_NAME=AGENT_EXECUTION
+#   - NATS_CONSUMER_GROUP=agent-executor-workers
+
+# Migration Notes:
+# - This claim replaces the following direct manifests:
+#   - agent-executor-deployment.yaml (Deployment)
+#   - agent-executor-service.yaml (Service)
+#   - agent-executor-scaledobject.yaml (KEDA ScaledObject)
+#   - agent-executor-serviceaccount.yaml (ServiceAccount)
+# - Total reduction: 212 lines → ~30 lines (85% reduction)
+# - Functionality: Identical (validated field-by-field)
+# - KEDA fix applied: Uses nats-headless.nats.svc.cluster.local:8222 (proven working)
+# - Migration status: Ready for deployment (deferred per ARCHITECTURE_DECISION.md)
+# - Rollback: Can revert to direct manifests if needed (Git revert)
+
+# Deployment Instructions:
+# 1. Ensure all prerequisites exist (database, cache, secrets, NATS stream)
+# 2. Validate claim: ./scripts/validate-claim.sh agent-executor-claim.yaml
+# 3. Apply claim: kubectl apply -f agent-executor-claim.yaml
+# 4. Verify deployment: kubectl get eventdrivenservice agent-executor -n intelligence-deepagents
+# 5. Check pods: kubectl get pods -n intelligence-deepagents -l app.kubernetes.io/name=agent-executor
+# 6. Check KEDA: kubectl get scaledobject agent-executor-scaler -n intelligence-deepagents
+# 7. Test autoscaling: Publish 50 messages to AGENT_EXECUTION stream, watch pods scale up
+
+# Troubleshooting:
+# - ImagePullBackOff: Check ghcr-pull-secret exists and is valid
+# - CreateContainerConfigError: Check all 3 secrets exist (db-conn, cache-conn, llm-keys)
+# - Init:CrashLoopBackOff: Check database is reachable, migrations script is correct
+# - KEDA TriggerError: Check NATS stream exists, nats-headless endpoint is reachable
+# - Pod not scaling: Check KEDA ScaledObject status, verify NATS queue has messages

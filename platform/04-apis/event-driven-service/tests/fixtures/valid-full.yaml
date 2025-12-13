@@ -1,0 +1,29 @@
+# Valid full-featured claim for testing
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: test-full
+  namespace: test
+  labels:
+    app: test-full
+    environment: test
+  annotations:
+    description: "Full-featured test claim"
+spec:
+  image: ghcr.io/test/full:v2.0.0
+  size: medium
+  nats:
+    url: nats://nats.nats.svc:4222
+    stream: TEST_FULL_STREAM
+    consumer: test-full-consumer
+  secret1Name: test-db-conn
+  secret2Name: test-cache-conn
+  secret3Name: test-llm-keys
+  secret4Name: test-app-config
+  secret5Name: test-extra-secrets
+  imagePullSecrets:
+    - name: test-pull-secret
+  initContainer:
+    command: ["/bin/bash", "-c"]
+    args:
+      - "echo 'Running migrations' && ./migrate.sh"
