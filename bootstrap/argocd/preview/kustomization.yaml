@@ -1,0 +1,64 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: argocd
+
+resources:
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.2.0/manifests/install.yaml
+
+# Preview mode: No control-plane tolerations needed for Kind clusters
+patches:
+  - target:
+      kind: Deployment
+      name: argocd-repo-server
+    patch: |-
+      - op: add
+        path: /spec/template/spec/volumes/-
+        value:
+          name: local-repo
+          hostPath:
+            path: /repo
+            type: Directory
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts/-
+        value:
+          name: local-repo
+          mountPath: /repo
+          readOnly: true
+  - target:
+      kind: StatefulSet
+      name: argocd-application-controller
+    patch: |-
+      - op: add
+        path: /spec/template/spec/volumes/-
+        value:
+          name: local-repo
+          hostPath:
+            path: /repo
+            type: Directory
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts/-
+        value:
+          name: local-repo
+          mountPath: /repo
+          readOnly: true
+  - target:
+      kind: ConfigMap
+      name: argocd-cm
+    patch: |-
+      - op: add
+        path: /data/resource.exclusions
+        value: |
+          - apiGroups:
+              - platform.bizmatters.io
+            kinds:
+              - XEventDrivenService
+            clusters:
+              - "*"
+          - apiGroups:
+              - database.bizmatters.io
+            kinds:
+              - XPostgresInstance
+              - XDragonflyInstance
+            clusters:
+              - "*"

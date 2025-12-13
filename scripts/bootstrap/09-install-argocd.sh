@@ -83,13 +83,7 @@ if kubectl get nodes -o jsonpath='{.items[*].spec.taints[?(@.key=="node-role.kub
     kubectl apply -k "$REPO_ROOT/bootstrap/argocd"
 else
     log_info "Applying ArgoCD manifests for Kind cluster (version: $ARGOCD_VERSION)..."
-    # Temporarily rename files to use preview kustomization
-    mv "$REPO_ROOT/bootstrap/argocd/kustomization.yaml" "$REPO_ROOT/bootstrap/argocd/kustomization-prod.yaml"
-    mv "$REPO_ROOT/bootstrap/argocd/kustomization-preview.yaml" "$REPO_ROOT/bootstrap/argocd/kustomization.yaml"
-    kubectl apply -k "$REPO_ROOT/bootstrap/argocd"
-    # Restore original files
-    mv "$REPO_ROOT/bootstrap/argocd/kustomization.yaml" "$REPO_ROOT/bootstrap/argocd/kustomization-preview.yaml"
-    mv "$REPO_ROOT/bootstrap/argocd/kustomization-prod.yaml" "$REPO_ROOT/bootstrap/argocd/kustomization.yaml"
+    kubectl apply -k "$REPO_ROOT/bootstrap/argocd/preview"
 fi
 
 log_info "✓ ArgoCD manifests applied with control-plane tolerations"
