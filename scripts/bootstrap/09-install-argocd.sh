@@ -17,12 +17,18 @@ NC='\033[0m' # No Color
 # Configuration
 ARGOCD_VERSION="v3.2.0"  # Latest stable as of 2024-11-24
 ARGOCD_NAMESPACE="argocd"
-ROOT_APP_PATH="bootstrap/root.yaml"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Parse mode parameter
 MODE="${1:-auto}"
+
+# Set root application path based on mode
+if [ "$MODE" = "preview" ]; then
+    ROOT_APP_PATH="bootstrap/root-preview.yaml"
+else
+    ROOT_APP_PATH="bootstrap/root.yaml"
+fi
 
 # Function to print colored messages
 log_info() {

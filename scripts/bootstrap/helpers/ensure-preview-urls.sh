@@ -38,8 +38,8 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     GITHUB_URL="https://github.com/arun4infra/zerotouch-platform.git"
     LOCAL_URL="file:///repo"
     
-    # Update URLs in bootstrap files
-    for file in "$REPO_ROOT"/bootstrap/*.yaml "$REPO_ROOT"/bootstrap/components/*.yaml "$REPO_ROOT"/bootstrap/components-tenants/*.yaml; do
+    # Update URLs in bootstrap files (including preview components)
+    for file in "$REPO_ROOT"/bootstrap/*.yaml "$REPO_ROOT"/bootstrap/components/*.yaml "$REPO_ROOT"/bootstrap/components/preview/*.yaml "$REPO_ROOT"/bootstrap/components-tenants/*.yaml; do
         if [ -f "$file" ]; then
             if grep -q "$GITHUB_URL" "$file" 2>/dev/null; then
                 sed -i.bak "s|$GITHUB_URL|$LOCAL_URL|g" "$file"
@@ -50,7 +50,7 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     done
     
     # Also remove targetRevision since local files don't have branches
-    for file in "$REPO_ROOT"/bootstrap/*.yaml "$REPO_ROOT"/bootstrap/components/*.yaml "$REPO_ROOT"/bootstrap/components-tenants/*.yaml; do
+    for file in "$REPO_ROOT"/bootstrap/*.yaml "$REPO_ROOT"/bootstrap/components/*.yaml "$REPO_ROOT"/bootstrap/components/preview/*.yaml "$REPO_ROOT"/bootstrap/components-tenants/*.yaml; do
         if [ -f "$file" ]; then
             if grep -q "targetRevision:" "$file" 2>/dev/null; then
                 sed -i.bak '/targetRevision:/d' "$file"

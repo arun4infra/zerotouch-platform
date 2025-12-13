@@ -12,9 +12,7 @@ spec:
   source:
     repoURL: https://github.com/arun4infra/zerotouch-platform.git
     targetRevision: feature/agent-executor
-    path: platform/05-databases
-    directory:
-      recurse: true
+    path: platform/05-databases/overlays/production
   destination:
     server: https://kubernetes.default.svc
     # No namespace - XRDs and Compositions are cluster-scoped
