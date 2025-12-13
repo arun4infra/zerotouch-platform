@@ -100,7 +100,7 @@ check_postgres() {
 
 # Check Dragonfly caches
 check_dragonfly() {
-    local sts_json=$(kubectl_retry get statefulsets --all-namespaces -l app.kubernetes.io/name=dragonfly -o json 2>/dev/null || echo '{"items":[]}')
+    local sts_json=$(kubectl_retry get statefulsets --all-namespaces -l app=dragonfly -o json 2>/dev/null || echo '{"items":[]}')
     local total=$(echo "$sts_json" | jq -r '.items | length')
     
     if [ "$total" -eq 0 ]; then
@@ -127,7 +127,7 @@ check_dragonfly() {
             unhealthy_details+=("$namespace/$name: $ready_replicas/$replicas")
             
             # Check for pending pods
-            local pending_pods=$(kubectl_retry get pods -n "$namespace" -l app.kubernetes.io/name=dragonfly --field-selector=status.phase=Pending --no-headers 2>/dev/null | wc -l)
+            local pending_pods=$(kubectl_retry get pods -n "$namespace" -l app=dragonfly --field-selector=status.phase=Pending --no-headers 2>/dev/null | wc -l)
             if [ "$pending_pods" -gt 0 ]; then
                 unhealthy_details+=("  └─ $pending_pods pods pending (likely PVC issues)")
             fi
@@ -301,7 +301,7 @@ kubectl_retry get clusters.postgresql.cnpg.io --all-namespaces -o wide 2>/dev/nu
 echo ""
 
 echo -e "${BLUE}Dragonfly Caches:${NC}"
-kubectl_retry get statefulsets --all-namespaces -l app.kubernetes.io/name=dragonfly -o wide 2>/dev/null || echo "No Dragonfly caches found"
+kubectl_retry get statefulsets --all-namespaces -l app=dragonfly -o wide 2>/dev/null || echo "No Dragonfly caches found"
 echo ""
 
 echo -e "${BLUE}NATS Messaging:${NC}"
@@ -322,7 +322,7 @@ echo ""
 
 echo -e "${YELLOW}Manual debug commands:${NC}"
 echo "  kubectl get clusters.postgresql.cnpg.io --all-namespaces -o wide"
-echo "  kubectl get statefulsets --all-namespaces -l app.kubernetes.io/name=dragonfly -o wide"
+echo "  kubectl get statefulsets --all-namespaces -l app=dragonfly -o wide"
 echo "  kubectl get statefulset nats -n nats -o wide"
 echo "  kubectl get externalsecrets --all-namespaces -o wide"
 echo "  kubectl describe clustersecretstore aws-parameter-store"
