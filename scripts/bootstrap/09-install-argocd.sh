@@ -225,6 +225,17 @@ grep -n "storageClassName" "$REPO_ROOT/bootstrap/components/01-nats.yaml" 2>/dev
 log_info "01-nats.yaml targetRevision:"
 grep -n "targetRevision" "$REPO_ROOT/bootstrap/components/01-nats.yaml" 2>/dev/null || echo "  (no targetRevision found - THIS WILL CAUSE HELM CHART ERROR!)"
 
+log_info "Verifying files inside Kind container at /repo:"
+if kubectl get nodes &>/dev/null; then
+    # Get the Kind container name
+    KIND_CONTAINER=$(docker ps --filter "name=zerotouch-preview-control-plane" --format "{{.Names}}" 2>/dev/null || echo "")
+    if [ -n "$KIND_CONTAINER" ]; then
+        log_info "Checking /repo/bootstrap/components/01-nats.yaml inside container:"
+        docker exec "$KIND_CONTAINER" grep -n "storageClassName" /repo/bootstrap/components/01-nats.yaml 2>/dev/null || echo "  (file not accessible in container)"
+        docker exec "$KIND_CONTAINER" grep -n "targetRevision" /repo/bootstrap/components/01-nats.yaml 2>/dev/null || echo "  (no targetRevision in container)"
+    fi
+fi
+
 log_info "Checking for GitHub URLs in bootstrap files:"
 GITHUB_COUNT=$(grep -r "github.com/arun4infra/zerotouch-platform" "$REPO_ROOT/bootstrap/"*.yaml 2>/dev/null | wc -l | tr -d ' ')
 log_info "  Files with GitHub URL: $GITHUB_COUNT"
