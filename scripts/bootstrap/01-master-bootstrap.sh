@@ -214,7 +214,13 @@ if [ "$MODE" = "preview" ]; then
     
     # Debug: Show NATS application as ArgoCD sees it
     echo -e "${BLUE}DEBUG: NATS application spec as seen by ArgoCD:${NC}"
-    kubectl get application nats -n argocd -o yaml 2>/dev/null | grep -A 20 "spec:" || echo "NATS app not found"
+    kubectl get application nats -n argocd -o yaml 2>/dev/null | grep -A 30 "spec:" || echo "NATS app not found"
+    
+    echo -e "${BLUE}DEBUG: NATS source file in container:${NC}"
+    KIND_CONTAINER=$(docker ps --filter "name=zerotouch-preview-control-plane" --format "{{.Names}}" 2>/dev/null || echo "")
+    if [ -n "$KIND_CONTAINER" ]; then
+        docker exec "$KIND_CONTAINER" cat /repo/bootstrap/components/01-nats.yaml 2>/dev/null | head -20 || echo "Cannot read file"
+    fi
     
     "$SCRIPT_DIR/helpers/fix-kind-conflicts.sh"
     
