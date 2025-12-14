@@ -1,0 +1,51 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xdragonflyinstances.database.bizmatters.io
+spec:
+  group: database.bizmatters.io
+  names:
+    kind: XDragonflyInstance
+    plural: xdragonflyinstances
+  claimNames:
+    kind: DragonflyInstance
+    plural: dragonflyinstances
+  connectionSecretKeys:
+    - endpoint
+    - port
+    - password
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                size:
+                  type: string
+                  description: "Size of the cache instance (small, medium, large)"
+                  enum:
+                    - small
+                    - medium
+                    - large
+                  default: small
+                storageGB:
+                  type: integer
+                  description: "Storage size in GB"
+                  default: 10
+                  minimum: 5
+                  maximum: 500
+              required:
+                - size
+            status:
+              type: object
+              properties:
+                ready:
+                  type: boolean
+                endpoint:
+                  type: string
+                  description: "Connection endpoint"

@@ -9,7 +9,9 @@ spec:
   project: default
   source:
     repoURL: file:///repo
-    path: platform/05-databases/overlays/development
+    path: platform/05-databases-preview
+    directory:
+      recurse: false
   destination:
     server: https://kubernetes.default.svc
     namespace: crossplane-system

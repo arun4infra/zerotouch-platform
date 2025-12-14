@@ -1,0 +1,57 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xpostgresinstances.database.bizmatters.io
+spec:
+  group: database.bizmatters.io
+  names:
+    kind: XPostgresInstance
+    plural: xpostgresinstances
+  claimNames:
+    kind: PostgresInstance
+    plural: postgresinstances
+  connectionSecretKeys:
+    - endpoint
+    - port
+    - username
+    - password
+    - database
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                size:
+                  type: string
+                  description: "Size of the database instance (small, medium, large)"
+                  enum:
+                    - small
+                    - medium
+                    - large
+                  default: small
+                version:
+                  type: string
+                  description: "PostgreSQL version"
+                  default: "16"
+                storageGB:
+                  type: integer
+                  description: "Storage size in GB"
+                  default: 20
+                  minimum: 10
+                  maximum: 1000
+              required:
+                - size
+            status:
+              type: object
+              properties:
+                ready:
+                  type: boolean
+                endpoint:
+                  type: string
+                  description: "Connection endpoint"

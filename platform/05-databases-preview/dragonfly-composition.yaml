@@ -1,0 +1,314 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: dragonfly-instance
+  annotations:
+    argocd.argoproj.io/sync-options: ServerSideApply=true
+  labels:
+    crossplane.io/xrd: xdragonflyinstances.database.bizmatters.io
+spec:
+  mode: Resources
+  compositeTypeRef:
+    apiVersion: database.bizmatters.io/v1alpha1
+    kind: XDragonflyInstance
+  writeConnectionSecretsToNamespace: crossplane-system
+  
+  resources:
+    # Password Secret - Auto-generated using composite UID
+    - name: password-secret
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                namespace: placeholder
+              type: Opaque
+              data:
+                password: ""
+          providerConfigRef:
+            name: kubernetes-provider
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        # Password secret name: {claim-name}-password
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.claimRef.name
+            strategy: string
+            string:
+              fmt: "%s-password"
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        # Auto-generate password from composite UID (base64 encoded)
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.uid
+          toFieldPath: spec.forProvider.manifest.data.password
+          transforms:
+            - type: string
+              string:
+                type: Convert
+                convert: ToBase64
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
+    
+    # Service
+    - name: dragonfly-service
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: Service
+              metadata:
+                namespace: placeholder
+              spec:
+                type: ClusterIP
+                ports:
+                  - port: 6379
+                    targetPort: 6379
+                    protocol: TCP
+                    name: dragonfly
+          providerConfigRef:
+            name: kubernetes-provider
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.selector.app
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
+
+    # StatefulSet
+    - name: dragonfly-statefulset
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: apps/v1
+              kind: StatefulSet
+              metadata:
+                namespace: placeholder
+              spec:
+                replicas: 1
+                selector:
+                  matchLabels:
+                    app: dragonfly
+                template:
+                  metadata:
+                    labels:
+                      app: dragonfly
+                  spec:
+                    containers:
+                      - name: dragonfly
+                        image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+                        ports:
+                          - containerPort: 6379
+                            name: dragonfly
+                        args:
+                          - "--requirepass=$(DRAGONFLY_PASSWORD)"
+                          - "--dir=/data"
+                        env:
+                          - name: DRAGONFLY_PASSWORD
+                            valueFrom:
+                              secretKeyRef:
+                                name: placeholder-password
+                                key: password
+                        volumeMounts:
+                          - name: dragonfly-data
+                            mountPath: /data
+                        resources:
+                          requests:
+                            memory: "512Mi"
+                            cpu: "250m"
+                          limits:
+                            memory: "2Gi"
+                            cpu: "1000m"
+                volumeClaimTemplates:
+                  - metadata:
+                      name: dragonfly-data
+                    spec:
+                      accessModes: ["ReadWriteOnce"]
+                      storageClassName: standard
+                      resources:
+                        requests:
+                          storage: 10Gi
+          providerConfigRef:
+            name: kubernetes-provider
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.serviceName
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.selector.matchLabels.app
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.template.metadata.labels.app
+        # Reference password secret: {claim-name}-password
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.claimRef.name
+            strategy: string
+            string:
+              fmt: "%s-password"
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.name
+        # Size-based resource patches
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.requests.memory
+          transforms:
+            - type: map
+              map:
+                small: "512Mi"
+                medium: "1Gi"
+                large: "2Gi"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.limits.memory
+          transforms:
+            - type: map
+              map:
+                small: "2Gi"
+                medium: "4Gi"
+                large: "8Gi"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.requests.cpu
+          transforms:
+            - type: map
+              map:
+                small: "250m"
+                medium: "500m"
+                large: "1000m"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.limits.cpu
+          transforms:
+            - type: map
+              map:
+                small: "1000m"
+                medium: "2000m"
+                large: "4000m"
+        # Storage size patch
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.storageGB
+          toFieldPath: spec.forProvider.manifest.spec.volumeClaimTemplates[0].spec.resources.requests.storage
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%dGi"
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
+
+    # Connection Secret - Zero-Touch Pattern
+    # Auto-creates {claim-name}-conn with standard environment variable names
+    - name: connection-secret
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                namespace: placeholder
+              type: Opaque
+              stringData:
+                DRAGONFLY_PORT: "6379"
+          references:
+            # Copy password from auto-generated password secret
+            - patchesFrom:
+                apiVersion: v1
+                kind: Secret
+                namespace: placeholder
+                name: placeholder-password
+                fieldPath: data.password
+              toFieldPath: data.DRAGONFLY_PASSWORD
+          providerConfigRef:
+            name: kubernetes-provider
+      patches:
+        # Target secret name: {claim-name}-conn (auto-derived)
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.claimRef.name
+            strategy: string
+            string:
+              fmt: "%s-conn"
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        # Target namespace = claim namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        # Source namespace for password secret
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.references[0].patchesFrom.namespace
+        # Source secret name: {claim-name}-password
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.claimRef.name
+            strategy: string
+            string:
+              fmt: "%s-password"
+          toFieldPath: spec.references[0].patchesFrom.name
+        # Computed endpoint (DRAGONFLY_HOST)
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.claimRef.name
+              - fromFieldPath: spec.claimRef.namespace
+            strategy: string
+            string:
+              fmt: "%s.%s.svc.cluster.local"
+          toFieldPath: spec.forProvider.manifest.stringData.DRAGONFLY_HOST
+        # Update status with endpoint
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.claimRef.name
+              - fromFieldPath: spec.claimRef.namespace
+            strategy: string
+            string:
+              fmt: "%s.%s.svc.cluster.local"
+          toFieldPath: status.endpoint
+          policy:
+            fromFieldPath: Required
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"

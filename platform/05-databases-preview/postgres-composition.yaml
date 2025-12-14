@@ -1,0 +1,223 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: postgres-instance
+  annotations:
+    argocd.argoproj.io/sync-options: ServerSideApply=true
+  labels:
+    crossplane.io/xrd: xpostgresinstances.database.bizmatters.io
+spec:
+  mode: Resources
+  compositeTypeRef:
+    apiVersion: database.bizmatters.io/v1alpha1
+    kind: XPostgresInstance
+  writeConnectionSecretsToNamespace: crossplane-system
+  resources:
+    # CNPG Cluster - Zero-Touch Pattern
+    - name: cnpg-cluster
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: postgresql.cnpg.io/v1
+              kind: Cluster
+              metadata:
+                name: placeholder
+                namespace: placeholder
+              spec:
+                instances: 1
+                imageName: ghcr.io/cloudnative-pg/postgresql:16
+                storage:
+                  size: 20Gi
+                  storageClass: standard
+                bootstrap:
+                  initdb:
+                    database: placeholder
+                    owner: placeholder
+                resources:
+                  requests:
+                    memory: "512Mi"
+                    cpu: "250m"
+                  limits:
+                    memory: "2Gi"
+                    cpu: "1000m"
+          providerConfigRef:
+            name: kubernetes-provider
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.bootstrap.initdb.database
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.bootstrap.initdb.owner
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.resources.requests.memory
+          transforms:
+            - type: map
+              map:
+                small: "256Mi"
+                medium: "512Mi"
+                large: "1Gi"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.resources.limits.memory
+          transforms:
+            - type: map
+              map:
+                small: "1Gi"
+                medium: "2Gi"
+                large: "4Gi"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.resources.requests.cpu
+          transforms:
+            - type: map
+              map:
+                small: "250m"
+                medium: "500m"
+                large: "1000m"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.resources.limits.cpu
+          transforms:
+            - type: map
+              map:
+                small: "1000m"
+                medium: "2000m"
+                large: "4000m"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.storageGB
+          toFieldPath: spec.forProvider.manifest.spec.storage.size
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%dGi"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.version
+          toFieldPath: spec.forProvider.manifest.spec.imageName
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "ghcr.io/cloudnative-pg/postgresql:%s"
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
+    # Connection Secret - copies from CNPG -app secret to {claim-name}-conn
+    # Uses standard environment variable names for envFrom compatibility
+    - name: connection-secret
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: placeholder
+                namespace: placeholder
+              type: Opaque
+              stringData:
+                POSTGRES_PORT: "5432"
+                POSTGRES_SCHEMA: "public"
+          references:
+            - patchesFrom:
+                apiVersion: v1
+                kind: Secret
+                namespace: placeholder
+                name: placeholder-app
+                fieldPath: data.username
+              toFieldPath: data.POSTGRES_USER
+            - patchesFrom:
+                apiVersion: v1
+                kind: Secret
+                namespace: placeholder
+                name: placeholder-app
+                fieldPath: data.password
+              toFieldPath: data.POSTGRES_PASSWORD
+            - patchesFrom:
+                apiVersion: v1
+                kind: Secret
+                namespace: placeholder
+                name: placeholder-app
+                fieldPath: data.dbname
+              toFieldPath: data.POSTGRES_DB
+          providerConfigRef:
+            name: kubernetes-provider
+      patches:
+        # Target secret name: {claim-name}-conn (auto-derived)
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.claimRef.name
+            strategy: string
+            string:
+              fmt: "%s-conn"
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        # Target namespace = claim namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        # Source namespace for CNPG -app secret
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.references[0].patchesFrom.namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.references[1].patchesFrom.namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.references[2].patchesFrom.namespace
+        # Source secret name: {claim-name}-app
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.claimRef.name
+            strategy: string
+            string:
+              fmt: "%s-app"
+          toFieldPath: spec.references[0].patchesFrom.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.claimRef.name
+            strategy: string
+            string:
+              fmt: "%s-app"
+          toFieldPath: spec.references[1].patchesFrom.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.claimRef.name
+            strategy: string
+            string:
+              fmt: "%s-app"
+          toFieldPath: spec.references[2].patchesFrom.name
+        # Computed endpoint (POSTGRES_HOST)
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.claimRef.name
+              - fromFieldPath: spec.claimRef.namespace
+            strategy: string
+            string:
+              fmt: "%s-rw.%s.svc.cluster.local"
+          toFieldPath: spec.forProvider.manifest.stringData.POSTGRES_HOST
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
