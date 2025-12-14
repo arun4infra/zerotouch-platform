@@ -112,9 +112,6 @@ spec:
     server: https://kubernetes.default.svc
     namespace: nats
   syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
     syncOptions:
       - CreateNamespace=true
     retry:
@@ -130,6 +127,7 @@ spec:
       jqPathExpressions:
         - .spec.volumeClaimTemplates[]?.metadata.creationTimestamp
         - .spec.volumeClaimTemplates[]?.status
+        - .spec.volumeClaimTemplates[]?.spec.storageClassName
 EOF
 
 # Verify
