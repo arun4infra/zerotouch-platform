@@ -222,6 +222,9 @@ grep -n "repoURL" "$REPO_ROOT/bootstrap/10-platform-bootstrap.yaml" 2>/dev/null 
 log_info "01-nats.yaml storageClassName:"
 grep -n "storageClassName" "$REPO_ROOT/bootstrap/components/01-nats.yaml" 2>/dev/null || echo "  (file not found or no storageClassName)"
 
+log_info "01-nats.yaml targetRevision:"
+grep -n "targetRevision" "$REPO_ROOT/bootstrap/components/01-nats.yaml" 2>/dev/null || echo "  (no targetRevision found - THIS WILL CAUSE HELM CHART ERROR!)"
+
 log_info "Checking for GitHub URLs in bootstrap files:"
 GITHUB_COUNT=$(grep -r "github.com/arun4infra/zerotouch-platform" "$REPO_ROOT/bootstrap/"*.yaml 2>/dev/null | wc -l | tr -d ' ')
 log_info "  Files with GitHub URL: $GITHUB_COUNT"
