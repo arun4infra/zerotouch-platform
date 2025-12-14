@@ -2,13 +2,16 @@
 # Apply all preview/Kind patches to the platform
 # This script runs all numbered patch scripts in order
 #
-# Usage: ./00-apply-all-patches.sh
+# Usage: ./00-apply-all-patches.sh [--force]
 #
 # Run this BEFORE ArgoCD syncs from file:///repo
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Pass through arguments (e.g., --force)
+ARGS="$@"
 
 # Colors
 GREEN='\033[0;32m'
@@ -26,7 +29,7 @@ for script in "$SCRIPT_DIR"/[0-9][0-9]-*.sh; do
         script_name=$(basename "$script")
         echo -e "${BLUE}Running: $script_name${NC}"
         chmod +x "$script"
-        "$script"
+        "$script" $ARGS
         echo ""
     fi
 done

@@ -88,11 +88,17 @@ check_postgres() {
             echo -e "       ${RED}✗ $detail${NC}"
         done
         
+        # Show PVC status (common issue)
+        echo -e "     ${YELLOW}PVC status:${NC}"
+        kubectl_retry get pvc --all-namespaces -l cnpg.io/cluster 2>/dev/null | head -5 | while read -r pvc; do
+            echo -e "       $pvc"
+        done || echo -e "       ${YELLOW}No PVCs found${NC}"
+        
         # Show recent events for troubleshooting
-        echo -e "     ${YELLOW}Recent cluster events:${NC}"
-        kubectl_retry get events --all-namespaces --sort-by='.lastTimestamp' | grep -i "postgresql\|cnpg\|cluster" | tail -3 | while read -r event; do
-            echo -e "       ${BLUE}$event${NC}"
-        done 2>/dev/null || echo -e "       ${YELLOW}No recent events found${NC}"
+        echo -e "     ${YELLOW}Recent events:${NC}"
+        kubectl_retry get events --all-namespaces --sort-by='.lastTimestamp' 2>/dev/null | grep -iE "postgresql|cnpg|pvc|volume|provision" | tail -3 | while read -r event; do
+            echo -e "       $event"
+        done || echo -e "       ${YELLOW}No recent events found${NC}"
     fi
     
     [ "$healthy" -eq "$total" ]
@@ -142,11 +148,17 @@ check_dragonfly() {
             echo -e "       ${RED}✗ $detail${NC}"
         done
         
+        # Show PVC status (common issue)
+        echo -e "     ${YELLOW}PVC status:${NC}"
+        kubectl_retry get pvc --all-namespaces -l app=dragonfly 2>/dev/null | head -5 | while read -r pvc; do
+            echo -e "       $pvc"
+        done || echo -e "       ${YELLOW}No PVCs found${NC}"
+        
         # Show recent events for troubleshooting
-        echo -e "     ${YELLOW}Recent cache events:${NC}"
-        kubectl_retry get events --all-namespaces --sort-by='.lastTimestamp' | grep -i "dragonfly\|statefulset" | tail -3 | while read -r event; do
-            echo -e "       ${BLUE}$event${NC}"
-        done 2>/dev/null || echo -e "       ${YELLOW}No recent events found${NC}"
+        echo -e "     ${YELLOW}Recent events:${NC}"
+        kubectl_retry get events --all-namespaces --sort-by='.lastTimestamp' 2>/dev/null | grep -iE "dragonfly|pvc|volume|provision" | tail -3 | while read -r event; do
+            echo -e "       $event"
+        done || echo -e "       ${YELLOW}No recent events found${NC}"
     fi
     
     [ "$ready" -eq "$total" ]
@@ -169,15 +181,21 @@ check_nats() {
         
         # Show pod status
         echo -e "     ${YELLOW}Pod status:${NC}"
-        kubectl_retry get pods -n nats -l app.kubernetes.io/name=nats -o wide 2>/dev/null | while read -r pod; do
-            echo -e "       ${BLUE}$pod${NC}"
+        kubectl_retry get pods -n nats -l app.kubernetes.io/name=nats -o wide 2>/dev/null | head -5 | while read -r pod; do
+            echo -e "       $pod"
         done || echo -e "       ${YELLOW}No pods found${NC}"
+        
+        # Show PVC status
+        echo -e "     ${YELLOW}PVC status:${NC}"
+        kubectl_retry get pvc -n nats 2>/dev/null | head -5 | while read -r pvc; do
+            echo -e "       $pvc"
+        done || echo -e "       ${YELLOW}No PVCs found${NC}"
         
         # Show recent events
         echo -e "     ${YELLOW}Recent events:${NC}"
-        kubectl_retry get events -n nats --sort-by='.lastTimestamp' | grep -i nats | tail -3 | while read -r event; do
-            echo -e "       ${BLUE}$event${NC}"
-        done 2>/dev/null || echo -e "       ${YELLOW}No recent events found${NC}"
+        kubectl_retry get events -n nats --sort-by='.lastTimestamp' 2>/dev/null | grep -iE "nats|pvc|volume|provision" | tail -3 | while read -r event; do
+            echo -e "       $event"
+        done || echo -e "       ${YELLOW}No recent events found${NC}"
     fi
     
     [ "$ready" -eq "$total" ]

@@ -36,9 +36,10 @@ echo ""
 echo -e "${BLUE}Preview mode configured${NC}"
 echo ""
 
-# 1. Apply preview patches (URLs, storage class, tolerations)
+# 1. Apply preview patches (URLs, storage class, tolerations, disable local-path-provisioner)
 echo -e "${BLUE}Applying preview patches...${NC}"
-"$SCRIPT_DIR/../patches/00-apply-all-patches.sh"
+# Pass --force since we're definitely in preview mode (cluster doesn't exist yet)
+"$SCRIPT_DIR/../patches/00-apply-all-patches.sh" --force
 echo ""
 
 # 2. Update Kind config to mount local repo
