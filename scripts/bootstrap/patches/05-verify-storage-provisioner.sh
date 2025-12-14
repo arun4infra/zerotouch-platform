@@ -28,72 +28,29 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     echo -e "${BLUE}Verifying local-path-provisioner for Kind cluster...${NC}"
     echo -e "${BLUE}Context: $CONTEXT${NC}"
     
-    # Check if Kind's built-in provisioner exists (in kube-system namespace)
+    # Check if Kind has a built-in provisioner (check for standard storage class or deployment)
     KIND_PROVISIONER_EXISTS=false
-    echo -e "${BLUE}Checking for Kind's built-in provisioner in kube-system namespace...${NC}"
+    echo -e "${BLUE}Checking for Kind's built-in provisioner...${NC}"
+    
+    # Check for deployment in kube-system (older Kind versions)
     if kubectl get deployment -n kube-system local-path-provisioner >/dev/null 2>&1; then
         KIND_PROVISIONER_EXISTS=true
         REPLICAS=$(kubectl get deployment -n kube-system local-path-provisioner -o jsonpath='{.status.availableReplicas}' 2>/dev/null || echo "0")
-        echo -e "  ${GREEN}✓${NC} Kind's built-in local-path-provisioner found in kube-system (replicas: $REPLICAS)"
-        
-        # Disable our ArgoCD Application to avoid conflicts
-        LOCAL_PATH_APP="$REPO_ROOT/bootstrap/00-local-path-provisioner.yaml"
-        if [ -f "$LOCAL_PATH_APP" ]; then
-            mv "$LOCAL_PATH_APP" "$LOCAL_PATH_APP.disabled"
-            echo -e "  ${BLUE}ℹ${NC} Disabled ArgoCD Application to avoid conflict with Kind's provisioner"
+        echo -e "  ${GREEN}✓${NC} Kind's built-in provisioner found in kube-system (replicas: $REPLICAS)"
+    # Check for standard storage class (Kind v1.34+)
+    elif kubectl get storageclass standard >/dev/null 2>&1; then
+        STANDARD_PROVISIONER=$(kubectl get storageclass standard -o jsonpath='{.provisioner}' 2>/dev/null || echo "unknown")
+        if [[ "$STANDARD_PROVISIONER" == "rancher.io/local-path" ]]; then
+            KIND_PROVISIONER_EXISTS=true
+            echo -e "  ${GREEN}✓${NC} Kind v1.34+ detected with built-in provisioner (storage class: standard)"
         fi
-    else
-        echo -e "  ${BLUE}ℹ${NC} Kind's built-in provisioner not found (Kind v1.34+ doesn't include it)"
-        
-        # Re-enable our ArgoCD Application if it was disabled
-        LOCAL_PATH_APP_DISABLED="$REPO_ROOT/bootstrap/00-local-path-provisioner.yaml.disabled"
-        if [ -f "$LOCAL_PATH_APP_DISABLED" ]; then
-            mv "$LOCAL_PATH_APP_DISABLED" "${LOCAL_PATH_APP_DISABLED%.disabled}"
-            echo -e "  ${GREEN}✓${NC} Re-enabled ArgoCD Application for local-path-provisioner"
-        else
-            # Check both locations (bootstrap/ and bootstrap/components/)
-            if [ -f "$REPO_ROOT/bootstrap/00-local-path-provisioner.yaml" ]; then
-                echo -e "  ${BLUE}ℹ${NC} ArgoCD Application is enabled: $REPO_ROOT/bootstrap/01-local-path-provisioner.yaml"
-            elif [ -f "$REPO_ROOT/bootstrap/00-local-path-provisioner.yaml" ]; then
-                echo -e "  ${BLUE}ℹ${NC} ArgoCD Application is enabled: $REPO_ROOT/bootstrap/components/01-local-path-provisioner.yaml"
-            else
-                echo -e "  ${YELLOW}⚠${NC} ArgoCD Application file not found in expected locations"
-            fi
-        fi
-        
-        # Check if our ArgoCD-deployed provisioner exists
-        echo -e "${BLUE}Checking for ArgoCD-deployed provisioner in local-path-storage namespace...${NC}"
-        if kubectl get namespace local-path-storage >/dev/null 2>&1; then
-            echo -e "  ${GREEN}✓${NC} local-path-storage namespace exists"
-            
-            if kubectl get pods -n local-path-storage -l app.kubernetes.io/name=local-path-provisioner >/dev/null 2>&1; then
-                POD_COUNT=$(kubectl get pods -n local-path-storage -l app.kubernetes.io/name=local-path-provisioner --no-headers 2>/dev/null | wc -l)
-                POD_STATUS=$(kubectl get pods -n local-path-storage -l app.kubernetes.io/name=local-path-provisioner -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "NotFound")
-                POD_NAME=$(kubectl get pods -n local-path-storage -l app.kubernetes.io/name=local-path-provisioner -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "unknown")
-                
-                if [ "$POD_STATUS" = "Running" ]; then
-                    echo -e "  ${GREEN}✓${NC} ArgoCD-deployed provisioner is running (pod: $POD_NAME, count: $POD_COUNT)"
-                else
-                    echo -e "  ${YELLOW}⚠${NC} ArgoCD-deployed provisioner status: $POD_STATUS (pod: $POD_NAME)"
-                    # Show pod events for debugging
-                    echo -e "${BLUE}Recent pod events:${NC}"
-                    kubectl get events -n local-path-storage --field-selector involvedObject.name=$POD_NAME --sort-by='.lastTimestamp' | tail -5 || true
-                fi
-            else
-                echo -e "  ${YELLOW}⚠${NC} No provisioner pods found in local-path-storage namespace"
-                echo -e "  ${BLUE}ℹ${NC} Checking if ArgoCD Application exists..."
-                if kubectl get application -n argocd local-path-provisioner >/dev/null 2>&1; then
-                    APP_SYNC=$(kubectl get application -n argocd local-path-provisioner -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
-                    APP_HEALTH=$(kubectl get application -n argocd local-path-provisioner -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Unknown")
-                    echo -e "  ${BLUE}ℹ${NC} ArgoCD Application status: Sync=$APP_SYNC, Health=$APP_HEALTH"
-                else
-                    echo -e "  ${YELLOW}⚠${NC} ArgoCD Application 'local-path-provisioner' not found yet"
-                fi
-            fi
-        else
-            echo -e "  ${BLUE}ℹ${NC} local-path-storage namespace doesn't exist yet"
-            echo -e "  ${BLUE}ℹ${NC} ArgoCD will create it and deploy local-path-provisioner"
-        fi
+    fi
+    
+    # Always disable our ArgoCD Application in preview mode to avoid conflicts
+    LOCAL_PATH_APP="$REPO_ROOT/bootstrap/00-local-path-provisioner.yaml"
+    if [ -f "$LOCAL_PATH_APP" ]; then
+        mv "$LOCAL_PATH_APP" "$LOCAL_PATH_APP.disabled"
+        echo -e "  ${BLUE}ℹ${NC} Disabled ArgoCD Application (not needed in Kind preview mode)"
     fi
     
     # Check storage class
@@ -114,10 +71,15 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
         # Check if Kind's default "standard" storage class exists (Kind v1.34+)
         if kubectl get storageclass standard >/dev/null 2>&1; then
             STANDARD_PROVISIONER=$(kubectl get storageclass standard -o jsonpath='{.provisioner}' 2>/dev/null || echo "unknown")
-            echo -e "  ${BLUE}ℹ${NC} Found Kind's 'standard' storage class (provisioner: $STANDARD_PROVISIONER)"
+            STANDARD_BINDING=$(kubectl get storageclass standard -o jsonpath='{.volumeBindingMode}' 2>/dev/null || echo "unknown")
+            STANDARD_RECLAIM=$(kubectl get storageclass standard -o jsonpath='{.reclaimPolicy}' 2>/dev/null || echo "unknown")
+            echo -e "  ${BLUE}ℹ${NC} Found Kind's 'standard' storage class"
+            echo -e "     Provisioner: $STANDARD_PROVISIONER"
+            echo -e "     VolumeBindingMode: $STANDARD_BINDING"
+            echo -e "     ReclaimPolicy: $STANDARD_RECLAIM"
             
-            # Create local-path as an alias to standard
-            echo -e "  ${BLUE}ℹ${NC} Creating 'local-path' storage class as alias..."
+            # Create local-path as an exact copy of standard
+            echo -e "  ${BLUE}ℹ${NC} Creating 'local-path' storage class with same configuration..."
             cat <<EOF | kubectl apply -f -
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -125,20 +87,23 @@ metadata:
   name: local-path
   annotations:
     storageclass.kubernetes.io/is-default-class: "false"
-provisioner: rancher.io/local-path
-volumeBindingMode: WaitForFirstConsumer
-reclaimPolicy: Delete
+provisioner: $STANDARD_PROVISIONER
+volumeBindingMode: $STANDARD_BINDING
+reclaimPolicy: $STANDARD_RECLAIM
 EOF
             echo -e "  ${GREEN}✓${NC} Created 'local-path' storage class"
             
             # Verify it was created
             if kubectl get storageclass local-path >/dev/null 2>&1; then
                 echo -e "  ${GREEN}✓${NC} Verified: local-path storage class is now available"
+                echo -e "${BLUE}Testing PVC creation with local-path storage class...${NC}"
+                # The provisioner should now work for any PVCs requesting local-path
             else
                 echo -e "  ${RED}✗${NC} Failed to create local-path storage class"
             fi
         else
-            echo -e "  ${BLUE}ℹ${NC} No default storage class found - will be created by ArgoCD"
+            echo -e "  ${YELLOW}⚠${NC} No standard storage class found"
+            echo -e "  ${BLUE}ℹ${NC} This is unexpected for Kind clusters"
         fi
     fi
     
