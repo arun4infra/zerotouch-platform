@@ -14,7 +14,7 @@ NC='\033[0m'
 
 echo -e "${BLUE}Patching storage class to 'standard'...${NC}"
 
-# Patch compositions
+# Patch database compositions
 for file in "$REPO_ROOT"/platform/05-databases/compositions/*.yaml; do
     if [ -f "$file" ]; then
         if grep -q "local-path" "$file" 2>/dev/null; then
@@ -27,5 +27,17 @@ for file in "$REPO_ROOT"/platform/05-databases/compositions/*.yaml; do
         fi
     fi
 done
+
+# Patch NATS component
+NATS_FILE="$REPO_ROOT/bootstrap/components/01-nats.yaml"
+if [ -f "$NATS_FILE" ]; then
+    if grep -q "local-path" "$NATS_FILE" 2>/dev/null; then
+        sed -i.bak \
+            -e 's/storageClassName: local-path/storageClassName: standard/g' \
+            "$NATS_FILE"
+        rm -f "$NATS_FILE.bak"
+        echo -e "  ${GREEN}✓${NC} Patched: 01-nats.yaml"
+    fi
+fi
 
 echo -e "${GREEN}✓ Storage class patches applied${NC}"

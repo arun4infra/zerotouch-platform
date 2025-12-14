@@ -19,21 +19,16 @@ echo -e "${BLUE}║   Fixing Kind Cluster Deployment Conflicts                  
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-# Fix 1: local-path-provisioner immutable selector issue
-echo -e "${BLUE}Checking local-path-provisioner deployment...${NC}"
+# Fix 1: local-path-provisioner - SKIP deletion
+# Kind comes with its own local-path-provisioner that works fine.
+# We no longer deploy our own via ArgoCD in preview mode, so no conflict.
+# The storage class 'standard' in Kind uses Kind's built-in provisioner.
+echo -e "${BLUE}Checking local-path-provisioner...${NC}"
 if kubectl get deployment local-path-provisioner -n local-path-storage &>/dev/null; then
-    echo -e "${YELLOW}  Found existing local-path-provisioner deployment${NC}"
-    echo -e "${BLUE}  Deleting to allow ArgoCD to recreate with correct labels...${NC}"
-    
-    # Delete the deployment (but not the namespace or other resources)
-    kubectl delete deployment local-path-provisioner -n local-path-storage --ignore-not-found=true
-    
-    # Wait a moment for deletion to complete
-    sleep 5
-    
-    echo -e "${GREEN}  ✓ Deployment deleted${NC}"
+    echo -e "${GREEN}  ✓ Kind's built-in local-path-provisioner is running${NC}"
+    echo -e "${BLUE}  Using Kind's provisioner (not deploying our own in preview mode)${NC}"
 else
-    echo -e "${GREEN}  ✓ No conflicting deployment found${NC}"
+    echo -e "${YELLOW}  ⚠ local-path-provisioner not found - storage may not work${NC}"
 fi
 
 # Fix 2: Check for other common Kind conflicts

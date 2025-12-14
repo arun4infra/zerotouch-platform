@@ -23,7 +23,7 @@ GitHub Actions Runner
 |-----------|-----------|---------|
 | **Cluster** | Talos Linux | Kind |
 | **Networking** | Cilium | kindnet (built-in) |
-| **Storage** | Rook/Ceph | local-path-provisioner |
+| **Storage** | Rook/Ceph | Kind's built-in local-path-provisioner |
 | **Secrets** | Full SSM params | Core secrets only |
 | **Tenant Repos** | Required | Optional (skipped) |
 
@@ -48,8 +48,8 @@ GitHub Actions Runner
    - Syncs platform from GitHub repository
 
 5. **Fix Kind Conflicts** (`helpers/fix-kind-conflicts.sh`)
-   - Deletes `local-path-provisioner` deployment (immutable field fix)
-   - Allows ArgoCD to recreate with correct labels
+   - Uses Kind's built-in `local-path-provisioner` (not deploying our own)
+   - Checks for other potential deployment conflicts
 
 6. **Verify ESO** (`11-verify-eso.sh`)
    - Forces re-sync of all ExternalSecrets
