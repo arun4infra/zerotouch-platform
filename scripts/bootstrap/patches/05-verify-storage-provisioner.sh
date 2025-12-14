@@ -46,12 +46,19 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
         echo -e "  ${BLUE}ℹ${NC} Kind's built-in provisioner not found (Kind v1.34+ doesn't include it)"
         
         # Re-enable our ArgoCD Application if it was disabled
-        LOCAL_PATH_APP_DISABLED="$REPO_ROOT/bootstrap/components/01-local-path-provisioner.yaml.disabled"
+        LOCAL_PATH_APP_DISABLED="$REPO_ROOT/bootstrap/01-local-path-provisioner.yaml.disabled"
         if [ -f "$LOCAL_PATH_APP_DISABLED" ]; then
             mv "$LOCAL_PATH_APP_DISABLED" "${LOCAL_PATH_APP_DISABLED%.disabled}"
             echo -e "  ${GREEN}✓${NC} Re-enabled ArgoCD Application for local-path-provisioner"
         else
-            echo -e "  ${BLUE}ℹ${NC} ArgoCD Application is enabled: $REPO_ROOT/bootstrap/components/01-local-path-provisioner.yaml"
+            # Check both locations (bootstrap/ and bootstrap/components/)
+            if [ -f "$REPO_ROOT/bootstrap/01-local-path-provisioner.yaml" ]; then
+                echo -e "  ${BLUE}ℹ${NC} ArgoCD Application is enabled: $REPO_ROOT/bootstrap/01-local-path-provisioner.yaml"
+            elif [ -f "$REPO_ROOT/bootstrap/01-local-path-provisioner.yaml" ]; then
+                echo -e "  ${BLUE}ℹ${NC} ArgoCD Application is enabled: $REPO_ROOT/bootstrap/components/01-local-path-provisioner.yaml"
+            else
+                echo -e "  ${YELLOW}⚠${NC} ArgoCD Application file not found in expected locations"
+            fi
         fi
         
         # Check if our ArgoCD-deployed provisioner exists
@@ -91,31 +98,47 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     
     # Check storage class
     echo -e "${BLUE}Checking storage class configuration...${NC}"
+    
+    # Show all storage classes first
+    echo -e "${BLUE}Current storage classes:${NC}"
+    kubectl get storageclass -o custom-columns=NAME:.metadata.name,PROVISIONER:.provisioner,DEFAULT:.metadata.annotations.storageclass\\.kubernetes\\.io/is-default-class 2>/dev/null || echo "No storage classes found yet"
+    
+    # Check if local-path storage class exists
     if kubectl get storageclass local-path >/dev/null 2>&1; then
         PROVISIONER=$(kubectl get storageclass local-path -o jsonpath='{.provisioner}' 2>/dev/null || echo "unknown")
         IS_DEFAULT=$(kubectl get storageclass local-path -o jsonpath='{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}' 2>/dev/null || echo "false")
         echo -e "  ${GREEN}✓${NC} local-path storage class exists (provisioner: $PROVISIONER, default: $IS_DEFAULT)"
-        
-        # Make it default if not already
-        if [ "$IS_DEFAULT" != "true" ]; then
-            echo -e "  ${BLUE}ℹ${NC} Setting local-path as default storage class..."
-            kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
-            echo -e "  ${GREEN}✓${NC} local-path set as default storage class"
-        fi
-        
-        # Show all storage classes for context
-        echo -e "${BLUE}All storage classes:${NC}"
-        kubectl get storageclass -o custom-columns=NAME:.metadata.name,PROVISIONER:.provisioner,DEFAULT:.metadata.annotations.storageclass\\.kubernetes\\.io/is-default-class
     else
-        echo -e "  ${YELLOW}⚠${NC} local-path storage class not found yet"
-        if [ "$KIND_PROVISIONER_EXISTS" = true ]; then
-            echo -e "  ${RED}✗${NC} Kind's provisioner exists but storage class is missing - this is unexpected"
-            echo -e "${BLUE}Checking all storage classes:${NC}"
-            kubectl get storageclass || echo "No storage classes found"
+        echo -e "  ${YELLOW}⚠${NC} local-path storage class not found"
+        
+        # Check if Kind's default "standard" storage class exists (Kind v1.34+)
+        if kubectl get storageclass standard >/dev/null 2>&1; then
+            STANDARD_PROVISIONER=$(kubectl get storageclass standard -o jsonpath='{.provisioner}' 2>/dev/null || echo "unknown")
+            echo -e "  ${BLUE}ℹ${NC} Found Kind's 'standard' storage class (provisioner: $STANDARD_PROVISIONER)"
+            
+            # Create local-path as an alias to standard
+            echo -e "  ${BLUE}ℹ${NC} Creating 'local-path' storage class as alias..."
+            cat <<EOF | kubectl apply -f -
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-path
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: rancher.io/local-path
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+EOF
+            echo -e "  ${GREEN}✓${NC} Created 'local-path' storage class"
+            
+            # Verify it was created
+            if kubectl get storageclass local-path >/dev/null 2>&1; then
+                echo -e "  ${GREEN}✓${NC} Verified: local-path storage class is now available"
+            else
+                echo -e "  ${RED}✗${NC} Failed to create local-path storage class"
+            fi
         else
-            echo -e "  ${BLUE}ℹ${NC} Will be created by ArgoCD deployment"
-            echo -e "${BLUE}Current storage classes:${NC}"
-            kubectl get storageclass || echo "No storage classes found yet"
+            echo -e "  ${BLUE}ℹ${NC} No default storage class found - will be created by ArgoCD"
         fi
     fi
     
