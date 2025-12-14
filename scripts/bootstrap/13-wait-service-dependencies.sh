@@ -6,12 +6,21 @@
 
 set -e
 
+# Get script directory for sourcing helpers
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m'
+
+# Source shared diagnostics library
+if [ -f "$SCRIPT_DIR/helpers/diagnostics.sh" ]; then
+    source "$SCRIPT_DIR/helpers/diagnostics.sh"
+fi
 
 # Configuration
 TIMEOUT=300  # 5 minutes default
@@ -36,19 +45,21 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Kubectl retry function
-kubectl_retry() {
-    local max_attempts=5
-    local attempt=1
-    while [ $attempt -le $max_attempts ]; do
-        if kubectl "$@" 2>/dev/null; then
-            return 0
-        fi
-        sleep 2
-        attempt=$((attempt + 1))
-    done
-    return 1
-}
+# Kubectl retry function (fallback if not in shared library)
+if ! type kubectl_retry &>/dev/null; then
+    kubectl_retry() {
+        local max_attempts=5
+        local attempt=1
+        while [ $attempt -le $max_attempts ]; do
+            if kubectl "$@" 2>/dev/null; then
+                return 0
+            fi
+            sleep 2
+            attempt=$((attempt + 1))
+        done
+        return 1
+    }
+fi
 
 # Check PostgreSQL clusters
 check_postgres() {
@@ -177,25 +188,36 @@ check_nats() {
     
     if [ "$ready" -ne "$total" ]; then
         echo -e "     ${RED}NATS not ready:${NC}"
-        echo -e "       ${RED}✗ nats/nats: $ready/$total replicas${NC}"
         
-        # Show pod status
-        echo -e "     ${YELLOW}Pod status:${NC}"
-        kubectl_retry get pods -n nats -l app.kubernetes.io/name=nats -o wide 2>/dev/null | head -5 | while read -r pod; do
-            echo -e "       $pod"
-        done || echo -e "       ${YELLOW}No pods found${NC}"
-        
-        # Show PVC status
-        echo -e "     ${YELLOW}PVC status:${NC}"
-        kubectl_retry get pvc -n nats 2>/dev/null | head -5 | while read -r pvc; do
-            echo -e "       $pvc"
-        done || echo -e "       ${YELLOW}No PVCs found${NC}"
-        
-        # Show recent events
-        echo -e "     ${YELLOW}Recent events:${NC}"
-        kubectl_retry get events -n nats --sort-by='.lastTimestamp' 2>/dev/null | grep -iE "nats|pvc|volume|provision" | tail -3 | while read -r event; do
-            echo -e "       $event"
-        done || echo -e "       ${YELLOW}No recent events found${NC}"
+        # Use shared diagnostics if available
+        if type diagnose_nats &>/dev/null; then
+            diagnose_nats "nats"
+        else
+            echo -e "       ${RED}✗ nats/nats: $ready/$total replicas${NC}"
+            
+            # Show pod status with container details
+            echo -e "     ${YELLOW}Pod status:${NC}"
+            kubectl_retry get pods -n nats -l app.kubernetes.io/name=nats -o wide 2>/dev/null | head -5 | while read -r pod; do
+                echo -e "       $pod"
+            done || echo -e "       ${YELLOW}No pods found${NC}"
+            
+            # Show waiting containers
+            WAITING=$(kubectl get pods -n nats -o json 2>/dev/null | \
+                jq -r '.items[]? | select(.status.containerStatuses[]?.ready == false) | 
+                "       \(.metadata.name): \(.status.containerStatuses[]? | select(.ready == false) | .state | to_entries[0] | "\(.key): \(.value.reason // .value.message // "waiting")")"' 2>/dev/null | head -3)
+            [ -n "$WAITING" ] && echo -e "     ${YELLOW}Waiting containers:${NC}" && echo "$WAITING"
+            
+            # Show PVC status
+            echo -e "     ${YELLOW}PVC status:${NC}"
+            kubectl_retry get pvc -n nats 2>/dev/null | head -5 | while read -r pvc; do
+                echo -e "       $pvc"
+            done || echo -e "       ${YELLOW}No PVCs found${NC}"
+            
+            # Show recent warning events
+            EVENTS=$(kubectl get events -n nats --field-selector type=Warning --sort-by='.lastTimestamp' -o json 2>/dev/null | \
+                jq -r '.items[-5:][]? | "       \(.involvedObject.kind)/\(.involvedObject.name): \(.reason) - \(.message | .[0:80])"' 2>/dev/null)
+            [ -n "$EVENTS" ] && echo -e "     ${YELLOW}Recent warnings:${NC}" && echo "$EVENTS"
+        fi
     fi
     
     [ "$ready" -eq "$total" ]

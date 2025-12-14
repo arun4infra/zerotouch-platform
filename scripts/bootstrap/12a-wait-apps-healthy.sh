@@ -1,18 +1,90 @@
 #!/bin/bash
 # Wait for All Applications to be Synced & Healthy
-# Usage: ./13-wait-apps-healthy.sh [--timeout <seconds>]
+# Usage: ./12a-wait-apps-healthy.sh [--timeout <seconds>]
 #
 # This script waits for all ArgoCD applications to reach Synced & Healthy status.
 # Only Synced & Healthy is considered success - Progressing is NOT accepted.
 
 set -e
 
+# Get script directory for sourcing helpers
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m'
+
+# Source shared diagnostics library
+if [ -f "$SCRIPT_DIR/helpers/diagnostics.sh" ]; then
+    source "$SCRIPT_DIR/helpers/diagnostics.sh"
+fi
+
+# Fallback inline diagnostics if library not available
+_inline_diagnose_app() {
+    local app_name="$1"
+    local status="$2"
+    
+    APP_JSON=$(kubectl get application "$app_name" -n argocd -o json 2>/dev/null)
+    APP_NAMESPACE=$(echo "$APP_JSON" | jq -r '.spec.destination.namespace // "default"' 2>/dev/null)
+    
+    # Conditions
+    CONDITIONS=$(echo "$APP_JSON" | jq -r '.status.conditions[]? | "         - \(.type): \(.message // "no message")"' 2>/dev/null | head -2)
+    [ -n "$CONDITIONS" ] && echo -e "       ${YELLOW}Conditions:${NC}" && echo "$CONDITIONS"
+    
+    # Operation state
+    OP_PHASE=$(echo "$APP_JSON" | jq -r '.status.operationState.phase // "none"' 2>/dev/null)
+    if [ "$OP_PHASE" = "Failed" ] || [ "$OP_PHASE" = "Error" ]; then
+        OP_MSG=$(echo "$APP_JSON" | jq -r '.status.operationState.message // "none"' 2>/dev/null | head -c 200)
+        echo -e "       ${RED}Operation: $OP_PHASE - $OP_MSG${NC}"
+    fi
+    
+    # OutOfSync resources
+    if [[ "$status" == *"OutOfSync"* ]]; then
+        OUTOFSYNC=$(echo "$APP_JSON" | jq -r '.status.resources[]? | select(.status == "OutOfSync") | "         \(.kind)/\(.name)"' 2>/dev/null | head -3)
+        [ -n "$OUTOFSYNC" ] && echo -e "       ${RED}OutOfSync:${NC}" && echo "$OUTOFSYNC"
+    fi
+    
+    # Degraded resources
+    if [[ "$status" == *"Degraded"* ]]; then
+        DEGRADED=$(echo "$APP_JSON" | jq -r '.status.resources[]? | select(.health.status == "Degraded") | "         \(.kind)/\(.name): \(.health.message // "no message")"' 2>/dev/null | head -3)
+        [ -n "$DEGRADED" ] && echo -e "       ${RED}Degraded:${NC}" && echo "$DEGRADED"
+    fi
+    
+    # Progressing - enhanced diagnostics
+    if [[ "$status" == *"Progressing"* ]]; then
+        # ArgoCD progressing resources
+        PROGRESSING=$(echo "$APP_JSON" | jq -r '.status.resources[]? | select(.health.status == "Progressing") | "         \(.kind)/\(.name): \(.health.message // "waiting")"' 2>/dev/null | head -3)
+        [ -n "$PROGRESSING" ] && echo -e "       ${BLUE}Progressing:${NC}" && echo "$PROGRESSING"
+        
+        # Waiting pods
+        WAITING_PODS=$(kubectl get pods -n "$APP_NAMESPACE" -o json 2>/dev/null | \
+            jq -r '.items[]? | select(.status.phase != "Running" or (.status.containerStatuses[]?.ready == false)) | 
+            "         \(.metadata.name): \(.status.phase) - \(.status.containerStatuses[]? | select(.ready == false) | .state | to_entries[0] | "\(.key): \(.value.reason // .value.message // "waiting")")"' 2>/dev/null | head -3)
+        [ -n "$WAITING_PODS" ] && echo -e "       ${BLUE}Waiting pods:${NC}" && echo "$WAITING_PODS"
+        
+        # Pending PVCs
+        PENDING_PVCS=$(kubectl get pvc -n "$APP_NAMESPACE" -o json 2>/dev/null | \
+            jq -r '.items[]? | select(.status.phase != "Bound") | "         \(.metadata.name): \(.status.phase)"' 2>/dev/null | head -2)
+        [ -n "$PENDING_PVCS" ] && echo -e "       ${BLUE}Pending PVCs:${NC}" && echo "$PENDING_PVCS"
+        
+        # Recent warnings
+        EVENTS=$(kubectl get events -n "$APP_NAMESPACE" --field-selector type=Warning --sort-by='.lastTimestamp' -o json 2>/dev/null | \
+            jq -r '.items[-3:][]? | "         \(.involvedObject.kind)/\(.involvedObject.name): \(.reason) - \(.message | .[0:80])"' 2>/dev/null)
+        [ -n "$EVENTS" ] && echo -e "       ${YELLOW}Recent warnings:${NC}" && echo "$EVENTS"
+        
+        # Fallback summary
+        if [ -z "$PROGRESSING" ] && [ -z "$WAITING_PODS" ] && [ -z "$PENDING_PVCS" ]; then
+            HEALTH_MSG=$(echo "$APP_JSON" | jq -r '.status.health.message // empty' 2>/dev/null)
+            [ -n "$HEALTH_MSG" ] && echo -e "       ${BLUE}Health: $HEALTH_MSG${NC}"
+            echo -e "       ${BLUE}Resources:${NC}"
+            echo "$APP_JSON" | jq -r '[.status.resources[]? | .health.status // "Unknown"] | group_by(.) | map("\(.[0]): \(length)") | "         " + join(", ")' 2>/dev/null
+        fi
+    fi
+}
 
 # Configuration
 TIMEOUT=600  # 10 minutes default
@@ -111,7 +183,7 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     # Print progress
     echo -e "${YELLOW}⏳ $HEALTHY_APPS/$TOTAL_APPS healthy ($((ELAPSED/60))m $((ELAPSED%60))s elapsed)${NC}"
     
-    # Show not ready apps with FULL error details (same as timeout output)
+    # Show not ready apps with comprehensive diagnostics
     if [ ${#NOT_READY_APPS[@]} -gt 0 ]; then
         echo -e "   ${YELLOW}Not ready applications:${NC}"
         for app_status in "${NOT_READY_APPS[@]:0:3}"; do
@@ -120,60 +192,12 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
             
             echo -e "     ${RED}❌ $app_name: $status${NC}"
             
-            # Get full app details
-            APP_JSON=$(kubectl get application "$app_name" -n argocd -o json 2>/dev/null)
-            
-            # Show conditions (sync errors, etc.)
-            CONDITIONS=$(echo "$APP_JSON" | jq -r '.status.conditions[]? | "         - \(.type): \(.message // "no message")"' 2>/dev/null | head -2)
-            if [ -n "$CONDITIONS" ]; then
-                echo -e "       ${YELLOW}Conditions:${NC}"
-                echo "$CONDITIONS"
-            fi
-            
-            # Show operation state if failed
-            OP_PHASE=$(echo "$APP_JSON" | jq -r '.status.operationState.phase // "none"' 2>/dev/null)
-            if [ "$OP_PHASE" = "Failed" ] || [ "$OP_PHASE" = "Error" ]; then
-                OP_MSG=$(echo "$APP_JSON" | jq -r '.status.operationState.message // "none"' 2>/dev/null | head -c 200)
-                echo -e "       ${RED}Operation: $OP_PHASE${NC}"
-                if [ "$OP_MSG" != "none" ]; then
-                    echo -e "         ${RED}$OP_MSG${NC}"
-                fi
-            fi
-            
-            # Show out of sync resources
-            if [[ "$status" == *"OutOfSync"* ]]; then
-                OUTOFSYNC=$(echo "$APP_JSON" | jq -r '.status.resources[]? | select(.status == "OutOfSync") | "         \(.kind)/\(.name)"' 2>/dev/null | head -3)
-                if [ -n "$OUTOFSYNC" ]; then
-                    echo -e "       ${RED}OutOfSync resources:${NC}"
-                    echo "$OUTOFSYNC"
-                fi
-            fi
-            
-            # Show degraded resources
-            if [[ "$status" == *"Degraded"* ]]; then
-                DEGRADED=$(echo "$APP_JSON" | jq -r '.status.resources[]? | select(.health.status == "Degraded") | "         \(.kind)/\(.name): \(.health.message // "no message")"' 2>/dev/null | head -3)
-                if [ -n "$DEGRADED" ]; then
-                    echo -e "       ${RED}Degraded resources:${NC}"
-                    echo "$DEGRADED"
-                fi
-            fi
-            
-            # Show progressing resources
-            if [[ "$status" == *"Progressing"* ]]; then
-                PROGRESSING=$(echo "$APP_JSON" | jq -r '.status.resources[]? | select(.health.status == "Progressing") | "         \(.kind)/\(.name): \(.health.message // "waiting")"' 2>/dev/null | head -3)
-                if [ -n "$PROGRESSING" ]; then
-                    echo -e "       ${BLUE}Progressing resources:${NC}"
-                    echo "$PROGRESSING"
-                else
-                    # No individual resources progressing - check app-level health message
-                    HEALTH_MSG=$(echo "$APP_JSON" | jq -r '.status.health.message // empty' 2>/dev/null)
-                    if [ -n "$HEALTH_MSG" ]; then
-                        echo -e "       ${BLUE}Health message: $HEALTH_MSG${NC}"
-                    fi
-                    # Show all resource health statuses for debugging
-                    echo -e "       ${BLUE}Resource health breakdown:${NC}"
-                    echo "$APP_JSON" | jq -r '.status.resources[]? | "         \(.kind)/\(.name): \(.health.status // "Unknown") - \(.health.message // "no message")"' 2>/dev/null | head -5
-                fi
+            # Use shared diagnostics library
+            if type diagnose_argocd_app &>/dev/null; then
+                diagnose_argocd_app "$app_name"
+            else
+                # Fallback inline diagnostics if library not loaded
+                _inline_diagnose_app "$app_name" "$status"
             fi
             echo ""
         done
@@ -205,79 +229,34 @@ while IFS='|' read -r name sync health; do
         echo -e "  ✅ $name: $sync / $health"
     else
         echo -e "  ❌ $name: $sync / $health"
-        echo ""
         
-        # Get detailed status using kubectl and jq
-        APP_JSON=$(kubectl get application "$name" -n argocd -o json 2>/dev/null)
-        
-        # Print ALL conditions
-        echo -e "     ${YELLOW}Conditions:${NC}"
-        CONDITIONS_OUT=$(echo "$APP_JSON" | jq -r '.status.conditions[]? | "       - \(.type): \(.message // "no message")"' 2>/dev/null)
-        if [ -n "$CONDITIONS_OUT" ]; then
-            echo "$CONDITIONS_OUT"
+        # Use shared diagnostics library for detailed output
+        if type diagnose_argocd_app &>/dev/null; then
+            diagnose_argocd_app "$name"
         else
-            echo "       (no conditions)"
+            _inline_diagnose_app "$name" "$sync/$health"
         fi
-        
-        # Print operation state
-        echo -e "     ${YELLOW}Operation State:${NC}"
-        OP_PHASE=$(echo "$APP_JSON" | jq -r '.status.operationState.phase // "none"' 2>/dev/null)
-        OP_MSG=$(echo "$APP_JSON" | jq -r '.status.operationState.message // "none"' 2>/dev/null)
-        echo "       Phase: $OP_PHASE"
-        if [ "$OP_MSG" != "none" ]; then
-            echo "       Message: $OP_MSG"
-        fi
-        
-        # For OutOfSync, show what's out of sync
-        if [[ "$sync" == "OutOfSync" ]]; then
-            echo -e "     ${RED}Out of Sync Resources:${NC}"
-            OUTOFSYNC=$(echo "$APP_JSON" | jq -r '.status.resources[]? | select(.status == "OutOfSync") | "       - \(.kind)/\(.name): \(.message // "no message")"' 2>/dev/null | head -5)
-            if [ -n "$OUTOFSYNC" ]; then
-                echo "$OUTOFSYNC"
-            else
-                echo "       (no out of sync resources found)"
-            fi
-        fi
-        
-        # For Degraded health, show ALL degraded resources with full details
-        if [[ "$health" == "Degraded" ]]; then
-            echo -e "     ${RED}Degraded Resources:${NC}"
-            DEGRADED=$(echo "$APP_JSON" | jq -r '.status.resources[]? | select(.health.status == "Degraded") | "       - \(.kind)/\(.name) in \(.namespace): \(.health.message // "no message")"' 2>/dev/null)
-            if [ -n "$DEGRADED" ]; then
-                echo "$DEGRADED"
-            else
-                echo "       (no degraded resources found)"
-            fi
-            
-            # Also check for progressing resources
-            echo -e "     ${YELLOW}Progressing Resources:${NC}"
-            PROGRESSING=$(echo "$APP_JSON" | jq -r '.status.resources[]? | select(.health.status == "Progressing") | "       - \(.kind)/\(.name) in \(.namespace): \(.health.message // "no message")"' 2>/dev/null)
-            if [ -n "$PROGRESSING" ]; then
-                echo "$PROGRESSING"
-            else
-                echo "       (no progressing resources)"
-            fi
-            
-            # Get pod status for degraded apps
-            echo -e "     ${YELLOW}Pod Status:${NC}"
-            PODS=$(echo "$APP_JSON" | jq -r '.status.resources[]? | select(.kind == "Pod") | "\(.namespace)/\(.name): \(.health.status // "Unknown")"' 2>/dev/null | head -5)
-            if [ -n "$PODS" ]; then
-                echo "$PODS" | while read -r pod; do
-                    echo "       - $pod"
-                done
-            else
-                echo "       (no pods found)"
-            fi
-        fi
-        
         echo ""
     fi
 done < <(echo "$APPS_JSON" | jq -r '.items[] | "\(.metadata.name)|\(.status.sync.status // "Unknown")|\(.status.health.status // "Unknown")"')
 
-echo ""
-echo -e "${YELLOW}Debug commands:${NC}"
-echo "  kubectl get applications -n argocd"
-echo "  kubectl describe application <app-name> -n argocd"
-echo ""
+# Print diagnostic summary if library available
+if type print_diagnostic_summary &>/dev/null; then
+    echo ""
+    print_diagnostic_summary "$APPS_JSON"
+fi
+
+# Print debug commands
+if type print_debug_commands &>/dev/null; then
+    print_debug_commands
+else
+    echo ""
+    echo -e "${YELLOW}Debug commands:${NC}"
+    echo "  kubectl get applications -n argocd"
+    echo "  kubectl describe application <app-name> -n argocd"
+    echo "  kubectl get pods -A | grep -v Running"
+    echo "  kubectl get events -A --sort-by='.lastTimestamp' | tail -20"
+    echo ""
+fi
 
 exit 1
