@@ -13,7 +13,7 @@ spec:
     path: bootstrap/components
     directory:
       recurse: true
-      exclude: '01-eso.yaml|00-local-path-provisioner.yaml'
+      exclude: '01-eso.yaml'
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
