@@ -1,8 +1,0 @@
-# Production environment - uses base configurations as-is
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - ../
-
-# No patches needed - production uses local-path as configured in base
