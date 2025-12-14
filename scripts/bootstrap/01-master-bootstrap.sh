@@ -192,6 +192,20 @@ Verify parameters:
   aws ssm get-parameters-by-path --path /zerotouch/prod --region ap-south-1"
 fi
 
+# Step 8: Re-apply patches for preview mode (ensure mount has latest changes)
+if [ "$MODE" = "preview" ]; then
+    echo -e "${YELLOW}[8a/14] Re-applying patches after cluster creation...${NC}"
+    "$SCRIPT_DIR/patches/00-apply-all-patches.sh" --force
+    
+    # Verify patches in the mounted filesystem
+    echo -e "${BLUE}Verifying patches in Kind container...${NC}"
+    KIND_CONTAINER=$(docker ps --filter "name=zerotouch-preview-control-plane" --format "{{.Names}}" 2>/dev/null || echo "")
+    if [ -n "$KIND_CONTAINER" ]; then
+        echo -e "${BLUE}NATS file in container:${NC}"
+        docker exec "$KIND_CONTAINER" grep -n "storageClassName" /repo/bootstrap/components/01-nats.yaml || echo "File not found"
+    fi
+fi
+
 # Step 8: Install ArgoCD
 echo -e "${YELLOW}[8/14] Installing ArgoCD...${NC}"
 "$SCRIPT_DIR/09-install-argocd.sh" "$MODE"
