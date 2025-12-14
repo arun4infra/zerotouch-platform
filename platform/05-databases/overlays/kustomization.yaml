@@ -1,7 +1,0 @@
-# Base kustomization for database compositions
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - ../compositions/postgres-composition.yaml
-  - ../compositions/dragonfly-composition.yaml
