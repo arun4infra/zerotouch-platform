@@ -203,12 +203,21 @@ if [ "$MODE" = "preview" ]; then
     if [ -n "$KIND_CONTAINER" ]; then
         echo -e "${BLUE}NATS file in container:${NC}"
         docker exec "$KIND_CONTAINER" grep -n "storageClassName" /repo/bootstrap/components/01-nats.yaml || echo "File not found"
+        echo -e "${BLUE}Platform-bootstrap exclude pattern in container:${NC}"
+        docker exec "$KIND_CONTAINER" grep -n "exclude:" /repo/bootstrap/10-platform-bootstrap.yaml || echo "No exclude found"
     fi
 fi
 
 # Step 8: Install ArgoCD
 echo -e "${YELLOW}[8/14] Installing ArgoCD...${NC}"
 "$SCRIPT_DIR/09-install-argocd.sh" "$MODE"
+
+# Step 8b: Pre-create NATS Application with correct storage class (preview mode)
+# NATS is excluded from platform-bootstrap in preview mode, so we create it separately
+if [ "$MODE" = "preview" ]; then
+    echo -e "${YELLOW}[8b/14] Creating NATS Application with correct storage class...${NC}"
+    "$SCRIPT_DIR/helpers/precreate-nats-preview.sh"
+fi
 
 # Step 9: Wait for platform-bootstrap
 echo -e "${YELLOW}[9/14] Waiting for platform-bootstrap...${NC}"

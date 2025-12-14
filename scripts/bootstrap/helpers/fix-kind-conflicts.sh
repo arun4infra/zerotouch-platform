@@ -19,28 +19,24 @@ echo -e "${BLUE}║   Fixing Kind Cluster Deployment Conflicts                  
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-# Fix 0: Preemptively delete NATS application to force recreation with patched values
-echo -e "${BLUE}Checking if NATS application needs recreation...${NC}"
+# Fix 0: Verify NATS Application has correct storage class
+# The NATS Application should have been pre-created with correct values in 01-master-bootstrap.sh
+echo -e "${BLUE}Verifying NATS application storage class...${NC}"
+
 if kubectl get application nats -n argocd &>/dev/null; then
-    echo -e "${YELLOW}  ⚠ NATS application exists - checking if it needs recreation${NC}"
+    # Check current storage class in the Application spec
+    CURRENT_SC=$(kubectl get application nats -n argocd -o jsonpath='{.spec.source.helm.valuesObject.config.jetstream.fileStore.pvc.storageClassName}' 2>/dev/null || echo "")
+    echo -e "${BLUE}  Current NATS storageClassName in ArgoCD: ${CURRENT_SC:-not set}${NC}"
     
-    # Check if NATS namespace has resources
-    if kubectl get namespace nats &>/dev/null; then
-        # Check PVC storage class
+    if [ "$CURRENT_SC" = "local-path" ]; then
+        echo -e "${YELLOW}  ⚠ NATS Application has wrong storage class, fixing...${NC}"
+        
+        # Delete any existing NATS resources with wrong storage class
         if kubectl get pvc nats-js-nats-0 -n nats &>/dev/null; then
-            NATS_SC=$(kubectl get pvc nats-js-nats-0 -n nats -o jsonpath='{.spec.storageClassName}' 2>/dev/null || echo "")
-            if [ "$NATS_SC" = "local-path" ]; then
-                echo -e "${YELLOW}  ⚠ NATS PVC has wrong storage class: $NATS_SC${NC}"
-                echo -e "${BLUE}  Deleting NATS application and namespace for clean recreation...${NC}"
-                
-                # Delete application first (stops ArgoCD from recreating resources)
-                kubectl delete application nats -n argocd --wait=false 2>/dev/null || true
-                
-                # Delete namespace (cascades to all resources)
+            NATS_PVC_SC=$(kubectl get pvc nats-js-nats-0 -n nats -o jsonpath='{.spec.storageClassName}' 2>/dev/null || echo "")
+            if [ "$NATS_PVC_SC" = "local-path" ]; then
+                echo -e "${BLUE}  Deleting NATS namespace to clean up wrong PVC...${NC}"
                 kubectl delete namespace nats --wait=false 2>/dev/null || true
-                
-                # Wait for deletion
-                echo -e "${BLUE}  Waiting for cleanup (max 60s)...${NC}"
                 for i in {1..60}; do
                     if ! kubectl get namespace nats &>/dev/null; then
                         echo -e "${GREEN}  ✓ NATS namespace deleted${NC}"
@@ -48,87 +44,51 @@ if kubectl get application nats -n argocd &>/dev/null; then
                     fi
                     sleep 1
                 done
-                
-                # Force platform-bootstrap to recreate NATS with patched values
-                echo -e "${BLUE}  Triggering platform-bootstrap refresh...${NC}"
-                kubectl patch application platform-bootstrap -n argocd --type=merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}' 2>/dev/null || true
-                
-                # Wait for NATS app to be recreated
-                echo -e "${BLUE}  Waiting for NATS application recreation...${NC}"
-                for i in {1..30}; do
-                    if kubectl get application nats -n argocd &>/dev/null; then
-                        echo -e "${GREEN}  ✓ NATS application recreated${NC}"
-                        break
-                    fi
-                    sleep 2
-                done
-                
-                echo -e "${GREEN}  ✓ NATS will be recreated with correct storage class${NC}"
-            else
-                echo -e "${GREEN}  ✓ NATS PVC has correct storage class: ${NATS_SC}${NC}"
             fi
-        else
-            echo -e "${BLUE}  NATS PVC not yet created${NC}"
         fi
+        
+        # Patch the NATS Application directly
+        echo -e "${BLUE}  Patching NATS Application...${NC}"
+        kubectl patch application nats -n argocd --type=json -p='[
+          {"op": "replace", "path": "/spec/source/helm/valuesObject/config/jetstream/fileStore/pvc/storageClassName", "value": "standard"}
+        ]' 2>/dev/null && {
+            echo -e "${GREEN}  ✓ NATS Application patched${NC}"
+        } || {
+            echo -e "${YELLOW}  Patch failed - Application may need manual intervention${NC}"
+        }
+        
+        # Force sync
+        kubectl patch application nats -n argocd --type=merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}' 2>/dev/null || true
+        
+    elif [ "$CURRENT_SC" = "standard" ]; then
+        echo -e "${GREEN}  ✓ NATS Application has correct storage class: standard${NC}"
     else
-        echo -e "${BLUE}  NATS namespace doesn't exist yet${NC}"
+        echo -e "${YELLOW}  ⚠ NATS Application has unexpected storage class: ${CURRENT_SC:-empty}${NC}"
     fi
 else
     echo -e "${BLUE}  NATS application doesn't exist yet${NC}"
 fi
 
-# Fix 1: local-path-provisioner - SKIP deletion
-# Kind comes with its own local-path-provisioner that works fine.
-# We no longer deploy our own via ArgoCD in preview mode, so no conflict.
-# The storage class 'standard' in Kind uses Kind's built-in provisioner.
-echo -e "${BLUE}Checking local-path-provisioner...${NC}"
-if kubectl get deployment local-path-provisioner -n local-path-storage &>/dev/null; then
-    echo -e "${GREEN}  ✓ Kind's built-in local-path-provisioner is running${NC}"
-    echo -e "${BLUE}  Using Kind's provisioner (not deploying our own in preview mode)${NC}"
+# Fix 1: Verify Kind's storage provisioner is working
+echo -e "${BLUE}Checking Kind storage provisioner...${NC}"
+if kubectl get storageclass standard &>/dev/null; then
+    echo -e "${GREEN}  ✓ 'standard' StorageClass exists${NC}"
 else
-    echo -e "${YELLOW}  ⚠ local-path-provisioner not found - storage may not work${NC}"
+    echo -e "${YELLOW}  ⚠ 'standard' StorageClass not found - checking alternatives${NC}"
+    kubectl get storageclass 2>/dev/null || true
 fi
 
-# Fix 2: Clean up PVCs with wrong storage class
-# If a PVC was created with 'local-path' but we need 'standard', delete it
-# so it can be recreated with the correct storage class
-echo -e "${BLUE}Checking for PVCs with wrong storage class...${NC}"
-
-# Check NATS PVC specifically
+# Fix 2: Verify NATS PVC will use correct storage class
+echo -e "${BLUE}Checking NATS PVC status...${NC}"
 if kubectl get pvc nats-js-nats-0 -n nats &>/dev/null; then
-    NATS_SC=$(kubectl get pvc nats-js-nats-0 -n nats -o jsonpath='{.spec.storageClassName}' 2>/dev/null || echo "")
-    if [ "$NATS_SC" = "local-path" ]; then
-        echo -e "${YELLOW}  ⚠ Found NATS PVC with wrong storage class: $NATS_SC${NC}"
-        echo -e "${BLUE}  Deleting PVC so it can be recreated with 'standard' storage class...${NC}"
-        
-        # Delete the StatefulSet first to release the PVC
-        kubectl delete statefulset nats -n nats --ignore-not-found=true --wait=false 2>/dev/null || true
-        
-        # Delete the PVC
-        kubectl delete pvc nats-js-nats-0 -n nats --ignore-not-found=true 2>/dev/null || true
-        
-        # Wait for PVC to be deleted (max 30 seconds)
-        echo -e "${BLUE}  Waiting for PVC to be deleted...${NC}"
-        for i in {1..30}; do
-            if ! kubectl get pvc nats-js-nats-0 -n nats &>/dev/null; then
-                echo -e "${GREEN}  ✓ PVC deleted${NC}"
-                break
-            fi
-            sleep 1
-        done
-        
-        # Force ArgoCD to re-sync the NATS application
-        if kubectl get application nats -n argocd &>/dev/null; then
-            echo -e "${BLUE}  Triggering ArgoCD re-sync for NATS...${NC}"
-            kubectl patch application nats -n argocd --type=merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}' 2>/dev/null || true
-            
-            # Also trigger a sync operation
-            kubectl patch application nats -n argocd --type=merge -p '{"operation":{"initiatedBy":{"username":"fix-kind-conflicts"},"sync":{"revision":"HEAD"}}}' 2>/dev/null || true
-        fi
-        
-        echo -e "${GREEN}  ✓ NATS PVC cleanup complete - will be recreated with correct storage class${NC}"
+    NATS_PVC_SC=$(kubectl get pvc nats-js-nats-0 -n nats -o jsonpath='{.spec.storageClassName}' 2>/dev/null || echo "")
+    NATS_PVC_STATUS=$(kubectl get pvc nats-js-nats-0 -n nats -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+    echo -e "${BLUE}  NATS PVC: storageClass=${NATS_PVC_SC}, status=${NATS_PVC_STATUS}${NC}"
+    
+    if [ "$NATS_PVC_SC" = "local-path" ]; then
+        echo -e "${YELLOW}  ⚠ NATS PVC has wrong storage class - this should have been fixed above${NC}"
     else
-        echo -e "${GREEN}  ✓ NATS PVC has correct storage class: ${NATS_SC:-standard}${NC}"
+        echo -e "${GREEN}  ✓ NATS PVC has correct storage class${NC}"
     fi
 else
     echo -e "${BLUE}  NATS PVC not yet created (will be created with correct storage class)${NC}"
