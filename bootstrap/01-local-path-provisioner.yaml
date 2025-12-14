@@ -4,13 +4,13 @@ metadata:
   name: local-path-provisioner
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/sync-wave: "-3"  # Deploy before ESO (-2)
 spec:
   project: default
   source:
-    repoURL: https://github.com/rancher/local-path-provisioner.git
-    targetRevision: v0.0.26
-    path: deploy/chart/local-path-provisioner
+    repoURL: https://charts.rancher.io
+    chart: local-path-provisioner
+    targetRevision: 0.0.26
   destination:
     server: https://kubernetes.default.svc
     namespace: local-path-storage
