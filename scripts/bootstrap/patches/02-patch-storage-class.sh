@@ -7,8 +7,13 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
+echo "Script directory: $SCRIPT_DIR"
+echo "Repository root: $REPO_ROOT"
+
 # Colors
+RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
@@ -37,6 +42,19 @@ if [ -f "$NATS_FILE" ]; then
             "$NATS_FILE"
         rm -f "$NATS_FILE.bak"
         echo -e "  ${GREEN}✓${NC} Patched: 01-nats.yaml"
+    fi
+fi
+
+# Verify patches were applied
+echo -e "${BLUE}Verifying storage class patches...${NC}"
+if [ -f "$NATS_FILE" ]; then
+    if grep -q "local-path" "$NATS_FILE" 2>/dev/null; then
+        echo -e "  ${RED}✗ NATS file still contains 'local-path'!${NC}"
+        echo -e "  ${YELLOW}File content:${NC}"
+        grep -n "storageClassName" "$NATS_FILE" || true
+    else
+        echo -e "  ${GREEN}✓ NATS file verified - no 'local-path' found${NC}"
+        grep -n "storageClassName" "$NATS_FILE" || true
     fi
 fi
 

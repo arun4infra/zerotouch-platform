@@ -208,6 +208,34 @@ if [[ ! -f "$REPO_ROOT/$ROOT_APP_PATH" ]]; then
     exit 1
 fi
 
+# Debug: Log file contents before applying (helps diagnose patch issues)
+log_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log_info "DEBUG: Contents of key files before ArgoCD sync"
+log_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+log_info "root.yaml repoURL:"
+grep -n "repoURL" "$REPO_ROOT/$ROOT_APP_PATH" || echo "  (no repoURL found)"
+
+log_info "10-platform-bootstrap.yaml repoURL:"
+grep -n "repoURL" "$REPO_ROOT/bootstrap/10-platform-bootstrap.yaml" 2>/dev/null || echo "  (file not found or no repoURL)"
+
+log_info "01-nats.yaml storageClassName:"
+grep -n "storageClassName" "$REPO_ROOT/bootstrap/components/01-nats.yaml" 2>/dev/null || echo "  (file not found or no storageClassName)"
+
+log_info "Checking for GitHub URLs in bootstrap files:"
+GITHUB_COUNT=$(grep -r "github.com/arun4infra/zerotouch-platform" "$REPO_ROOT/bootstrap/"*.yaml 2>/dev/null | wc -l | tr -d ' ')
+log_info "  Files with GitHub URL: $GITHUB_COUNT"
+if [ "$GITHUB_COUNT" -gt 0 ]; then
+    log_warn "  GitHub URLs found - patches may not have been applied!"
+    grep -l "github.com/arun4infra/zerotouch-platform" "$REPO_ROOT/bootstrap/"*.yaml 2>/dev/null | head -5
+fi
+
+log_info "Checking for local file:///repo URLs:"
+LOCAL_COUNT=$(grep -r "file:///repo" "$REPO_ROOT/bootstrap/"*.yaml 2>/dev/null | wc -l | tr -d ' ')
+log_info "  Files with local URL: $LOCAL_COUNT"
+
+log_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
 log_info "Applying root application..."
 kubectl apply --server-side -f "$REPO_ROOT/$ROOT_APP_PATH"
 

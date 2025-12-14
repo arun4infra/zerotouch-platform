@@ -6,12 +6,17 @@
 set -e
 
 # Colors
+RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+
+echo -e "${BLUE}Script directory: $SCRIPT_DIR${NC}"
+echo -e "${BLUE}Repository root: $REPO_ROOT${NC}"
 
 FORCE_UPDATE=false
 
@@ -58,6 +63,49 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
             fi
         fi
     done
+    
+    # Verify patches were applied
+    echo -e "${BLUE}Verifying URL patches...${NC}"
+    
+    # Check root.yaml
+    ROOT_YAML="$REPO_ROOT/bootstrap/root.yaml"
+    if [ -f "$ROOT_YAML" ]; then
+        if grep -q "$GITHUB_URL" "$ROOT_YAML" 2>/dev/null; then
+            echo -e "  ${RED}✗ root.yaml still contains GitHub URL!${NC}"
+            grep -n "repoURL" "$ROOT_YAML" || true
+        else
+            echo -e "  ${GREEN}✓ root.yaml verified - using local URL${NC}"
+            grep -n "repoURL" "$ROOT_YAML" || true
+        fi
+        if grep -q "targetRevision" "$ROOT_YAML" 2>/dev/null; then
+            echo -e "  ${RED}✗ root.yaml still contains targetRevision!${NC}"
+        else
+            echo -e "  ${GREEN}✓ root.yaml verified - no targetRevision${NC}"
+        fi
+    fi
+    
+    # Check 10-platform-bootstrap.yaml (this is the key file!)
+    PLATFORM_YAML="$REPO_ROOT/bootstrap/10-platform-bootstrap.yaml"
+    if [ -f "$PLATFORM_YAML" ]; then
+        echo -e "${BLUE}Checking 10-platform-bootstrap.yaml...${NC}"
+        if grep -q "$GITHUB_URL" "$PLATFORM_YAML" 2>/dev/null; then
+            echo -e "  ${RED}✗ 10-platform-bootstrap.yaml still contains GitHub URL!${NC}"
+            grep -n "repoURL" "$PLATFORM_YAML" || true
+        else
+            echo -e "  ${GREEN}✓ 10-platform-bootstrap.yaml verified - using local URL${NC}"
+            grep -n "repoURL" "$PLATFORM_YAML" || true
+        fi
+    fi
+    
+    # List all files that still contain GitHub URL
+    echo -e "${BLUE}Checking for remaining GitHub URLs...${NC}"
+    REMAINING=$(grep -l "$GITHUB_URL" "$REPO_ROOT"/bootstrap/*.yaml 2>/dev/null || true)
+    if [ -n "$REMAINING" ]; then
+        echo -e "  ${RED}✗ Files still containing GitHub URL:${NC}"
+        echo "$REMAINING" | while read f; do echo "    - $(basename "$f")"; done
+    else
+        echo -e "  ${GREEN}✓ No files contain GitHub URL${NC}"
+    fi
     
     echo -e "${GREEN}✓ ArgoCD manifests updated for local filesystem sync${NC}"
 fi
