@@ -54,12 +54,17 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
         fi
     done
     
-    # Also remove targetRevision since local files don't have branches
+    # Remove targetRevision ONLY for Git sources (not Helm charts)
+    # Helm charts need targetRevision to specify chart version
     for file in "$REPO_ROOT"/bootstrap/*.yaml "$REPO_ROOT"/bootstrap/components/*.yaml "$REPO_ROOT"/bootstrap/components-tenants/*.yaml; do
         if [ -f "$file" ]; then
-            if grep -q "targetRevision:" "$file" 2>/dev/null; then
-                sed -i.bak '/targetRevision:/d' "$file"
-                rm -f "$file.bak"
+            # Only remove targetRevision if this is a Git source (has repoURL with file:///repo)
+            # Skip if it's a Helm chart (has 'chart:' field)
+            if grep -q "file:///repo" "$file" 2>/dev/null && ! grep -q "^  chart:" "$file" 2>/dev/null; then
+                if grep -q "targetRevision:" "$file" 2>/dev/null; then
+                    sed -i.bak '/targetRevision:/d' "$file"
+                    rm -f "$file.bak"
+                fi
             fi
         fi
     done
