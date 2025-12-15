@@ -64,24 +64,27 @@ spec:
           transforms:
             - type: map
               map:
-                small: "256Mi"
-                medium: "512Mi"
-                large: "1Gi"
+                micro: "256Mi"
+                small: "512Mi"
+                medium: "1Gi"
+                large: "2Gi"
         - type: FromCompositeFieldPath
           fromFieldPath: spec.size
           toFieldPath: spec.forProvider.manifest.spec.resources.limits.memory
           transforms:
             - type: map
               map:
-                small: "1Gi"
-                medium: "2Gi"
-                large: "4Gi"
+                micro: "1Gi"
+                small: "2Gi"
+                medium: "4Gi"
+                large: "8Gi"
         - type: FromCompositeFieldPath
           fromFieldPath: spec.size
           toFieldPath: spec.forProvider.manifest.spec.resources.requests.cpu
           transforms:
             - type: map
               map:
+                micro: "100m"
                 small: "250m"
                 medium: "500m"
                 large: "1000m"
@@ -91,6 +94,7 @@ spec:
           transforms:
             - type: map
               map:
+                micro: "500m"
                 small: "1000m"
                 medium: "2000m"
                 large: "4000m"
