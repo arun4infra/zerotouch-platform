@@ -39,14 +39,8 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     CROSSPLANE_FILE="$REPO_ROOT/bootstrap/components/01-crossplane.yaml"
     KEDA_FILE="$REPO_ROOT/bootstrap/components/01-keda.yaml"
     
-    # 1. Disable NATS Box (debugging tool not needed in CI)
+    # 1. Keep NATS Box enabled for debugging (needed for stream validation in CI)
     if [ -f "$NATS_FILE" ]; then
-        if grep -q "natsBox:" "$NATS_FILE" 2>/dev/null; then
-            sed -i.bak 's/natsBox:/natsBox:\n          enabled: false  # Disabled in preview/g' "$NATS_FILE"
-            rm -f "$NATS_FILE.bak"
-            echo -e "  ${GREEN}✓${NC} Disabled NATS Box"
-        fi
-        
         # Reduce NATS resources
         if grep -q "cpu: 100m" "$NATS_FILE" 2>/dev/null; then
             sed -i.bak 's/cpu: 100m/cpu: 50m/g' "$NATS_FILE"
