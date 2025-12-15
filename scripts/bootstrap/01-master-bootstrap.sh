@@ -18,6 +18,7 @@ NC='\033[0m' # No Color
 
 # Default mode
 MODE="production"
+ENV="dev"
 SERVER_IP=""
 ROOT_PASSWORD=""
 WORKER_NODES=""
@@ -26,19 +27,22 @@ WORKER_PASSWORD=""
 # Parse arguments
 if [ "$#" -eq 0 ]; then
     echo -e "${RED}Usage:${NC}"
-    echo -e "  ${GREEN}Production:${NC} $0 <server-ip> <root-password> [--worker-nodes <list>] [--worker-password <password>]"
-    echo -e "  ${GREEN}Preview:${NC}    $0 --mode preview"
+    echo -e "  ${GREEN}Production (from tenant repo):${NC} $0 [ENV]"
+    echo -e "  ${GREEN}Production (manual):${NC}           $0 <server-ip> <root-password> [--worker-nodes <list>]"
+    echo -e "  ${GREEN}Preview:${NC}                       $0 --mode preview"
     echo ""
     echo "Arguments:"
-    echo "  <server-ip>         Control plane server IP (production mode)"
-    echo "  <root-password>     Root password for rescue mode (production mode)"
+    echo "  ENV                 Environment name (dev/staging/production) - reads from tenant repo"
+    echo "  <server-ip>         Control plane server IP (manual mode)"
+    echo "  <root-password>     Root password for rescue mode (manual mode)"
     echo "  --mode preview      Run in preview mode (GitHub Actions/Kind cluster)"
     echo "  --worker-nodes      Optional: Comma-separated list of worker nodes (name:ip format)"
     echo "  --worker-password   Optional: Worker node rescue password (if different from control plane)"
     echo ""
     echo "Examples:"
-    echo "  Production single node:  $0 46.62.218.181 MyS3cur3P@ssw0rd"
-    echo "  Production multi-node:   $0 46.62.218.181 MyS3cur3P@ssw0rd --worker-nodes worker01-db:95.216.151.243"
+    echo "  From tenant repo:        $0 dev"
+    echo "  Manual single node:      $0 46.62.218.181 MyS3cur3P@ssw0rd"
+    echo "  Manual multi-node:       $0 46.62.218.181 MyS3cur3P@ssw0rd --worker-nodes worker01:95.216.151.243"
     echo "  Preview (CI/CD):         $0 --mode preview"
     exit 1
 fi
@@ -47,11 +51,24 @@ fi
 if [ "$1" = "--mode" ]; then
     MODE="$2"
     shift 2
+# Check if first argument looks like an environment name (not an IP)
+elif [[ "$1" =~ ^(dev|staging|production)$ ]]; then
+    ENV="$1"
+    shift
+    echo -e "${BLUE}Using environment: $ENV${NC}"
+    echo -e "${BLUE}Fetching configuration from tenant repository...${NC}"
+    
+    # Parse tenant config using helper
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    source "$SCRIPT_DIR/helpers/parse-tenant-config.sh" "$ENV"
+    
+    echo -e "${GREEN}✓ Configuration loaded from tenant repo${NC}"
 else
-    # Production mode - require server-ip and password
+    # Manual mode - require server-ip and password
     if [ "$#" -lt 2 ]; then
-        echo -e "${RED}Error: Production mode requires <server-ip> and <root-password>${NC}"
+        echo -e "${RED}Error: Manual mode requires <server-ip> and <root-password>${NC}"
         echo -e "Usage: $0 <server-ip> <root-password> [--worker-nodes <list>]"
+        echo -e "   or: $0 [ENV]  (to use tenant repo)"
         echo -e "   or: $0 --mode preview"
         exit 1
     fi

@@ -25,6 +25,29 @@ source ./helpers/fetch-tenant-config.sh dev
 echo "Config file: $TENANT_CONFIG_FILE"
 ```
 
+### parse-tenant-config.sh
+
+Fetches and parses tenant configuration, exporting variables for bootstrap scripts.
+
+**Usage:**
+```bash
+source ./helpers/parse-tenant-config.sh <ENV>
+# Sets: SERVER_IP, ROOT_PASSWORD, WORKER_NODES, WORKER_PASSWORD
+```
+
+**Features:**
+- Calls `fetch-tenant-config.sh` internally
+- Parses YAML using Python
+- Exports all necessary variables for bootstrap
+- Formats worker nodes as comma-separated list
+
+**Example:**
+```bash
+source ./helpers/parse-tenant-config.sh dev
+echo "Control Plane: $SERVER_IP"
+echo "Workers: $WORKER_NODES"
+```
+
 ### update-tenant-config.sh
 
 Commits and pushes changes back to the tenant repository.
