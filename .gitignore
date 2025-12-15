@@ -19,3 +19,6 @@ bootstrap/talos/nodes/cp01-main/config.yaml.*
 ztp-codebase.md
 .env.ssm.bkp
 archived
+
+# Tenant configuration cache
+.tenants-cache/

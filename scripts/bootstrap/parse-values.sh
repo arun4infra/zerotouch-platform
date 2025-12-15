@@ -2,7 +2,11 @@
 # Helper script to parse talos-values.yaml
 
 ENV="${1:-dev}"
-VALUES_FILE="environments/$ENV/talos-values.yaml"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Fetch tenant configuration
+source "$SCRIPT_DIR/helpers/fetch-tenant-config.sh" "$ENV" --use-cache
+VALUES_FILE="$TENANT_CONFIG_FILE"
 
 if [ ! -f "$VALUES_FILE" ]; then
     echo "ERROR: $VALUES_FILE not found" >&2

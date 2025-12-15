@@ -28,6 +28,7 @@ NC='\033[0m' # No Color
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+HELPERS_DIR="$SCRIPT_DIR/helpers"
 ENV="${1:-dev}"
 AUTO_YES=false
 
@@ -44,7 +45,10 @@ for arg in "$@"; do
     esac
 done
 
-VALUES_FILE="$REPO_ROOT/environments/$ENV/talos-values.yaml"
+# Fetch tenant configuration from private repository
+source "$HELPERS_DIR/fetch-tenant-config.sh" "$ENV"
+VALUES_FILE="$TENANT_CONFIG_FILE"
+
 HETZNER_API_URL="https://api.hetzner.cloud/v1"
 
 # Function to print colored messages (all output to stderr to not interfere with function returns)
@@ -259,6 +263,9 @@ update_yaml_password() {
 
         log_success "Password updated in YAML file using yq"
     fi
+    
+    # Push changes to tenant repository
+    "$HELPERS_DIR/update-tenant-config.sh" "$VALUES_FILE" "Update rescue password for $node_name ($ENV)"
 }
 
 # Function to process a single server

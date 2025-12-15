@@ -97,3 +97,8 @@ All tests are located in [tests/](./tests/) directory:
 - Composition: `compositions/event-driven-service-composition.yaml`
 - XRD: `definitions/xeventdrivenservices.yaml`
 - Schema: `schemas/eventdrivenservice.schema.json`
+
+## Standards
+
+- [NATS Stream Configuration Standard](../../../docs/standards/nats-stream-configuration.md) - How to create streams for your service
+- [Namespace Naming Convention](../../../docs/standards/namespace-naming-convention.md) - Namespace naming patterns
