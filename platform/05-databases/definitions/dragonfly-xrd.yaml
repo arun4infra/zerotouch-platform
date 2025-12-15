@@ -27,8 +27,9 @@ spec:
               properties:
                 size:
                   type: string
-                  description: "Size of the cache instance (small, medium, large)"
+                  description: "Size of the cache instance (micro, small, medium, large)"
                   enum:
+                    - micro
                     - small
                     - medium
                     - large

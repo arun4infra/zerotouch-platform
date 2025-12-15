@@ -29,8 +29,9 @@ spec:
               properties:
                 size:
                   type: string
-                  description: "Size of the database instance (small, medium, large)"
+                  description: "Size of the database instance (micro, small, medium, large)"
                   enum:
+                    - micro
                     - small
                     - medium
                     - large
