@@ -1,8 +1,5 @@
 name: Platform Integration Test
 
-# Full end-to-end test: Creates ephemeral cluster, bootstraps platform, validates health
-# This replaces all other validation workflows with one comprehensive test
-
 on:
   pull_request:
     paths:
@@ -18,214 +15,62 @@ on:
       - 'scripts/**'
   workflow_dispatch:
 
-env:
-  K3D_VERSION: v5.6.0
-  KUBECTL_VERSION: v1.28.0
-  ARGOCD_VERSION: v2.9.3
+permissions:
+  id-token: write      # Required for AWS OIDC authentication
+  contents: read
 
 jobs:
   integration-test:
     name: Platform Integration Test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install k3d
-        run: |
-          curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=${{ env.K3D_VERSION }} bash
-
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          version: ${{ env.KUBECTL_VERSION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+          mask-aws-account-id: true
 
-      - name: Install ArgoCD CLI
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python Dependencies
         run: |
-          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/download/${{ env.ARGOCD_VERSION }}/argocd-linux-amd64
-          chmod +x argocd
-          sudo mv argocd /usr/local/bin/
+          python -m pip install --upgrade pip
+          pip install pyyaml
 
-      - name: Create k3d test cluster
-        run: |
-          echo "Creating k3d cluster for integration testing..."
-          k3d cluster create test-platform \
-            --agents 1 \
-            --wait \
-            --timeout 5m
-          
-          kubectl cluster-info
-          kubectl get nodes
-
-      - name: Install ArgoCD using bootstrap script
-        run: |
-          echo "Installing ArgoCD using existing bootstrap script..."
-          
-          # Make script executable
-          chmod +x scripts/bootstrap/03-install-argocd.sh
-          
-          # Run the script
-          ./scripts/bootstrap/03-install-argocd.sh
-          
-          echo "✓ ArgoCD installed successfully"
-
-      - name: Label k3d nodes for workload placement
-        run: |
-          echo "Labeling k3d nodes to support workload selectors..."
-          
-          # Label all nodes with intelligence workload label
-          kubectl label nodes --all workload.bizmatters.dev/intelligence=true --overwrite
-          
-          echo "✓ Nodes labeled for workload placement"
-
-      - name: Configure ArgoCD to use feature branch
-        run: |
-          echo "Configuring ArgoCD to sync from feature branch: ${{ github.head_ref }}"
-          
-          # Update bootstrap apps to point to PR branch
-          for file in bootstrap/*.yaml bootstrap/components/*.yaml; do
-            if [ -f "$file" ] && [[ ! "$file" =~ \.disabled$ ]]; then
-              echo "Updating $file to use branch: ${{ github.head_ref }}"
-              sed -i "s|targetRevision:.*|targetRevision: ${{ github.head_ref }}|g" "$file"
-            fi
-          done
-          
-          # Update platform apps to point to PR branch
-          for file in platform/*.yaml; do
-            if [ -f "$file" ] && [[ ! "$file" =~ \.disabled$ ]]; then
-              echo "Updating $file to use branch: ${{ github.head_ref }}"
-              sed -i "s|targetRevision:.*|targetRevision: ${{ github.head_ref }}|g" "$file"
-            fi
-          done
-          
-          echo "✓ All ArgoCD apps configured for feature branch"
-
-      - name: Deploy platform root application
-        run: |
-          echo "Deploying platform root application..."
-          
-          # Apply root application
-          kubectl apply -f bootstrap/root.yaml
-          
-          echo "✓ Root application deployed"
-          
-          # Give ArgoCD time to detect applications
-          sleep 10
-          
-          echo "ArgoCD Applications:"
-          kubectl get applications -n argocd
-
-      - name: Wait for foundation layer to sync
-        run: |
-          echo "Waiting for foundation layer (creates ClusterSecretStore)..."
-          
-          TIMEOUT=180
-          ELAPSED=0
-          while [ $ELAPSED -lt $TIMEOUT ]; do
-            if kubectl get clustersecretstore aws-parameter-store &>/dev/null 2>&1; then
-              echo "✓ ClusterSecretStore ready"
-              break
-            fi
-            echo "Waiting for ClusterSecretStore... (${ELAPSED}s / ${TIMEOUT}s)"
-            sleep 5
-            ELAPSED=$((ELAPSED + 5))
-          done
-          
-          if [ $ELAPSED -ge $TIMEOUT ]; then
-            echo "✗ Timeout waiting for ClusterSecretStore"
-            kubectl get applications -n argocd
-            exit 1
-          fi
-
-      - name: Inject ESO bootstrap secret using bootstrap script
+      - name: Bootstrap Platform Preview Environment
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BOT_GITHUB_USERNAME: ${{ secrets.BOT_GITHUB_USERNAME }}
+          BOT_GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          TENANTS_REPO_NAME: ${{ secrets.TENANTS_REPO_NAME }}
         run: |
-          echo "Injecting ESO bootstrap secret using existing script..."
-          
-          # Make script executable
-          chmod +x scripts/bootstrap/05-inject-secrets.sh
-          
-          # Run the script with AWS credentials
-          ./scripts/bootstrap/05-inject-secrets.sh "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY"
-          
-          echo "✓ ESO bootstrap secret created"
+          chmod +x scripts/bootstrap/01-master-bootstrap.sh
+          ./scripts/bootstrap/01-master-bootstrap.sh --mode preview
 
-      - name: Verify ESO is working
-        run: |
-          echo "Verifying External Secrets Operator..."
-          
-          # Wait for ESO pods
-          kubectl wait --for=condition=ready pod \
-            -l app.kubernetes.io/name=external-secrets \
-            -n external-secrets \
-            --timeout=120s
-          
-          # Wait for ClusterSecretStore
-          TIMEOUT=120
-          ELAPSED=0
-          while [ $ELAPSED -lt $TIMEOUT ]; do
-            STATUS=$(kubectl get clustersecretstore aws-parameter-store -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
-            if [ "$STATUS" = "True" ]; then
-              echo "✓ ClusterSecretStore ready"
-              break
-            fi
-            echo "Waiting for ClusterSecretStore... (${ELAPSED}s / ${TIMEOUT}s)"
-            sleep 5
-            ELAPSED=$((ELAPSED + 5))
-          done
-          
-          if [ $ELAPSED -ge $TIMEOUT ]; then
-            echo "✗ ClusterSecretStore not ready"
-            kubectl describe clustersecretstore aws-parameter-store
-            exit 1
-          fi
-          
-          # Wait for ExternalSecrets to sync
-          TIMEOUT=120
-          ELAPSED=0
-          while [ $ELAPSED -lt $TIMEOUT ]; do
-            ES_COUNT=$(kubectl get externalsecret -A --no-headers 2>/dev/null | wc -l | tr -d ' ')
-            if [ "$ES_COUNT" -gt 0 ]; then
-              SYNCED=$(kubectl get externalsecret -A -o json | jq '[.items[] | select(.status.conditions[0].status == "True")] | length')
-              if [ "$SYNCED" -eq "$ES_COUNT" ]; then
-                echo "✓ All $ES_COUNT ExternalSecrets synced"
-                break
-              fi
-              echo "ExternalSecrets: $SYNCED/$ES_COUNT synced (${ELAPSED}s / ${TIMEOUT}s)"
-            else
-              echo "Waiting for ExternalSecrets... (${ELAPSED}s / ${TIMEOUT}s)"
-            fi
-            sleep 5
-            ELAPSED=$((ELAPSED + 5))
-          done
-          
-          kubectl get externalsecret -A
-          echo "✓ ESO verification complete"
-
-      - name: Wait for ArgoCD applications to sync
+      - name: Wait for platform applications to sync
         run: |
           chmod +x scripts/wait-for-sync.sh
-          ./scripts/wait-for-sync.sh --ignore-file .github/ci-ignore-oos-apps.txt --timeout 900
+          ./scripts/wait-for-sync.sh --timeout 600
 
       - name: Wait for pods to be ready
         run: |
           chmod +x scripts/wait-for-pods.sh
           ./scripts/wait-for-pods.sh --timeout 600
 
-      - name: Run cluster validation using existing script
+      - name: Run cluster validation
         run: |
-          echo "Running comprehensive cluster validation..."
-          echo ""
-          
-          # Make script executable
-          chmod +x scripts/validate-cluster.sh
-          
-          # Run validation with CI ignore list
-          ./scripts/validate-cluster.sh --ignore-file .github/ci-ignore-oos-apps.txt
+          chmod +x scripts/bootstrap/99-validate-cluster.sh
+          ./scripts/bootstrap/99-validate-cluster.sh
 
       - name: Show final cluster state
         if: always()
@@ -234,16 +79,13 @@ jobs:
           echo "=== Final Cluster State ==="
           echo ""
           echo "ArgoCD Applications:"
-          kubectl get applications -n argocd
+          kubectl get applications -n argocd || true
           echo ""
           echo "All Pods:"
-          kubectl get pods -A
-          echo ""
-          echo "All Services:"
-          kubectl get svc -A
+          kubectl get pods -A || true
           echo ""
           echo "Nodes:"
-          kubectl get nodes
+          kubectl get nodes || true
 
       - name: Collect logs on failure
         if: failure()
@@ -253,35 +95,21 @@ jobs:
           echo ""
           
           echo "ArgoCD Application Controller logs:"
-          kubectl logs -n argocd -l app.kubernetes.io/name=argocd-application-controller --tail=100
-          echo ""
-          
-          echo "ArgoCD Server logs:"
-          kubectl logs -n argocd -l app.kubernetes.io/name=argocd-server --tail=100
+          kubectl logs -n argocd -l app.kubernetes.io/name=argocd-application-controller --tail=100 || true
           echo ""
           
           echo "External Secrets Operator logs:"
-          kubectl logs -n external-secrets -l app.kubernetes.io/name=external-secrets --tail=100 || echo "ESO not running"
+          kubectl logs -n external-secrets -l app.kubernetes.io/name=external-secrets --tail=100 || true
           echo ""
           
           echo "Failed pods:"
-          kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded
-          
-          # Get logs from failed pods
-          kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded -o json | \
-            jq -r '.items[] | "\(.metadata.namespace) \(.metadata.name)"' | \
-            while read ns pod; do
-              echo ""
-              echo "=== Logs for $ns/$pod ==="
-              kubectl logs -n $ns $pod --tail=50 || true
-            done
+          kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded || true
 
-      - name: Cleanup test cluster
+      - name: Cleanup preview environment
         if: always()
         run: |
-          echo "Cleaning up test cluster..."
-          k3d cluster delete test-platform || true
-          echo "✓ Cleanup complete"
+          chmod +x scripts/bootstrap/cleanup-preview.sh
+          ./scripts/bootstrap/cleanup-preview.sh || true
 
       - name: Summary
         if: success()
@@ -292,10 +120,8 @@ jobs:
           echo "╚══════════════════════════════════════════════════════════════╝"
           echo ""
           echo "All validations passed:"
-          echo "  ✓ ArgoCD installed and configured"
-          echo "  ✓ All platform applications synced from feature branch"
-          echo "  ✓ All applications healthy"
-          echo "  ✓ External Secrets synced successfully"
-          echo "  ✓ No configuration drift detected"
+          echo "  ✓ Platform bootstrapped in preview mode"
+          echo "  ✓ All applications synced"
+          echo "  ✓ All pods healthy"
+          echo "  ✓ Cluster validation passed"
           echo ""
-          echo "This PR is safe to merge to main!"
