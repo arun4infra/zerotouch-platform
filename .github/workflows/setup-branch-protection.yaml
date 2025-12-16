@@ -9,7 +9,7 @@ on:
       require_reviews:
         description: 'Require PR reviews (0 or 1)'
         required: false
-        default: '0'
+        default: '1'
         type: choice
         options:
           - '0'
@@ -44,11 +44,14 @@ jobs:
                     'integration-test'
                   ]
                 },
-                enforce_admins: false,
+                enforce_admins: true,
                 required_pull_request_reviews: {
-                  required_approving_review_count: parseInt('${{ inputs.require_reviews }}')
+                  required_approving_review_count: parseInt('${{ inputs.require_reviews }}'),
+                  dismiss_stale_reviews: true,
+                  require_code_owner_reviews: false
                 },
                 restrictions: null,
+                required_linear_history: true,
                 allow_force_pushes: false,
                 allow_deletions: false
               });
