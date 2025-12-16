@@ -2,6 +2,30 @@
 
 These scripts are for **one-time cluster initialization only**. After bootstrap, everything is managed via GitOps (ArgoCD).
 
+## Documentation
+
+- **[Deployment Modes](../../docs/DEPLOYMENT-MODES.md)** - Production vs Preview modes, environment variables, patches
+- **[Tenant Repository Setup](../../docs/TENANT-REPOSITORY.md)** - How to create and structure your tenant repository
+
+## Quick Start
+
+### Production Mode
+
+```bash
+# Bootstrap using environment name (fetches config from tenant repo)
+./01-master-bootstrap.sh dev
+
+# Or manual mode with explicit parameters
+./01-master-bootstrap.sh <server-ip> <root-password> --worker-nodes worker01:95.216.151.243
+```
+
+### Preview Mode (CI/CD)
+
+```bash
+# Bootstrap in preview mode (Kind cluster)
+./01-master-bootstrap.sh --mode preview
+```
+
 ## Recommended: Use Makefile
 
 The easiest way to bootstrap is via the Makefile:
@@ -17,7 +41,7 @@ make prod-bootstrap
 ```
 
 The Makefile automatically:
-- Reads environment-specific config from `environments/<ENV>/talos-values.yaml`
+- Reads environment-specific config from tenant repository
 - Extracts IPs, passwords, and worker node configuration
 - Calls the master bootstrap script with correct parameters
 
