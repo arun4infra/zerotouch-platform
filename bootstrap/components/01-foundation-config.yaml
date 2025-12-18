@@ -4,7 +4,7 @@ metadata:
   name: foundation-config
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-wave: "3"
 spec:
   project: default
   source:
@@ -19,3 +19,19 @@ spec:
       selfHeal: true
     syncOptions:
       - SkipDryRunOnMissingResource=true
+      - ServerSideApply=true
+    retry:
+      limit: 15
+      backoff:
+        duration: 30s
+        maxDuration: 10m
+  ignoreDifferences:
+    # Ignore Crossplane-managed status fields
+    - group: apiextensions.crossplane.io
+      kind: CompositeResourceDefinition
+      jqPathExpressions:
+        - .status
+    - group: pkg.crossplane.io
+      kind: Provider
+      jqPathExpressions:
+        - .status

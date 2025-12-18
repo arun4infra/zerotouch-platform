@@ -77,7 +77,7 @@ We chose specific tools to minimize "Day 2" complexity.
 This monorepo acts as the Single Source of Truth for both Code and Knowledge.
 
 ```text
-bizmatters-infra/
+zerotouch-platform/
 ├── .github/               # Automation (Librarian, Ingestion)
 ├── bootstrap/             # The "Big Bang" (App-of-Apps)
 ├── docs/                  # The Brain (Indexed by Vector DB)

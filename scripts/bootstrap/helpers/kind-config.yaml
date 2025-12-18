@@ -3,6 +3,23 @@ apiVersion: kind.x-k8s.io/v1alpha4
 name: zerotouch-preview
 nodes:
   - role: control-plane
+    # Increase resources for preview environment
+    kubeadmConfigPatches:
+    - |
+      kind: ClusterConfiguration
+      controllerManager:
+        extraArgs:
+          bind-address: "0.0.0.0"
+      scheduler:
+        extraArgs:
+          bind-address: "0.0.0.0"
+      etcd:
+        local:
+          dataDir: "/tmp/etcd"
+    extraMounts:
+    - hostPath: /repo
+      containerPath: /repo
+      readOnly: true
     extraPortMappings:
       # NATS client port
       - containerPort: 30080

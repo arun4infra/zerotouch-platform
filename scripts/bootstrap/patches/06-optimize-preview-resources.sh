@@ -43,11 +43,24 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     if [ -f "$NATS_FILE" ]; then
         # Disable JetStream file store (uses PVCs)
         if grep -q "enabled: true" "$NATS_FILE" 2>/dev/null; then
-            # Disable fileStore PVC
-            sed -i.bak '/fileStore:/,/pvc:/{s/enabled: true/enabled: false/}' "$NATS_FILE"
+            # Disable fileStore PVC - use awk for better cross-platform compatibility
+            awk '
+                /fileStore:/ { in_filestore = 1 }
+                /pvc:/ && in_filestore { in_pvc = 1 }
+                /enabled: true/ && in_filestore && in_pvc { gsub(/enabled: true/, "enabled: false") }
+                /^[[:space:]]*[^[:space:]]/ && !/^[[:space:]]*#/ && !/fileStore:/ && !/pvc:/ && in_filestore { in_filestore = 0; in_pvc = 0 }
+                { print }
+            ' "$NATS_FILE" > "$NATS_FILE.tmp" && mv "$NATS_FILE.tmp" "$NATS_FILE"
+            
             # Keep memoryStore enabled for in-memory streams
-            sed -i.bak '/memoryStore:/,/maxSize:/{s/enabled: false/enabled: true/}' "$NATS_FILE"
-            rm -f "$NATS_FILE.bak"
+            awk '
+                /memoryStore:/ { in_memstore = 1 }
+                /maxSize:/ && in_memstore { in_maxsize = 1 }
+                /enabled: false/ && in_memstore { gsub(/enabled: false/, "enabled: true") }
+                /^[[:space:]]*[^[:space:]]/ && !/^[[:space:]]*#/ && !/memoryStore:/ && !/maxSize:/ && in_memstore { in_memstore = 0; in_maxsize = 0 }
+                { print }
+            ' "$NATS_FILE" > "$NATS_FILE.tmp" && mv "$NATS_FILE.tmp" "$NATS_FILE"
+            
             echo -e "  ${GREEN}✓${NC} Disabled NATS persistence (using memory-only mode)"
         fi
         

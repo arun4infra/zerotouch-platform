@@ -4,7 +4,7 @@ metadata:
   name: keda
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   project: default
   source:
@@ -32,12 +32,13 @@ spec:
       - ServerSideApply=true  # Needed for large CRDs (scaledjobs.keda.sh)
       - RespectIgnoreDifferences=true  # Required for ignoreDifferences to work
       - ApplyOutOfSyncOnly=true  # Prevents reapplying unchanged resources
+      - Replace=true  # Force replace on conflicts
     retry:
-      limit: 5
+      limit: 8
       backoff:
-        duration: 5s
+        duration: 15s
         factor: 2
-        maxDuration: 3m
+        maxDuration: 5m
   ignoreDifferences:
     # 1. Ignore ALL fields in APIService (v1 variant for K8s >= 1.27)
     - group: apiregistration.k8s.io
