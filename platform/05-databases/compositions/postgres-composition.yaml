@@ -121,6 +121,7 @@ spec:
             status: "True"
     # Connection Secret - copies from CNPG -app secret to {claim-name}-conn
     # Uses standard environment variable names for envFrom compatibility
+    # IMPORTANT: This resource depends on the CNPG cluster being ready first
     - name: connection-secret
       base:
         apiVersion: kubernetes.crossplane.io/v1alpha2
@@ -159,6 +160,8 @@ spec:
                 name: placeholder-app
                 fieldPath: data.dbname
               toFieldPath: data.POSTGRES_DB
+          # Ensure proper lifecycle management and dependency handling
+          managementPolicies: ["Create", "Update", "Observe"]
           providerConfigRef:
             name: kubernetes-provider
       patches:
@@ -225,3 +228,10 @@ spec:
           matchCondition:
             type: Ready
             status: "True"
+        # Ensure connection secret waits for CNPG cluster to be fully ready
+        # This prevents password synchronization issues
+        - type: MatchCondition
+          matchCondition:
+            type: Synced
+            status: "True"
+
