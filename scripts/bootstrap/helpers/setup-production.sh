@@ -36,9 +36,9 @@ if kubectl cluster-info &>/dev/null; then
     kubectl get nodes >&2 2>&1 || true
     echo "" >&2
     echo -e "${YELLOW}If you need to:${NC}" >&2
-    echo -e "  - Add repository credentials: ${GREEN}./scripts/bootstrap/13-configure-repo-credentials.sh${NC}" >&2
-    echo -e "  - Inject secrets: ${GREEN}./scripts/bootstrap/07-inject-eso-secrets.sh${NC}" >&2
-    echo -e "  - Add worker nodes: ${GREEN}./scripts/bootstrap/05-add-worker-nodes.sh${NC}" >&2
+    echo -e "  - Add repository credentials: ${GREEN}./scripts/bootstrap/install/13-configure-repo-credentials.sh${NC}" >&2
+    echo -e "  - Inject secrets: ${GREEN}./scripts/bootstrap/install/07-inject-eso-secrets.sh${NC}" >&2
+    echo -e "  - Add worker nodes: ${GREEN}./scripts/bootstrap/install/05-add-worker-nodes.sh${NC}" >&2
     echo "" >&2
     if [ "$YES_FLAG" = "--yes" ]; then
         echo "y" >&2

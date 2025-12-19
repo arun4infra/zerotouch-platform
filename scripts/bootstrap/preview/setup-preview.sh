@@ -39,7 +39,7 @@ echo ""
 # 1. Apply preview patches (URLs, storage class, tolerations, disable local-path-provisioner)
 echo -e "${BLUE}Applying preview patches...${NC}"
 # Pass --force since we're definitely in preview mode (cluster doesn't exist yet)
-"$SCRIPT_DIR/../patches/00-apply-all-patches.sh" --force
+"$SCRIPT_DIR/patches/00-apply-all-patches.sh" --force
 
 # Patches applied - using default storage class (no verification needed)
 echo ""

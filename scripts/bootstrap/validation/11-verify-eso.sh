@@ -53,7 +53,7 @@ echo ""
 echo -e "${BLUE}Step 1: Checking ESO credentials...${NC}"
 if ! kubectl_retry get secret aws-access-token -n external-secrets &>/dev/null; then
     echo -e "${RED}✗ AWS credentials not found in external-secrets namespace${NC}"
-    echo -e "${BLUE}ℹ  Run: ./scripts/bootstrap/07-inject-eso-secrets.sh${NC}"
+    echo -e "${BLUE}ℹ  Run: ./scripts/bootstrap/install/07-inject-eso-secrets.sh${NC}"
     exit 1
 fi
 echo -e "${GREEN}✓ ESO credentials found${NC}"
