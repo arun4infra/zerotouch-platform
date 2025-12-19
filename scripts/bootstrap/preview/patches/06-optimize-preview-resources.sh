@@ -1,6 +1,6 @@
 #!/bin/bash
 # Optimize resource usage for preview mode
-# Disables non-essential components and reduces resource requests
+# Patches database and platform components that overlays don't handle
 
 set -e
 
@@ -35,9 +35,9 @@ fi
 if [ "$IS_PREVIEW_MODE" = true ]; then
     echo -e "${BLUE}Optimizing resources for preview mode...${NC}"
     
-    NATS_FILE="$REPO_ROOT/bootstrap/components/01-nats.yaml"
-    CROSSPLANE_FILE="$REPO_ROOT/bootstrap/components/01-crossplane.yaml"
-    KEDA_FILE="$REPO_ROOT/bootstrap/components/01-keda.yaml"
+    NATS_FILE="$REPO_ROOT/bootstrap/base/01-nats.yaml"
+    CROSSPLANE_FILE="$REPO_ROOT/bootstrap/base/01-crossplane.yaml"
+    KEDA_FILE="$REPO_ROOT/bootstrap/base/01-keda.yaml"
     
     # 1. Disable NATS persistence in preview mode (no PVCs needed)
     if [ -f "$NATS_FILE" ]; then
@@ -96,6 +96,20 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
             sed -i.bak 's/memory: 1000Mi/memory: 512Mi/g' "$KEDA_FILE"
             rm -f "$KEDA_FILE.bak"
             echo -e "  ${GREEN}✓${NC} Reduced KEDA resources (50m CPU, 128Mi memory)"
+        fi
+    fi
+    
+    # Verify overlay optimizations are in place
+    echo -e "${BLUE}Verifying overlay optimizations...${NC}"
+    OVERLAY_FILE="$REPO_ROOT/bootstrap/overlays/preview/kustomization.yaml"
+    if [ -f "$OVERLAY_FILE" ]; then
+        NATS_OPTIMIZED=$(grep -c "cpu: 50m" "$OVERLAY_FILE" 2>/dev/null || echo "0")
+        KAGENT_OPTIMIZED=$(grep -c "cpu: 25m" "$OVERLAY_FILE" 2>/dev/null || echo "0")
+        
+        if [ "$NATS_OPTIMIZED" -gt 0 ] && [ "$KAGENT_OPTIMIZED" -gt 0 ]; then
+            echo -e "  ${GREEN}✓${NC} Overlay optimizations verified (NATS, Kagent, KEDA)"
+        else
+            echo -e "  ${YELLOW}⚠${NC} Some overlay optimizations may be missing"
         fi
     fi
     

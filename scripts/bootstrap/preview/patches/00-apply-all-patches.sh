@@ -23,7 +23,7 @@ echo -e "${BLUE}║   Applying Preview/Kind Patches                             
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-# Run all numbered patch scripts (01-*, 02-*, etc.)
+# Run all numbered patch scripts (01-*, 03-*, etc.) - skip 02 (removed)
 for script in "$SCRIPT_DIR"/[0-9][0-9]-*.sh; do
     if [ -f "$script" ] && [ "$script" != "$0" ]; then
         script_name=$(basename "$script")

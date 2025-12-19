@@ -3,7 +3,8 @@ kind: Kustomization
 
 resources:
 - ../../base
-- ../../components-production
+- cilium/01-cilium.yaml
+- components-tenants
 
 # In production, we ensure targetRevision is main (or specific tag)
 patches:

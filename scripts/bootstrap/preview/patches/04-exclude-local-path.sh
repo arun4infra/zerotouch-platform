@@ -36,48 +36,36 @@ fi
 if [ "$IS_PREVIEW_MODE" = true ]; then
     echo -e "${BLUE}Excluding local-path-provisioner from preview mode...${NC}"
     
-    ROOT_YAML="$REPO_ROOT/bootstrap/root.yaml"
+    # With overlay structure, 00-* files should stay in bootstrap root, not in base/
+    # Ensure local-path-provisioner application is disabled
+    LOCAL_PATH_APP="$REPO_ROOT/bootstrap/00-local-path-provisioner.yaml"
+    LOCAL_PATH_DISABLED="$REPO_ROOT/bootstrap/00-local-path-provisioner.yaml.disabled"
     
-    if [ ! -f "$ROOT_YAML" ]; then
-        echo -e "${RED}Error: root.yaml not found at $ROOT_YAML${NC}"
-        exit 1
-    fi
-    
-    # Add exclude pattern for 00-local-path-provisioner.yaml
-    # Kind already provides local-path storage
-    if ! grep -q "exclude:" "$ROOT_YAML" 2>/dev/null; then
-        # No exclude pattern exists, add it after include line with proper YAML formatting
-        # Use awk to ensure proper YAML structure
-        awk '
-            /include:/ { 
-                print $0
-                getline
-                print "      exclude: '\''00-local-path-provisioner.yaml'\''"
-                print $0
-                next
-            }
-            { print }
-        ' "$ROOT_YAML" > "$ROOT_YAML.tmp" && mv "$ROOT_YAML.tmp" "$ROOT_YAML"
-        echo -e "  ${GREEN}✓${NC} Added exclude pattern for local-path-provisioner"
-    elif ! grep -q "exclude:.*00-local-path-provisioner" "$ROOT_YAML" 2>/dev/null; then
-        # Exclude exists but doesn't include local-path-provisioner
-        sed -i.bak "s/exclude: '\(.*\)'/exclude: '\1|00-local-path-provisioner.yaml'/" "$ROOT_YAML"
-        rm -f "$ROOT_YAML.bak"
-        echo -e "  ${GREEN}✓${NC} Updated exclude pattern to include local-path-provisioner"
+    if [ -f "$LOCAL_PATH_APP" ]; then
+        mv "$LOCAL_PATH_APP" "$LOCAL_PATH_DISABLED"
+        echo -e "  ${GREEN}✓${NC} Disabled: 00-local-path-provisioner.yaml"
+    elif [ -f "$LOCAL_PATH_DISABLED" ]; then
+        echo -e "  ${GREEN}✓${NC} Already disabled: 00-local-path-provisioner.yaml"
     else
-        echo -e "  ${YELLOW}⊘${NC} local-path-provisioner already excluded"
+        echo -e "  ${BLUE}ℹ${NC} No local-path-provisioner application found"
     fi
     
-    # Verify the change
-    echo -e "${BLUE}Verifying local-path-provisioner exclusion...${NC}"
-    if grep -q "exclude:.*00-local-path-provisioner" "$ROOT_YAML" 2>/dev/null; then
-        echo -e "  ${GREEN}✓ root.yaml verified - local-path-provisioner excluded${NC}"
-        grep -n "exclude:" "$ROOT_YAML" || true
+    # Ensure no 00-* files leak into base/ directory (overlays don't include them)
+    ZERO_FILES_IN_BASE=$(find "$REPO_ROOT/bootstrap/base/" -name "00-*.yaml" 2>/dev/null || true)
+    
+    if [ -n "$ZERO_FILES_IN_BASE" ]; then
+        echo -e "${YELLOW}⚠️  Found 00-* files in base directory - moving them:${NC}"
+        for file in $ZERO_FILES_IN_BASE; do
+            filename=$(basename "$file")
+            mv "$file" "$REPO_ROOT/bootstrap/$filename"
+            echo -e "  ${GREEN}✓${NC} Moved: $filename to bootstrap root"
+        done
     else
-        echo -e "  ${RED}✗ Failed to exclude local-path-provisioner!${NC}"
-        exit 1
+        echo -e "  ${GREEN}✓${NC} No 00-* files found in base directory"
     fi
     
+    echo -e "  ${BLUE}ℹ${NC} Kind clusters use built-in local-path storage"
+    echo -e "  ${BLUE}ℹ${NC} Preview overlay excludes 00-* bootstrap files"
     echo -e "${GREEN}✓ Local-path-provisioner excluded from preview mode${NC}"
 fi
 

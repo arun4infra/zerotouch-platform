@@ -4,25 +4,135 @@ kind: Kustomization
 resources:
 - ../../base
 
-# 1. Global Patch: Switch ALL Repo URLs to local filesystem
-patches:
-- target:
-    kind: Application
-    group: argoproj.io
-  patch: |
-    - op: replace
-      path: /spec/source/repoURL
-      value: file:///repo
-    - op: remove
-      path: /spec/source/targetRevision
+# URL patching is handled by 01-patch-urls.sh script (applied before ArgoCD sync)
 
-# 2. Specific Patch: Exclude Cilium from Foundation Config
+patches:
+# 1. Specific Patch: Exclude Cilium from Foundation Config
 # This prevents ArgoCD from deploying platform/01-foundation/cilium.yaml
 - target:
     kind: Application
     name: foundation-config
-  patch: |
-    - op: add
-      path: /spec/source/directory
-      value:
-        exclude: 'cilium.yaml'
+  patch: |-
+    apiVersion: argoproj.io/v1alpha1
+    kind: Application
+    metadata:
+      name: foundation-config
+    spec:
+      source:
+        directory:
+          exclude: 'cilium.yaml'
+
+# 2. Remove Control Plane Tolerations (Kind clusters don't have control-plane taints)
+- target:
+    kind: Application
+    name: external-secrets
+  patch: |-
+    apiVersion: argoproj.io/v1alpha1
+    kind: Application
+    metadata:
+      name: external-secrets
+    spec:
+      source:
+        helm:
+          values: |
+            installCRDs: true
+            webhook:
+              create: true
+
+- target:
+    kind: Application
+    name: crossplane-operator
+  patch: |-
+    apiVersion: argoproj.io/v1alpha1
+    kind: Application
+    metadata:
+      name: crossplane-operator
+    spec:
+      source:
+        helm:
+          values: |
+            # Allow Crossplane to run without control plane tolerations
+            tolerations: []
+            args:
+              - --enable-composition-revisions
+
+- target:
+    kind: Application
+    name: keda
+  patch: |-
+    apiVersion: argoproj.io/v1alpha1
+    kind: Application
+    metadata:
+      name: keda
+    spec:
+      source:
+        helm:
+          values: |
+            operator:
+              logLevel: info
+            # Remove control plane tolerations for Kind
+            tolerations: []
+
+# 3. Optimize Resources for Preview Mode
+- target:
+    kind: Application
+    name: nats
+  patch: |-
+    apiVersion: argoproj.io/v1alpha1
+    kind: Application
+    metadata:
+      name: nats
+    spec:
+      source:
+        helm:
+          values: |
+            container:
+              resources:
+                limits:
+                  cpu: 250m
+                  memory: 512Mi
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+            config:
+              jetstream:
+                fileStore:
+                  enabled: false
+                memoryStore:
+                  enabled: true
+
+- target:
+    kind: Application
+    name: kagent
+  patch: |-
+    apiVersion: argoproj.io/v1alpha1
+    kind: Application
+    metadata:
+      name: kagent
+    spec:
+      source:
+        helm:
+          values: |
+            # Schedule kagent agents on worker nodes with intelligence workloads
+            agents:
+              nodeSelector: {}
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 250m
+                  memory: 512Mi
+            # Keep controller on control plane (lightweight)
+            controller:
+              nodeSelector: {}
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+                limits:
+                  cpu: 100m
+                  memory: 256Mi
+            # Disable kmcp controller - platform uses RemoteMCPServer (v1alpha2) instead of MCPServer (v1alpha1)
+            kmcp:
+              enabled: false
