@@ -41,9 +41,15 @@ fi
 if [ "$IS_PREVIEW_MODE" = true ]; then
     echo -e "${BLUE}Updating ArgoCD manifests to use local filesystem...${NC}"
     
-    # Get current branch name
-    CURRENT_BRANCH="${GITHUB_HEAD_REF:-$(cd "$REPO_ROOT" && git branch --show-current 2>/dev/null || echo "HEAD")}"
-    echo -e "${BLUE}Current branch: $CURRENT_BRANCH${NC}"
+    # Get current commit SHA - more reliable than branch names
+    CURRENT_COMMIT=$(cd "$REPO_ROOT" && git rev-parse HEAD 2>/dev/null || echo "")
+    
+    if [ -z "$CURRENT_COMMIT" ]; then
+        echo -e "${RED}Error: Could not get current commit SHA${NC}"
+        exit 1
+    fi
+    
+    echo -e "${BLUE}Using commit SHA: $CURRENT_COMMIT${NC}"
     
     # Match any GitHub URL for zerotouch-platform
     GITHUB_URL_PATTERN="https://github.com/.*/zerotouch-platform.git"
@@ -60,7 +66,7 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
         fi
     done
     
-    # Remove targetRevision ONLY for Git sources (not Helm charts) and replace with current branch
+    # Remove targetRevision ONLY for Git sources (not Helm charts) and replace with current commit SHA
     # Helm charts need targetRevision to specify chart version
     for file in "$REPO_ROOT"/bootstrap/argocd/base/*.yaml "$REPO_ROOT"/bootstrap/argocd/overlays/production/components-tenants/*.yaml; do
         if [ -f "$file" ]; then
@@ -68,24 +74,20 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
             # Skip if it's a Helm chart (has 'chart:' field)
             if grep -q "file:///repo" "$file" 2>/dev/null && ! grep -q "^  chart:" "$file" 2>/dev/null; then
                 if grep -q "targetRevision:" "$file" 2>/dev/null; then
-                    # Escape the branch name for sed
-                    ESCAPED_BRANCH=$(echo "$CURRENT_BRANCH" | sed 's/[\/&]/\\&/g')
-                    sed -i.bak "s/targetRevision:.*/targetRevision: $ESCAPED_BRANCH/" "$file"
+                    sed -i.bak "s/targetRevision:.*/targetRevision: $CURRENT_COMMIT/" "$file"
                     rm -f "$file.bak"
                 fi
             fi
         fi
     done
     
-    # Also update the root.yaml files to use current branch
+    # Also update the root.yaml files to use current commit SHA
     for root_file in "$REPO_ROOT"/bootstrap/argocd/overlays/*/root.yaml; do
         if [ -f "$root_file" ] && grep -q "file:///repo" "$root_file" 2>/dev/null; then
             if grep -q "targetRevision:" "$root_file" 2>/dev/null; then
-                # Escape the branch name for sed
-                ESCAPED_BRANCH=$(echo "$CURRENT_BRANCH" | sed 's/[\/&]/\\&/g')
-                sed -i.bak "s/targetRevision:.*/targetRevision: $ESCAPED_BRANCH/" "$root_file"
+                sed -i.bak "s/targetRevision:.*/targetRevision: $CURRENT_COMMIT/" "$root_file"
                 rm -f "$root_file.bak"
-                echo -e "  ${GREEN}✓${NC} Updated targetRevision to $CURRENT_BRANCH: $(basename "$(dirname "$root_file")")/$(basename "$root_file")"
+                echo -e "  ${GREEN}✓${NC} Updated targetRevision to $CURRENT_COMMIT: $(basename "$(dirname "$root_file")")/$(basename "$root_file")"
             fi
         fi
     done
