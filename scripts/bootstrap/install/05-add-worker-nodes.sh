@@ -112,7 +112,8 @@ add_single_worker() {
     log_info "✓ Cluster is accessible"
 
     # Step 2: Check if node config exists
-    CONFIG_PATH="$SCRIPT_DIR/../../bootstrap/talos/nodes/$NODE_NAME/config.yaml"
+    REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
+    CONFIG_PATH="$REPO_ROOT/bootstrap/talos/nodes/$NODE_NAME/config.yaml"
     if [ ! -f "$CONFIG_PATH" ]; then
         log_error "Node configuration not found at: $CONFIG_PATH"
         log_error "Please create the configuration file first"
@@ -146,7 +147,7 @@ add_single_worker() {
 
     # Step 5: Apply worker configuration
     log_info "Step 4: Applying worker configuration..."
-    cd "$SCRIPT_DIR/../../bootstrap/talos"
+    cd "$REPO_ROOT/bootstrap/talos"
 
     if ! talosctl apply-config --insecure \
         --nodes "$NODE_IP" \

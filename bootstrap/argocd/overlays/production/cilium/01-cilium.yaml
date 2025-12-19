@@ -10,9 +10,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: file:///repo
+    repoURL: https://github.com/arun4infra/zerotouch-platform.git
     path: platform/01-foundation
-    targetRevision: HEAD
+    targetRevision: main
     directory:
       include: cilium.yaml
   destination:

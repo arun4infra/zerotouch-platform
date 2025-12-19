@@ -7,7 +7,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+# Find repository root by looking for .git directory
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
 
 # Colors
 GREEN='\033[0;32m'
@@ -48,7 +49,7 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     fi
     
     # Always disable our ArgoCD Application in preview mode to avoid conflicts
-    LOCAL_PATH_APP="$REPO_ROOT/bootstrap/00-local-path-provisioner.yaml"
+    LOCAL_PATH_APP="$REPO_ROOT/bootstrap/argocd/bootstrap-files/00-local-path-provisioner.yaml"
     if [ -f "$LOCAL_PATH_APP" ]; then
         mv "$LOCAL_PATH_APP" "$LOCAL_PATH_APP.disabled"
         echo -e "  ${BLUE}ℹ${NC} Disabled ArgoCD Application (not needed in Kind preview mode)"

@@ -219,9 +219,9 @@ if [ "$MODE" = "preview" ]; then
     KIND_CONTAINER=$(docker ps --filter "name=zerotouch-preview-control-plane" --format "{{.Names}}" 2>/dev/null || echo "")
     if [ -n "$KIND_CONTAINER" ]; then
         echo -e "${BLUE}NATS file in container:${NC}"
-        docker exec "$KIND_CONTAINER" grep -n "storageClassName" /repo/bootstrap/base/01-nats.yaml || echo "File not found"
+        docker exec "$KIND_CONTAINER" grep -n "storageClassName" /repo/bootstrap/argocd/base/01-nats.yaml || echo "File not found"
         echo -e "${BLUE}Preview overlay kustomization:${NC}"
-        docker exec "$KIND_CONTAINER" cat /repo/bootstrap/overlays/preview/kustomization.yaml || echo "Overlay not found"
+        docker exec "$KIND_CONTAINER" cat /repo/bootstrap/argocd/overlays/preview/kustomization.yaml || echo "Overlay not found"
         echo -e "${BLUE}Cilium status in container:${NC}"
         docker exec "$KIND_CONTAINER" ls -la /repo/platform/01-foundation/cilium.yaml* || echo "Cilium files not found"
     fi

@@ -15,7 +15,8 @@ if [[ "$2" == "--use-cache" ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+# Find repository root by looking for .git directory
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
 CACHE_DIR="$REPO_ROOT/.tenants-cache"
 ENV_FILE="$CACHE_DIR/environments/$ENV/talos-values.yaml"
 

@@ -18,16 +18,17 @@ NC='\033[0m' # No Color
 ARGOCD_VERSION="v3.2.0"  # Latest stable as of 2024-11-24
 ARGOCD_NAMESPACE="argocd"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+# Find repository root by looking for .git directory
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
 
 # Parse mode parameter
 MODE="${1:-auto}"
 
 # Root application path - now using overlays
 if [ "$MODE" = "preview" ]; then
-    ROOT_APP_OVERLAY="bootstrap/overlays/preview"
+    ROOT_APP_OVERLAY="bootstrap/argocd/overlays/preview"
 else
-    ROOT_APP_OVERLAY="bootstrap/overlays/production"
+    ROOT_APP_OVERLAY="bootstrap/argocd/overlays/production"
 fi
 
 # Function to print colored messages
@@ -92,19 +93,19 @@ fi
 # Determine deployment mode
 if [ "$MODE" = "preview" ]; then
     log_info "Applying ArgoCD manifests for preview mode (Kind cluster, version: $ARGOCD_VERSION)..."
-    kubectl apply -k "$REPO_ROOT/bootstrap/argocd/preview"
+    kubectl apply -k "$REPO_ROOT/bootstrap/argocd/install/preview"
 elif [ "$MODE" = "production" ]; then
     log_info "Applying ArgoCD manifests for production mode (Talos cluster, version: $ARGOCD_VERSION)..."
-    kubectl apply -k "$REPO_ROOT/bootstrap/argocd"
+    kubectl apply -k "$REPO_ROOT/bootstrap/argocd/install"
 else
     # Auto-detection fallback
     log_info "Auto-detecting cluster type..."
     if kubectl get nodes -o jsonpath='{.items[*].spec.taints[?(@.key=="node-role.kubernetes.io/control-plane")]}' | grep -q "control-plane"; then
         log_info "Detected Talos cluster - applying ArgoCD manifests with control-plane tolerations (version: $ARGOCD_VERSION)..."
-        kubectl apply -k "$REPO_ROOT/bootstrap/argocd"
+        kubectl apply -k "$REPO_ROOT/bootstrap/argocd/install"
     else
         log_info "Detected Kind cluster - applying ArgoCD manifests for preview mode (version: $ARGOCD_VERSION)..."
-        kubectl apply -k "$REPO_ROOT/bootstrap/argocd/preview"
+        kubectl apply -k "$REPO_ROOT/bootstrap/argocd/install/preview"
     fi
 fi
 
@@ -154,7 +155,7 @@ log_info ""
 log_step "Step 2.5/6: Granting ArgoCD cluster-admin permissions..."
 
 log_info "Applying cluster-admin RBAC patch..."
-kubectl apply -f "$REPO_ROOT/bootstrap/argocd-admin-patch.yaml"
+kubectl apply -f "$REPO_ROOT/bootstrap/argocd/bootstrap-files/argocd-admin-patch.yaml"
 
 log_info "✓ ArgoCD has cluster-admin permissions (required for namespace creation)"
 

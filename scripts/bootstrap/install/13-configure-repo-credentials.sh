@@ -38,7 +38,9 @@ print_blue() {
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_SSM_FILE="$SCRIPT_DIR/../../.env.ssm"
+# Find repository root by looking for .git directory
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
+ENV_SSM_FILE="$REPO_ROOT/.env.ssm"
 
 # Function to add a single repository
 add_repository() {
@@ -139,7 +141,7 @@ read_credentials_from_env() {
 
 # Function to check if tenant ApplicationSet exists
 check_tenant_appset() {
-    if [ -f "$SCRIPT_DIR/../../bootstrap/components/99-tenants.yaml" ]; then
+    if [ -f "$REPO_ROOT/bootstrap/argocd/bootstrap-files/99-tenants.yaml" ]; then
         return 0
     fi
     return 1

@@ -21,8 +21,9 @@ WORKER_PASSWORD="${4:-}"
 YES_FLAG="${5:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BOOTSTRAP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-CREDENTIALS_FILE="$BOOTSTRAP_DIR/bootstrap-credentials/bootstrap-credentials-$(date +%Y%m%d-%H%M%S).txt"
+# Find repository root by looking for .git directory
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
+CREDENTIALS_FILE="$REPO_ROOT/.talos-credentials/bootstrap-credentials-$(date +%Y%m%d-%H%M%S).txt"
 
 echo -e "${BLUE}Running in PRODUCTION mode (Bare Metal/Talos)${NC}" >&2
 echo "" >&2
@@ -58,6 +59,9 @@ fi
 echo -e "${GREEN}Server IP:${NC} $SERVER_IP" >&2
 echo -e "${GREEN}Credentials will be saved to:${NC} $CREDENTIALS_FILE" >&2
 echo "" >&2
+
+# Create credentials directory if it doesn't exist
+mkdir -p "$(dirname "$CREDENTIALS_FILE")"
 
 # Initialize credentials file
 cat > "$CREDENTIALS_FILE" << EOF

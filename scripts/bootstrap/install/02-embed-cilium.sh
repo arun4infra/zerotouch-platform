@@ -6,8 +6,10 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CP_CONFIG="$SCRIPT_DIR/../../bootstrap/talos/nodes/cp01-main/config.yaml"
-CILIUM_MANIFEST="$SCRIPT_DIR/../../bootstrap/talos-templates/cilium-bootstrap.yaml"
+# Find repository root by looking for .git directory
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
+CP_CONFIG="$REPO_ROOT/bootstrap/talos/nodes/cp01-main/config.yaml"
+CILIUM_MANIFEST="$REPO_ROOT/bootstrap/talos/templates/cilium-bootstrap.yaml"
 
 # Check if Cilium manifest exists
 if [ ! -f "$CILIUM_MANIFEST" ]; then

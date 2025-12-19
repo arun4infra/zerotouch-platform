@@ -11,7 +11,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-CONFIG_FILE="$REPO_ROOT/bootstrap/config.yaml"
+CONFIG_FILE="$REPO_ROOT/bootstrap/argocd/bootstrap-files/config.yaml"
 
 # Colors
 GREEN='\033[0;32m'
@@ -142,7 +142,7 @@ echo -e "${YELLOW}Next steps:${NC}"
 echo -e "  1. Review changes: ${GREEN}git diff bootstrap/${NC}"
 echo -e "  2. Commit changes: ${GREEN}git add bootstrap/ && git commit -m 'chore: Update target revision to $TARGET_REVISION'${NC}"
 echo -e "  3. Push to remote: ${GREEN}git push${NC}"
-echo -e "  4. Apply to cluster: ${GREEN}kubectl apply -f bootstrap/root.yaml${NC}"
+echo -e "  4. Apply to cluster: ${GREEN}kubectl apply -f bootstrap/argocd/overlays/production/root.yaml${NC}"
 echo ""
 
 exit 0

@@ -13,7 +13,8 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+# Find repository root by looking for .git directory
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
 
 FORCE_UPDATE=false
 
@@ -38,8 +39,8 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     
     # With overlay structure, 00-* files should stay in bootstrap root, not in base/
     # Ensure local-path-provisioner application is disabled
-    LOCAL_PATH_APP="$REPO_ROOT/bootstrap/00-local-path-provisioner.yaml"
-    LOCAL_PATH_DISABLED="$REPO_ROOT/bootstrap/00-local-path-provisioner.yaml.disabled"
+    LOCAL_PATH_APP="$REPO_ROOT/bootstrap/argocd/bootstrap-files/00-local-path-provisioner.yaml"
+    LOCAL_PATH_DISABLED="$REPO_ROOT/bootstrap/argocd/bootstrap-files/00-local-path-provisioner.yaml.disabled"
     
     if [ -f "$LOCAL_PATH_APP" ]; then
         mv "$LOCAL_PATH_APP" "$LOCAL_PATH_DISABLED"
@@ -51,14 +52,14 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     fi
     
     # Ensure no 00-* files leak into base/ directory (overlays don't include them)
-    ZERO_FILES_IN_BASE=$(find "$REPO_ROOT/bootstrap/base/" -name "00-*.yaml" 2>/dev/null || true)
+    ZERO_FILES_IN_BASE=$(find "$REPO_ROOT/bootstrap/argocd/base/" -name "00-*.yaml" 2>/dev/null || true)
     
     if [ -n "$ZERO_FILES_IN_BASE" ]; then
         echo -e "${YELLOW}⚠️  Found 00-* files in base directory - moving them:${NC}"
         for file in $ZERO_FILES_IN_BASE; do
             filename=$(basename "$file")
-            mv "$file" "$REPO_ROOT/bootstrap/$filename"
-            echo -e "  ${GREEN}✓${NC} Moved: $filename to bootstrap root"
+            mv "$file" "$REPO_ROOT/bootstrap/argocd/bootstrap-files/$filename"
+            echo -e "  ${GREEN}✓${NC} Moved: $filename to bootstrap-files"
         done
     else
         echo -e "  ${GREEN}✓${NC} No 00-* files found in base directory"

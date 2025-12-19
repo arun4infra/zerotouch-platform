@@ -13,7 +13,8 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+# Find repository root by looking for .git directory
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
 
 echo -e "${BLUE}Script directory: $SCRIPT_DIR${NC}"
 echo -e "${BLUE}Repository root: $REPO_ROOT${NC}"
@@ -45,7 +46,7 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     LOCAL_URL="file:///repo"
     
     # Update URLs in bootstrap files (base/ and production tenant components)
-    for file in "$REPO_ROOT"/bootstrap/base/*.yaml "$REPO_ROOT"/bootstrap/overlays/production/components-tenants/*.yaml; do
+    for file in "$REPO_ROOT"/bootstrap/argocd/base/*.yaml "$REPO_ROOT"/bootstrap/argocd/overlays/production/components-tenants/*.yaml; do
         if [ -f "$file" ]; then
             if grep -qE "$GITHUB_URL_PATTERN" "$file" 2>/dev/null; then
                 sed -i.bak -E "s|$GITHUB_URL_PATTERN|$LOCAL_URL|g" "$file"
@@ -57,7 +58,7 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     
     # Remove targetRevision ONLY for Git sources (not Helm charts)
     # Helm charts need targetRevision to specify chart version
-    for file in "$REPO_ROOT"/bootstrap/base/*.yaml "$REPO_ROOT"/bootstrap/overlays/production/components-tenants/*.yaml; do
+    for file in "$REPO_ROOT"/bootstrap/argocd/base/*.yaml "$REPO_ROOT"/bootstrap/argocd/overlays/production/components-tenants/*.yaml; do
         if [ -f "$file" ]; then
             # Only remove targetRevision if this is a Git source (has repoURL with file:///repo)
             # Skip if it's a Helm chart (has 'chart:' field)
@@ -75,7 +76,7 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     
     # List all files that still contain GitHub URL
     echo -e "${BLUE}Checking for remaining GitHub URLs...${NC}"
-    REMAINING=$(grep -l "$GITHUB_URL_PATTERN" "$REPO_ROOT"/bootstrap/base/*.yaml "$REPO_ROOT"/bootstrap/overlays/production/components-tenants/*.yaml 2>/dev/null || true)
+    REMAINING=$(grep -l "$GITHUB_URL_PATTERN" "$REPO_ROOT"/bootstrap/argocd/base/*.yaml "$REPO_ROOT"/bootstrap/argocd/overlays/production/components-tenants/*.yaml 2>/dev/null || true)
     if [ -n "$REMAINING" ]; then
         echo -e "  ${RED}✗ Files still containing GitHub URL:${NC}"
         echo "$REMAINING" | while read f; do echo "    - $(basename "$f")"; done

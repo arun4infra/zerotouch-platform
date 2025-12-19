@@ -12,7 +12,8 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+# Find repository root by looking for .git directory
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
 
 FORCE_UPDATE=false
 
@@ -35,9 +36,9 @@ fi
 if [ "$IS_PREVIEW_MODE" = true ]; then
     echo -e "${BLUE}Optimizing resources for preview mode...${NC}"
     
-    NATS_FILE="$REPO_ROOT/bootstrap/base/01-nats.yaml"
-    CROSSPLANE_FILE="$REPO_ROOT/bootstrap/base/01-crossplane.yaml"
-    KEDA_FILE="$REPO_ROOT/bootstrap/base/01-keda.yaml"
+    NATS_FILE="$REPO_ROOT/bootstrap/argocd/base/01-nats.yaml"
+    CROSSPLANE_FILE="$REPO_ROOT/bootstrap/argocd/base/01-crossplane.yaml"
+    KEDA_FILE="$REPO_ROOT/bootstrap/argocd/base/01-keda.yaml"
     
     # 1. Disable NATS persistence in preview mode (no PVCs needed)
     if [ -f "$NATS_FILE" ]; then
@@ -101,7 +102,7 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     
     # Verify overlay optimizations are in place
     echo -e "${BLUE}Verifying overlay optimizations...${NC}"
-    OVERLAY_FILE="$REPO_ROOT/bootstrap/overlays/preview/kustomization.yaml"
+    OVERLAY_FILE="$REPO_ROOT/bootstrap/argocd/overlays/preview/kustomization.yaml"
     if [ -f "$OVERLAY_FILE" ]; then
         NATS_OPTIMIZED=$(grep -c "cpu: 50m" "$OVERLAY_FILE" 2>/dev/null || echo "0")
         KAGENT_OPTIMIZED=$(grep -c "cpu: 25m" "$OVERLAY_FILE" 2>/dev/null || echo "0")

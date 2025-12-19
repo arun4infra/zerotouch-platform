@@ -43,7 +43,7 @@ if kubectl get applicationset tenant-applications -n argocd &>/dev/null; then
     print_success "ApplicationSet 'tenant-applications' exists"
 else
     print_error "ApplicationSet 'tenant-applications' not found"
-    print_info "Run: kubectl apply -f bootstrap/components/99-tenants.yaml"
+    print_info "Run: kubectl apply -f bootstrap/argocd/bootstrap-files/99-tenants.yaml"
     ((ERRORS++))
 fi
 

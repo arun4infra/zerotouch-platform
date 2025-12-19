@@ -63,7 +63,9 @@ echo -e "${BLUE}⏳ Waiting 3 minutes for Talos to boot...${NC}"
 sleep 180
 
 # Change to Talos config directory
-cd "$SCRIPT_DIR/../../bootstrap/talos"
+# Find repository root by looking for .git directory
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
+cd "$REPO_ROOT/bootstrap/talos"
 
 # Apply Talos configuration
 echo -e "${BLUE}Applying Talos configuration (with CNI=none to prevent Flannel)...${NC}"
