@@ -112,7 +112,7 @@ done
 # Infrastructure apps that can be unhealthy in preview mode
 # These are known to have issues in Kind clusters but don't affect core functionality
 PREVIEW_OPTIONAL_APPS=(
-    "cilium"                    # Kind uses kindnet instead
+    # "cilium"                    # Kind uses kindnet instead
     "argocd-repo-credentials"   # Tenant repo credentials fail without SSM params
     "intelligence"              # AI/documentation layer - resource intensive, not needed for core functionality
     "local-path-provisioner"    # Kind has its own built-in provisioner, ours conflicts with immutable fields
