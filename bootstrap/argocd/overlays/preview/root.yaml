@@ -9,7 +9,7 @@ spec:
   project: default
   source:
     repoURL: file:///repo
-    path: bootstrap/overlays/preview
+    path: bootstrap/argocdoverlays/preview
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
