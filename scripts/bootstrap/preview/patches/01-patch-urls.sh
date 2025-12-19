@@ -42,7 +42,7 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     echo -e "${BLUE}Updating ArgoCD manifests to use local filesystem...${NC}"
     
     # Get current branch name
-    CURRENT_BRANCH=$(cd "$REPO_ROOT" && git branch --show-current)
+    CURRENT_BRANCH="${GITHUB_HEAD_REF:-$(cd "$REPO_ROOT" && git branch --show-current 2>/dev/null || echo "HEAD")}"
     echo -e "${BLUE}Current branch: $CURRENT_BRANCH${NC}"
     
     # Match any GitHub URL for zerotouch-platform
