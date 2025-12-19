@@ -39,11 +39,14 @@ if [ "$IS_KIND_CLUSTER" = true ]; then
     CILIUM_APP="$PLATFORM_ROOT/platform/01-foundation/cilium.yaml"
     
     if [ -f "$CILIUM_APP" ]; then
-        # Create a backup
-        cp "$CILIUM_APP" "$CILIUM_APP.backup"
-        
         # Rename the file to prevent ArgoCD from finding it
         mv "$CILIUM_APP" "$CILIUM_APP.disabled"
+        
+        # Also delete the ArgoCD application if it exists
+        if kubectl get application cilium -n argocd >/dev/null 2>&1; then
+            echo -e "${BLUE}Deleting existing Cilium ArgoCD application...${NC}"
+            kubectl delete application cilium -n argocd --ignore-not-found=true
+        fi
         
         echo -e "${GREEN}✓${NC} Cilium application disabled for Kind cluster"
         echo -e "${YELLOW}ℹ${NC} Kind will use its default CNI (kindnet) instead"
