@@ -46,6 +46,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyyaml
 
+      - name: Debug Branch Detection
+        run: |
+          echo "=== GitHub Actions Environment ==="
+          echo "GITHUB_HEAD_REF: $GITHUB_HEAD_REF"
+          echo "GITHUB_REF_NAME: $GITHUB_REF_NAME"
+          echo "GITHUB_REF: $GITHUB_REF"
+          echo "git branch --show-current: $(git branch --show-current || echo 'empty')"
+          echo "git symbolic-ref --short HEAD: $(git symbolic-ref --short HEAD 2>/dev/null || echo 'failed')"
+          echo ""
+          echo "=== Testing Branch Detection Script ==="
+          chmod +x scripts/bootstrap/preview/patches/01-patch-urls.sh
+          # Test the branch detection logic
+          ./scripts/bootstrap/preview/patches/01-patch-urls.sh --force || true
+
       - name: Bootstrap Platform Preview Environment
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
