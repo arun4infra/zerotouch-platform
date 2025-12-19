@@ -131,10 +131,11 @@ fi
 # 7. Set kubectl context
 kubectl config use-context "kind-${CLUSTER_NAME}"
 
-# 8. Label nodes for database workloads
-echo -e "${BLUE}Labeling nodes for database workloads...${NC}"
+# 8. Label nodes for database workloads and environment
+echo -e "${BLUE}Labeling nodes for database workloads and environment...${NC}"
 kubectl label nodes --all workload.bizmatters.dev/databases=true --overwrite
-echo -e "${GREEN}✓ Nodes labeled${NC}"
+kubectl label nodes --all environment=kind --overwrite
+echo -e "${GREEN}✓ Nodes labeled for Kind environment${NC}"
 
 echo ""
 

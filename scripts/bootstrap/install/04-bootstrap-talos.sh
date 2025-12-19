@@ -106,6 +106,11 @@ talosctl kubeconfig \
 echo -e "${BLUE}Verifying cluster (with retries)...${NC}"
 kubectl_retry get nodes
 
+# Label nodes for Talos environment
+echo -e "${BLUE}Labeling nodes for Talos environment...${NC}"
+kubectl label nodes --all environment=talos --overwrite
+echo -e "${GREEN}✓ Nodes labeled for Talos environment${NC}"
+
 echo ""
 echo -e "${GREEN}✓ Talos cluster bootstrapped successfully${NC}"
 echo ""
