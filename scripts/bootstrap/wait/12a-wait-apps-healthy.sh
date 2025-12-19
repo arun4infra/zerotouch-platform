@@ -19,8 +19,8 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 # Source shared diagnostics library
-if [ -f "$SCRIPT_DIR/helpers/diagnostics.sh" ]; then
-    source "$SCRIPT_DIR/helpers/diagnostics.sh"
+if [ -f "$SCRIPT_DIR/../helpers/diagnostics.sh" ]; then
+    source "$SCRIPT_DIR/../helpers/diagnostics.sh"
 fi
 
 # Fallback inline diagnostics if library not available
