@@ -11,7 +11,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/arun4infra/zerotouch-platform.git
-    targetRevision: chore/split-root
+    targetRevision: main
     path: platform/05-databases
     directory:
       recurse: true

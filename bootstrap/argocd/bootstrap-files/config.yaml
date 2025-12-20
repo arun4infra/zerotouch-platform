@@ -4,7 +4,7 @@
 
 # Git repository configuration
 REPO_URL: https://github.com/arun4infra/zerotouch-platform.git
-TARGET_REVISION: chore/split-root
+TARGET_REVISION: main
 
 # To switch back to main branch for production:
 # TARGET_REVISION: main

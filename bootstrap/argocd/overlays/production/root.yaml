@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/arun4infra/zerotouch-platform.git
     path: bootstrap/argocd/overlays/production
-    targetRevision: chore/split-root
+    targetRevision: main
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
