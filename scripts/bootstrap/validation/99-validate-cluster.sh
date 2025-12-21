@@ -172,13 +172,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo -e "${BLUE}Waiting for Platform API XRDs to be ready...${NC}"
 WAIT_SCRIPT="$SCRIPT_DIR/../wait/14-wait-platform-apis.sh"
 if [[ -f "$WAIT_SCRIPT" ]]; then
-    if "$WAIT_SCRIPT" --timeout 120; then
+    if "$WAIT_SCRIPT" --timeout 300; then
         echo -e "${GREEN}✓ Platform API XRDs are ready${NC}"
     else
-        echo -e "${YELLOW}⚠️  Platform API XRDs not fully ready, proceeding with validation anyway${NC}"
+        echo -e "${RED}❌ Platform API XRDs failed to become ready within timeout${NC}"
+        echo -e "${RED}Cannot proceed with validation - required XRDs are not available${NC}"
+        ((FAILED++)) || true
+        exit 1
     fi
 else
-    echo -e "${YELLOW}⚠️  Platform API wait script not found, proceeding without wait${NC}"
+    echo -e "${RED}❌ Platform API wait script not found${NC}"
+    ((FAILED++)) || true
+    exit 1
 fi
 echo ""
 
