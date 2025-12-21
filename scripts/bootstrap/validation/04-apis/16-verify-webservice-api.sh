@@ -101,13 +101,43 @@ if kubectl_retry get crd xwebservices.platform.bizmatters.io &>/dev/null; then
         ((ERRORS++))
     fi
     
-    # Verify XRD has correct API version
-    API_VERSION=$(kubectl_retry get crd xwebservices.platform.bizmatters.io -o jsonpath='{.spec.versions[0].name}' 2>/dev/null)
+    # Verify XRD has correct API version with robust checking
+    echo "DEBUG: Checking API version for xwebservices.platform.bizmatters.io" >&2
+    
+    # Try multiple approaches to get the API version
+    API_VERSION=""
+    
+    # Method 1: Direct jsonpath
+    API_VERSION=$(kubectl_retry get crd xwebservices.platform.bizmatters.io -o jsonpath='{.spec.versions[0].name}' 2>/dev/null || echo "")
+    echo "DEBUG: Method 1 - API_VERSION='$API_VERSION'" >&2
+    
+    # Method 2: If empty, try with jq
+    if [ -z "$API_VERSION" ]; then
+        API_VERSION=$(kubectl_retry get crd xwebservices.platform.bizmatters.io -o json 2>/dev/null | jq -r '.spec.versions[0].name // empty' 2>/dev/null || echo "")
+        echo "DEBUG: Method 2 - API_VERSION='$API_VERSION'" >&2
+    fi
+    
+    # Method 3: If still empty, get all versions and take first
+    if [ -z "$API_VERSION" ]; then
+        ALL_VERSIONS=$(kubectl_retry get crd xwebservices.platform.bizmatters.io -o jsonpath='{.spec.versions[*].name}' 2>/dev/null || echo "")
+        echo "DEBUG: Method 3 - All versions: '$ALL_VERSIONS'" >&2
+        if [ -n "$ALL_VERSIONS" ]; then
+            API_VERSION=$(echo "$ALL_VERSIONS" | awk '{print $1}')
+            echo "DEBUG: Method 3 - Using first version: '$API_VERSION'" >&2
+        fi
+    fi
+    
+    # Validate the result
     if [ "$API_VERSION" = "v1alpha1" ]; then
         echo -e "${GREEN}✓ XRD API version: v1alpha1${NC}"
-    else
+    elif [ -n "$API_VERSION" ]; then
         echo -e "${YELLOW}⚠️  XRD API version: $API_VERSION (expected: v1alpha1)${NC}"
         ((WARNINGS++))
+    else
+        echo -e "${RED}✗ Could not determine XRD API version${NC}"
+        echo "DEBUG: Showing CRD structure for troubleshooting:" >&2
+        kubectl_retry get crd xwebservices.platform.bizmatters.io -o yaml 2>/dev/null | head -30 >&2 || echo "DEBUG: Could not get CRD YAML" >&2
+        ((ERRORS++))
     fi
 else
     echo -e "${RED}✗ XRD 'xwebservices.platform.bizmatters.io' not found${NC}"
