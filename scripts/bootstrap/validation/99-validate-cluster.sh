@@ -168,8 +168,9 @@ echo "------------------------------------------"
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Run Platform API validations
-if [[ -f "$SCRIPT_DIR/04-apis/15-verify-eventdrivenservice-api.sh"
+
+# Run EventDrivenService API validation directly
+EVENTDRIVENSERVICE_SCRIPT="$SCRIPT_DIR/04-apis/15-verify-eventdrivenservice-api.sh"
 echo -e "${BLUE}Running EventDrivenService API validation directly...${NC}"
 echo "  - Script path: $EVENTDRIVENSERVICE_SCRIPT"
 echo "  - Script exists: $(test -f "$EVENTDRIVENSERVICE_SCRIPT" && echo 'yes' || echo 'no')"
