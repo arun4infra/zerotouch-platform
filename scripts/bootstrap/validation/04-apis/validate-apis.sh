@@ -41,10 +41,16 @@ for script in "$SCRIPT_DIR"/[0-9][0-9]-*.sh; do
         chmod +x "$script"
         # Run script and show all output, capture exit code
         echo "  - Executing: $script"
-        if "$script" 2>&1; then
+        
+        # Capture both stdout and stderr, and preserve exit code
+        set +e  # Temporarily disable exit on error
+        "$script"
+        validation_exit_code=$?
+        set -e  # Re-enable exit on error
+        
+        if [ $validation_exit_code -eq 0 ]; then
             echo -e "  ✅ ${GREEN}${api_name} API validation passed${NC}"
         else
-            validation_exit_code=$?
             echo -e "  ❌ ${RED}${api_name} API validation failed (exit code: $validation_exit_code)${NC}"
             echo -e "  ${YELLOW}See detailed error output above${NC}"
             echo -e "  ${YELLOW}Debug: kubectl context=$(kubectl config current-context 2>&1 || echo 'none')${NC}"
