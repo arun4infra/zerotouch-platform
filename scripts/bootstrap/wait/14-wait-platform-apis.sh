@@ -73,6 +73,61 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
         # Check if XRD exists
         if ! kubectl get crd "$XRD" &>/dev/null; then
             echo -e "  ${YELLOW}⚠️  XRD not found${NC}"
+            
+            # Detailed diagnostics for CI debugging
+            echo -e "    ${BLUE}Diagnostics:${NC}"
+            
+            # Check ArgoCD application status
+            if kubectl get application apis -n argocd &>/dev/null; then
+                APP_STATUS=$(kubectl get application apis -n argocd -o jsonpath='{.status.sync.status}/{.status.health.status}' 2>/dev/null || echo "UNKNOWN")
+                echo -e "      ArgoCD app 'apis': $APP_STATUS"
+                
+                # Show sync details if not synced
+                if [[ "$APP_STATUS" != "Synced/Healthy" ]]; then
+                    echo -e "      ${YELLOW}ArgoCD Details:${NC}"
+                    kubectl get application apis -n argocd -o json 2>/dev/null | jq -r '
+                        "        Sync Status: \(.status.sync.status // "Unknown")",
+                        "        Health Status: \(.status.health.status // "Unknown")",
+                        "        Last Sync: \(.status.operationState.finishedAt // "Never")",
+                        "        Sync Revision: \(.status.sync.revision // "Unknown")[0:8]"
+                    ' 2>/dev/null || echo -e "        Could not get ArgoCD details"
+                    
+                    # Show conditions if any
+                    CONDITIONS=$(kubectl get application apis -n argocd -o json 2>/dev/null | jq -r '.status.conditions[]? | "        - \(.type): \(.message)"' 2>/dev/null)
+                    [ -n "$CONDITIONS" ] && echo -e "      ${YELLOW}Conditions:${NC}" && echo "$CONDITIONS"
+                fi
+                
+                # Show OutOfSync resources
+                OUTOFSYNC=$(kubectl get application apis -n argocd -o json 2>/dev/null | jq -r --arg xrd "$XRD_NAME" '.status.resources[]? | select(.status == "OutOfSync" and (.name | contains($xrd))) | "        \(.kind)/\(.name)"' 2>/dev/null)
+                [ -n "$OUTOFSYNC" ] && echo -e "      ${RED}OutOfSync XRD resources:${NC}" && echo "$OUTOFSYNC"
+                
+            else
+                echo -e "      ${RED}ArgoCD application 'apis' not found${NC}"
+            fi
+            
+            # Check if XRD definition files exist locally
+            if [ "$XRD_NAME" = "xwebservices" ]; then
+                LOCAL_PATH="platform/04-apis/webservice/definitions"
+            elif [ "$XRD_NAME" = "xeventdrivenservices" ]; then
+                LOCAL_PATH="platform/04-apis/event-driven-service/definitions"
+            else
+                LOCAL_PATH="platform/04-apis/unknown/definitions"
+            fi
+            
+            echo -e "      ${BLUE}Local files:${NC}"
+            if [ -d "$LOCAL_PATH" ]; then
+                echo -e "        ✓ Directory exists: $LOCAL_PATH"
+                if [ -f "$LOCAL_PATH/$XRD.yaml" ]; then
+                    echo -e "        ✓ XRD file exists: $LOCAL_PATH/$XRD.yaml"
+                else
+                    echo -e "        ✗ XRD file missing: $LOCAL_PATH/$XRD.yaml"
+                    echo -e "        Available files:"
+                    ls -la "$LOCAL_PATH/" 2>/dev/null | sed 's/^/          /' || echo -e "          Could not list files"
+                fi
+            else
+                echo -e "        ✗ Directory missing: $LOCAL_PATH"
+            fi
+            
             ALL_READY=false
             continue
         fi
@@ -88,12 +143,20 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
         API_VERSION=$(kubectl get crd "$XRD" -o jsonpath='{.spec.versions[0].name}' 2>/dev/null || echo "")
         if [ -z "$API_VERSION" ]; then
             echo -e "  ${YELLOW}⚠️  API version not available yet${NC}"
+            echo -e "    ${BLUE}XRD Status:${NC}"
+            kubectl get crd "$XRD" -o json 2>/dev/null | jq -r '
+                "      Created: \(.metadata.creationTimestamp)",
+                "      Generation: \(.metadata.generation)",
+                "      Versions: \(.spec.versions | length) defined"
+            ' 2>/dev/null || echo -e "      Could not get XRD details"
             ALL_READY=false
             continue
         fi
         
         if [ "$API_VERSION" != "v1alpha1" ]; then
             echo -e "  ${YELLOW}⚠️  Unexpected API version: $API_VERSION (expected: v1alpha1)${NC}"
+            echo -e "    ${BLUE}Available versions:${NC}"
+            kubectl get crd "$XRD" -o json 2>/dev/null | jq -r '.spec.versions[]? | "      - \(.name) (served: \(.served), storage: \(.storage))"' 2>/dev/null || echo -e "      Could not get version details"
             ALL_READY=false
             continue
         fi
@@ -102,6 +165,8 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
         ESTABLISHED=$(kubectl get crd "$XRD" -o jsonpath='{.status.conditions[?(@.type=="Established")].status}' 2>/dev/null || echo "")
         if [ "$ESTABLISHED" != "True" ]; then
             echo -e "  ${YELLOW}⚠️  XRD not established yet${NC}"
+            echo -e "    ${BLUE}XRD Conditions:${NC}"
+            kubectl get crd "$XRD" -o json 2>/dev/null | jq -r '.status.conditions[]? | "      - \(.type): \(.status) (\(.reason // "no reason")) - \(.message // "no message")"' 2>/dev/null || echo -e "      Could not get XRD conditions"
             ALL_READY=false
             continue
         fi
