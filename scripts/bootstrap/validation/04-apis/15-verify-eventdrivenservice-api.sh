@@ -11,16 +11,26 @@
 set -e
 
 # Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Navigate to repo root from script location (4 levels up from scripts/bootstrap/validation/04-apis/)
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+echo "DEBUG: Getting script directory..." >&2
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" || {
+    echo "ERROR: Failed to determine script directory" >&2
+    exit 1
+}
 
-# Debug output
-echo "DEBUG: Script starting..." >&2
 echo "DEBUG: SCRIPT_DIR=$SCRIPT_DIR" >&2
+
+# Navigate to repo root from script location (4 levels up from scripts/bootstrap/validation/04-apis/)
+echo "DEBUG: Calculating repo root..." >&2
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)" || {
+    echo "ERROR: Failed to navigate to repo root from $SCRIPT_DIR" >&2
+    echo "DEBUG: Trying alternative path calculation..." >&2
+    # Fallback: assume we're in the repo root already
+    REPO_ROOT="$(pwd)"
+}
+
 echo "DEBUG: REPO_ROOT=$REPO_ROOT" >&2
-echo "DEBUG: Checking for test fixtures at: $REPO_ROOT/platform/04-apis/event-driven-service/tests/fixtures/" >&2
-ls -la "$REPO_ROOT/platform/04-apis/event-driven-service/tests/fixtures/" 2>&1 || echo "DEBUG: Directory not found!" >&2
+echo "DEBUG: Contents of REPO_ROOT:" >&2
+ls -la "$REPO_ROOT" 2>&1 || echo "ERROR: Cannot list repo root contents" >&2
 
 # Colors
 RED='\033[0;31m'
