@@ -169,32 +169,69 @@ echo "------------------------------------------"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Run Platform API validations
-if [[ -f "$SCRIPT_DIR/04-apis/validate-apis.sh" ]]; then
-    echo -e "${BLUE}Running Platform API validation...${NC}"
-    echo "  - Script path: $SCRIPT_DIR/04-apis/validate-apis.sh"
-    echo "  - Script exists: $(test -f "$SCRIPT_DIR/04-apis/validate-apis.sh" && echo 'yes' || echo 'no')"
-    echo "  - Script executable: $(test -x "$SCRIPT_DIR/04-apis/validate-apis.sh" && echo 'yes' || echo 'no')"
+if [[ -f "$SCRIPT_DIR/04-apis/15-verify-eventdrivenservice-api.sh"
+echo -e "${BLUE}Running EventDrivenService API validation directly...${NC}"
+echo "  - Script path: $EVENTDRIVENSERVICE_SCRIPT"
+echo "  - Script exists: $(test -f "$EVENTDRIVENSERVICE_SCRIPT" && echo 'yes' || echo 'no')"
+echo "  - Script executable: $(test -x "$EVENTDRIVENSERVICE_SCRIPT" && echo 'yes' || echo 'no')"
+
+if [[ -f "$EVENTDRIVENSERVICE_SCRIPT" ]]; then
+    echo -e "${BLUE}Executing EventDrivenService validation (direct call)...${NC}"
+    echo "========== EventDrivenService Validation Output =========="
     
-    # Execute with detailed error capture
-    echo -e "${BLUE}Executing API validation (with full output)...${NC}"
-    if "$SCRIPT_DIR/04-apis/validate-apis.sh"; then
-        echo -e "  ✅ ${GREEN}Platform APIs${NC}: All validations passed"
+    # Make executable and run directly
+    chmod +x "$EVENTDRIVENSERVICE_SCRIPT"
+    
+    # Capture both stdout and stderr, preserve exit code
+    set +e
+    "$EVENTDRIVENSERVICE_SCRIPT" 2>&1
+    eventdriven_exit_code=$?
+    set -e
+    
+    echo "========== End EventDrivenService Validation Output =========="
+    echo "EventDrivenService validation exit code: $eventdriven_exit_code"
+    
+    if [ $eventdriven_exit_code -eq 0 ]; then
+        echo -e "  ✅ ${GREEN}EventDrivenService API validation passed${NC}"
     else
-        validation_exit_code=$?
-        echo -e "  ❌ ${RED}Platform APIs${NC}: Some validations failed (exit code: $validation_exit_code)"
-        echo -e "  ${YELLOW}Check the detailed output above for specific errors${NC}"
-        echo -e "  ${YELLOW}Debug info:${NC}"
-        echo "    - kubectl context: $(kubectl config current-context 2>&1 || echo 'no context')"
-        echo "    - ArgoCD apps: $(kubectl get applications -n argocd --no-headers 2>&1 | wc -l || echo '0') applications found"
-        echo "    - Available validation scripts:"
-        ls -la "$SCRIPT_DIR/04-apis/"[0-9][0-9]-*.sh 2>/dev/null || echo "      No validation scripts found"
+        echo -e "  ❌ ${RED}EventDrivenService API validation failed (exit code: $eventdriven_exit_code)${NC}"
         ((FAILED++)) || true
     fi
 else
-    echo -e "  ⚠️  ${YELLOW}Platform APIs${NC}: Validation script not found"
-    echo "  - Expected path: $SCRIPT_DIR/04-apis/validate-apis.sh"
-    echo "  - Directory contents:"
-    ls -la "$SCRIPT_DIR/04-apis/" 2>/dev/null || echo "    Directory not found"
+    echo -e "  ⚠️  ${YELLOW}EventDrivenService validation script not found${NC}"
+    ((FAILED++)) || true
+fi
+
+# Run WebService API validation directly
+WEBSERVICE_SCRIPT="$SCRIPT_DIR/04-apis/16-verify-webservice-api.sh"
+echo -e "${BLUE}Running WebService API validation directly...${NC}"
+echo "  - Script path: $WEBSERVICE_SCRIPT"
+
+if [[ -f "$WEBSERVICE_SCRIPT" ]]; then
+    echo -e "${BLUE}Executing WebService validation (direct call)...${NC}"
+    echo "========== WebService Validation Output =========="
+    
+    # Make executable and run directly
+    chmod +x "$WEBSERVICE_SCRIPT"
+    
+    # Capture both stdout and stderr, preserve exit code
+    set +e
+    "$WEBSERVICE_SCRIPT" 2>&1
+    webservice_exit_code=$?
+    set -e
+    
+    echo "========== End WebService Validation Output =========="
+    echo "WebService validation exit code: $webservice_exit_code"
+    
+    if [ $webservice_exit_code -eq 0 ]; then
+        echo -e "  ✅ ${GREEN}WebService API validation passed${NC}"
+    else
+        echo -e "  ❌ ${RED}WebService API validation failed (exit code: $webservice_exit_code)${NC}"
+        ((FAILED++)) || true
+    fi
+else
+    echo -e "  ⚠️  ${YELLOW}WebService validation script not found${NC}"
+    ((FAILED++)) || true
 fi
 
 echo ""
