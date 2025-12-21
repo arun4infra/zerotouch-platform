@@ -1,0 +1,520 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: webservice
+  labels:
+    provider: kubernetes
+    crossplane.io/xrd: xwebservices.platform.bizmatters.io
+spec:
+  compositeTypeRef:
+    apiVersion: platform.bizmatters.io/v1alpha1
+    kind: XWebService
+
+  # Use Resources mode with standard patches
+  mode: Resources
+  publishConnectionDetailsWithStoreConfigRef:
+    name: default
+  resources:
+    # Resource 1: ServiceAccount
+    - name: serviceaccount
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          providerConfigRef:
+            name: kubernetes-provider
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: ServiceAccount
+              metadata:
+                name: placeholder
+                namespace: placeholder
+                labels:
+                  app.kubernetes.io/name: placeholder
+                  app.kubernetes.io/component: web-service
+                  app.kubernetes.io/managed-by: crossplane
+              automountServiceAccountToken: false
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
+
+    # Resource 2: PostgreSQL Database (conditional)
+    - name: postgres-database
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          providerConfigRef:
+            name: kubernetes-provider
+          forProvider:
+            manifest:
+              apiVersion: database.bizmatters.io/v1alpha1
+              kind: PostgresInstance
+              metadata:
+                name: placeholder-db
+                namespace: placeholder
+                annotations:
+                  argocd.argoproj.io/sync-wave: "0"
+              spec:
+                size: small
+                version: "16"
+                storageGB: 20
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%s-db"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.databaseSize
+          toFieldPath: spec.forProvider.manifest.spec.size
+          policy:
+            fromFieldPath: Optional
+        # Only create if databaseName is provided
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.databaseName
+          toFieldPath: spec.forProvider.manifest.metadata.name
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%s-db"
+          policy:
+            fromFieldPath: Required
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
+
+    # Resource 3: Deployment
+    - name: deployment
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          providerConfigRef:
+            name: kubernetes-provider
+          forProvider:
+            manifest:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: placeholder
+                namespace: placeholder
+                labels:
+                  app.kubernetes.io/name: placeholder
+                  app.kubernetes.io/component: web-service
+                  app.kubernetes.io/managed-by: crossplane
+              spec:
+                replicas: 2
+                selector:
+                  matchLabels:
+                    app.kubernetes.io/name: placeholder
+                template:
+                  metadata:
+                    labels:
+                      app.kubernetes.io/name: placeholder
+                      app.kubernetes.io/component: web-service
+                      app.kubernetes.io/managed-by: crossplane
+                  spec:
+                    serviceAccountName: placeholder
+                    securityContext:
+                      runAsNonRoot: true
+                      runAsUser: 1000
+                      fsGroup: 1000
+                    initContainers:
+                      - name: init
+                        image: placeholder
+                        imagePullPolicy: IfNotPresent
+                        command: ["/bin/bash", "-c"]
+                        args: ["echo 'No init container configured'"]
+                        envFrom:
+                          - secretRef:
+                              name: placeholder-secret1
+                              optional: true
+                          - secretRef:
+                              name: placeholder-secret2
+                              optional: true
+                          - secretRef:
+                              name: placeholder-secret3
+                              optional: true
+                          - secretRef:
+                              name: placeholder-secret4
+                              optional: true
+                          - secretRef:
+                              name: placeholder-secret5
+                              optional: true
+                        securityContext:
+                          runAsNonRoot: true
+                          runAsUser: 1000
+                          allowPrivilegeEscalation: false
+                          capabilities:
+                            drop:
+                              - ALL
+                          seccompProfile:
+                            type: RuntimeDefault
+                    containers:
+                      - name: main
+                        image: placeholder
+                        imagePullPolicy: IfNotPresent
+                        ports:
+                          - name: http
+                            containerPort: 8080
+                            protocol: TCP
+                        envFrom:
+                          - secretRef:
+                              name: placeholder-secret1
+                              optional: true
+                          - secretRef:
+                              name: placeholder-secret2
+                              optional: true
+                          - secretRef:
+                              name: placeholder-secret3
+                              optional: true
+                          - secretRef:
+                              name: placeholder-secret4
+                              optional: true
+                          - secretRef:
+                              name: placeholder-secret5
+                              optional: true
+                        resources:
+                          requests:
+                            cpu: "500m"
+                            memory: "1Gi"
+                          limits:
+                            cpu: "2000m"
+                            memory: "4Gi"
+                        securityContext:
+                          runAsNonRoot: true
+                          runAsUser: 1000
+                          allowPrivilegeEscalation: false
+                          capabilities:
+                            drop:
+                              - ALL
+                          seccompProfile:
+                            type: RuntimeDefault
+                        livenessProbe:
+                          httpGet:
+                            path: /health
+                            port: 8080
+                          initialDelaySeconds: 10
+                          periodSeconds: 10
+                          timeoutSeconds: 5
+                          failureThreshold: 3
+                        readinessProbe:
+                          httpGet:
+                            path: /ready
+                            port: 8080
+                          initialDelaySeconds: 5
+                          periodSeconds: 5
+                          timeoutSeconds: 3
+                          failureThreshold: 2
+      patches:
+        # Patch name and namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        # Patch labels
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.selector.matchLabels[app.kubernetes.io/name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.template.metadata.labels[app.kubernetes.io/name]
+        # Patch ServiceAccount reference
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.serviceAccountName
+        # Patch image
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.image
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].image
+        # Patch port
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.port
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].ports[0].containerPort
+        # Patch replicas
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.replicas
+          toFieldPath: spec.forProvider.manifest.spec.replicas
+          policy:
+            fromFieldPath: Optional
+        # Patch resource sizing based on size enum
+        # CPU requests
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.requests.cpu
+          transforms:
+            - type: map
+              map:
+                micro: "100m"
+                small: "250m"
+                medium: "500m"
+                large: "1000m"
+          policy:
+            fromFieldPath: Optional
+        # CPU limits
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.limits.cpu
+          transforms:
+            - type: map
+              map:
+                micro: "500m"
+                small: "1000m"
+                medium: "2000m"
+                large: "4000m"
+          policy:
+            fromFieldPath: Optional
+        # Memory requests
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.requests.memory
+          transforms:
+            - type: map
+              map:
+                micro: "256Mi"
+                small: "512Mi"
+                medium: "1Gi"
+                large: "2Gi"
+          policy:
+            fromFieldPath: Optional
+        # Memory limits
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.limits.memory
+          transforms:
+            - type: map
+              map:
+                micro: "1Gi"
+                small: "2Gi"
+                medium: "4Gi"
+                large: "8Gi"
+          policy:
+            fromFieldPath: Optional
+        # Patch imagePullSecrets
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.imagePullSecrets
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.imagePullSecrets
+          policy:
+            fromFieldPath: Optional
+        # Patch secret slots (envFrom - bulk mounting)
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret1Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[0].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret2Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[1].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret3Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[2].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret4Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[3].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret5Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[4].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        # Patch health check paths
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.healthPath
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].livenessProbe.httpGet.path
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.readyPath
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].readinessProbe.httpGet.path
+          policy:
+            fromFieldPath: Optional
+        # Patch health check port
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.port
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].livenessProbe.httpGet.port
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.port
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].readinessProbe.httpGet.port
+        # Patch init container image (same as main container)
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.image
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].image
+        # Patch init container command
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.initContainer.command
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].command
+          policy:
+            fromFieldPath: Optional
+        # Patch init container args
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.initContainer.args
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].args
+          policy:
+            fromFieldPath: Optional
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
+
+    # Resource 4: Service
+    - name: service
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          providerConfigRef:
+            name: kubernetes-provider
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: Service
+              metadata:
+                name: placeholder
+                namespace: placeholder
+                labels:
+                  app.kubernetes.io/name: placeholder
+                  app.kubernetes.io/component: web-service
+                  app.kubernetes.io/managed-by: crossplane
+              spec:
+                type: ClusterIP
+                selector:
+                  app.kubernetes.io/name: placeholder
+                ports:
+                  - name: http
+                    port: 8080
+                    targetPort: http
+                    protocol: TCP
+      patches:
+        # Patch name and namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        # Patch labels
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.selector[app.kubernetes.io/name]
+        # Patch port
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.port
+          toFieldPath: spec.forProvider.manifest.spec.ports[0].port
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
+
+    # Resource 5: HTTPRoute (conditional - only if hostname is provided)
+    - name: httproute
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          providerConfigRef:
+            name: kubernetes-provider
+          forProvider:
+            manifest:
+              apiVersion: gateway.networking.k8s.io/v1
+              kind: HTTPRoute
+              metadata:
+                name: placeholder
+                namespace: placeholder
+                labels:
+                  app.kubernetes.io/name: placeholder
+                  app.kubernetes.io/component: web-service
+                  app.kubernetes.io/managed-by: crossplane
+              spec:
+                parentRefs:
+                  - name: cilium-gateway
+                    namespace: default
+                hostnames:
+                  - "placeholder.example.com"
+                rules:
+                  - matches:
+                      - path:
+                          type: PathPrefix
+                          value: "/"
+                    backendRefs:
+                      - name: placeholder
+                        port: 8080
+                        namespace: placeholder
+      patches:
+        # Patch name and namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        # Patch labels
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
+        # Patch hostname
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.hostname
+          toFieldPath: spec.forProvider.manifest.spec.hostnames[0]
+          policy:
+            fromFieldPath: Required
+        # Patch path prefix
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.pathPrefix
+          toFieldPath: spec.forProvider.manifest.spec.rules[0].matches[0].path.value
+          policy:
+            fromFieldPath: Optional
+        # Patch backend service name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.rules[0].backendRefs[0].name
+        # Patch backend service port
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.port
+          toFieldPath: spec.forProvider.manifest.spec.rules[0].backendRefs[0].port
+        # Patch backend service namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.spec.rules[0].backendRefs[0].namespace
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"

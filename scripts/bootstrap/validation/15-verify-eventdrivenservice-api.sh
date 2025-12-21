@@ -143,10 +143,47 @@ fi
 
 echo ""
 
-# 4. Verify schema file published
+# 4. Test EventDrivenService claim validation using test fixtures
+echo -e "${BLUE}Testing EventDrivenService claim validation...${NC}"
+
+EVENTDRIVENSERVICE_DIR="platform/04-apis/event-driven-service"
+
+# Create temporary namespace for testing (if it doesn't exist)
+kubectl create namespace test --dry-run=client -o yaml | kubectl apply -f - &>/dev/null || true
+
+# Test valid minimal claim
+if kubectl apply --dry-run=server -f "$EVENTDRIVENSERVICE_DIR/tests/fixtures/valid-minimal.yaml" &>/dev/null; then
+    echo -e "${GREEN}✓ Minimal EventDrivenService claim validates successfully${NC}"
+else
+    echo -e "${RED}✗ Minimal EventDrivenService claim validation failed${NC}"
+    ((ERRORS++))
+fi
+
+# Test valid full claim
+if kubectl apply --dry-run=server -f "$EVENTDRIVENSERVICE_DIR/tests/fixtures/valid-full.yaml" &>/dev/null; then
+    echo -e "${GREEN}✓ Full EventDrivenService claim validates successfully${NC}"
+else
+    echo -e "${RED}✗ Full EventDrivenService claim validation failed${NC}"
+    ((ERRORS++))
+fi
+
+# Test invalid claim (missing stream) - should fail
+if kubectl apply --dry-run=server -f "$EVENTDRIVENSERVICE_DIR/tests/fixtures/missing-stream.yaml" &>/dev/null; then
+    echo -e "${RED}✗ Invalid EventDrivenService claim was accepted (should have been rejected)${NC}"
+    ((ERRORS++))
+else
+    echo -e "${GREEN}✓ Invalid EventDrivenService claim correctly rejected${NC}"
+fi
+
+# Clean up temporary namespace
+kubectl delete namespace test --ignore-not-found=true &>/dev/null || true
+
+echo ""
+
+# 5. Verify schema file published
 echo -e "${BLUE}Verifying schema file...${NC}"
 
-SCHEMA_FILE="platform/04-apis/schemas/eventdrivenservice.schema.json"
+SCHEMA_FILE="platform/04-apis/event-driven-service/schemas/eventdrivenservice.schema.json"
 if [ -f "$SCHEMA_FILE" ]; then
     echo -e "${GREEN}✓ Schema file exists at $SCHEMA_FILE${NC}"
     

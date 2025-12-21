@@ -1,0 +1,8 @@
+# Invalid claim - missing required field port
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: WebService
+metadata:
+  name: test-missing-port
+  namespace: test
+spec:
+  image: "nginx:1.25"

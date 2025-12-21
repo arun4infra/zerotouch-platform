@@ -1,0 +1,10 @@
+# Invalid claim - size must be micro, small, medium, or large
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: WebService
+metadata:
+  name: test-invalid-size
+  namespace: test
+spec:
+  image: "nginx:1.25"
+  port: 80
+  size: "extra-large"

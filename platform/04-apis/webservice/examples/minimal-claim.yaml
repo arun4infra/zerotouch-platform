@@ -1,0 +1,35 @@
+# Minimal WebService Claim
+#
+# This example demonstrates the simplest possible deployment with just image and port.
+# No database, no external ingress, no secrets - suitable for internal services.
+
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: WebService
+metadata:
+  name: simple-web-service
+  namespace: default
+spec:
+  # Required fields
+  image: "nginx:1.25"
+  port: 80
+  
+  # Optional: Use micro size for minimal resource usage
+  size: micro
+  
+  # Optional: Single replica for development
+  replicas: 1
+
+# This creates:
+# - ServiceAccount: simple-web-service
+# - Deployment: simple-web-service (1 replica, nginx:1.25, port 80)
+# - Service: simple-web-service (ClusterIP, port 80)
+# - No database, no HTTPRoute, no secrets
+
+# Access: Only within cluster via service DNS
+# URL: http://simple-web-service.default.svc.cluster.local
+
+# Deployment Instructions:
+# 1. Apply claim: kubectl apply -f minimal-claim.yaml
+# 2. Check status: kubectl get webservice simple-web-service
+# 3. Verify pods: kubectl get pods -l app.kubernetes.io/name=simple-web-service
+# 4. Test access: kubectl run test-pod --rm -i --tty --image=curlimages/curl -- curl http://simple-web-service.default.svc.cluster.local

@@ -1,0 +1,184 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xwebservices.platform.bizmatters.io
+spec:
+  group: platform.bizmatters.io
+  names:
+    kind: XWebService
+    plural: xwebservices
+  claimNames:
+    kind: WebService
+    plural: webservices
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              description: "WebService specification for deploying HTTP services with ingress and database support"
+              required:
+                - image
+                - port
+              properties:
+                image:
+                  type: string
+                  description: "Container image reference (registry/repository:tag or registry/repository@sha256:digest)"
+                  pattern: '^[a-z0-9]+((\.|_|__|-+)[a-z0-9]+)*(\/[a-z0-9]+((\.|_|__|-+)[a-z0-9]+)*)*(:[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}|@sha256:[a-f0-9]{64})?$'
+                  example: "ghcr.io/org/ide-orchestrator:v1.0.0"
+
+                port:
+                  type: integer
+                  description: "Container port for HTTP traffic"
+                  minimum: 1
+                  maximum: 65535
+                  default: 8080
+                  example: 8080
+
+                size:
+                  type: string
+                  description: "Resource size allocation (micro: 100m-500m CPU, 256Mi-1Gi memory; small: 250m-1000m CPU, 512Mi-2Gi memory; medium: 500m-2000m CPU, 1Gi-4Gi memory; large: 1000m-4000m CPU, 2Gi-8Gi memory)"
+                  enum:
+                    - micro
+                    - small
+                    - medium
+                    - large
+                  default: medium
+
+                # Database configuration
+                databaseName:
+                  type: string
+                  description: "PostgreSQL database name to create (optional - if provided, creates dedicated database)"
+                  minLength: 1
+                  maxLength: 63
+                  pattern: '^[a-z][a-z0-9_]*$'
+                  example: "ide_orchestrator"
+
+                databaseSize:
+                  type: string
+                  description: "Database instance size (only used if databaseName is provided)"
+                  enum:
+                    - micro
+                    - small
+                    - medium
+                    - large
+                  default: small
+
+                # Secret management (same pattern as EventDrivenService)
+                secret1Name:
+                  type: string
+                  description: "First secret name to mount via envFrom (typically database credentials)"
+                  minLength: 1
+                  maxLength: 253
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                  example: "ide-orchestrator-db-conn"
+
+                secret2Name:
+                  type: string
+                  description: "Second secret name to mount via envFrom (typically JWT keys)"
+                  minLength: 1
+                  maxLength: 253
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                  example: "ide-orchestrator-jwt-keys"
+
+                secret3Name:
+                  type: string
+                  description: "Third secret name to mount via envFrom (typically application secrets)"
+                  minLength: 1
+                  maxLength: 253
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                  example: "ide-orchestrator-app-secrets"
+
+                secret4Name:
+                  type: string
+                  description: "Fourth secret name to mount via envFrom (optional)"
+                  minLength: 1
+                  maxLength: 253
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+
+                secret5Name:
+                  type: string
+                  description: "Fifth secret name to mount via envFrom (optional)"
+                  minLength: 1
+                  maxLength: 253
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+
+                # Ingress configuration
+                hostname:
+                  type: string
+                  description: "External hostname for HTTPRoute (optional - if provided, creates external ingress)"
+                  pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$'
+                  example: "api.bizmatters.com"
+
+                pathPrefix:
+                  type: string
+                  description: "Path prefix for routing (used with hostname)"
+                  pattern: '^\/.*$'
+                  default: "/"
+                  example: "/api"
+
+                # Image pull secrets
+                imagePullSecrets:
+                  type: array
+                  description: "Array of image pull secret names for private container registries"
+                  items:
+                    type: object
+                    required:
+                      - name
+                    properties:
+                      name:
+                        type: string
+                        description: "Name of the image pull secret"
+                        minLength: 1
+                        maxLength: 253
+                        pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                        example: "ghcr-pull-secret"
+
+                # Init container for migrations
+                initContainer:
+                  type: object
+                  description: "Optional init container configuration for database migrations or pre-start tasks (uses same image as main container)"
+                  required:
+                    - command
+                  properties:
+                    command:
+                      type: array
+                      description: "Command to execute in the init container"
+                      minItems: 1
+                      items:
+                        type: string
+                      example: ["/bin/bash", "-c"]
+
+                    args:
+                      type: array
+                      description: "Arguments to pass to the command"
+                      items:
+                        type: string
+                      example: ["cd /app && ./scripts/ci/run-migrations.sh"]
+
+                # Health check configuration
+                healthPath:
+                  type: string
+                  description: "Health check endpoint path"
+                  default: "/health"
+                  pattern: '^\/.*$'
+                  example: "/health"
+
+                readyPath:
+                  type: string
+                  description: "Readiness check endpoint path"
+                  default: "/ready"
+                  pattern: '^\/.*$'
+                  example: "/ready"
+
+                # Replica configuration
+                replicas:
+                  type: integer
+                  description: "Number of replicas to run"
+                  minimum: 1
+                  maximum: 10
+                  default: 2

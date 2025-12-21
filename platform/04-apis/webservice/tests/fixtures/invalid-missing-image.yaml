@@ -1,0 +1,8 @@
+# Invalid claim - missing required field image
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: WebService
+metadata:
+  name: test-missing-image
+  namespace: test
+spec:
+  port: 80

@@ -1,0 +1,9 @@
+# Valid minimal claim for testing
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: WebService
+metadata:
+  name: test-minimal
+  namespace: test
+spec:
+  image: "nginx:1.25"
+  port: 80

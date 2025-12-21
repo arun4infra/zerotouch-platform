@@ -1,0 +1,25 @@
+# Valid full-featured claim for testing
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: WebService
+metadata:
+  name: test-full
+  namespace: test
+spec:
+  image: "ghcr.io/org/test-service:v1.0.0"
+  port: 8080
+  size: medium
+  replicas: 2
+  databaseName: "test_db"
+  databaseSize: small
+  secret1Name: test-db-conn
+  secret2Name: test-jwt-keys
+  secret3Name: test-app-secrets
+  hostname: "test.example.com"
+  pathPrefix: "/api"
+  healthPath: "/health"
+  readyPath: "/ready"
+  imagePullSecrets:
+    - name: test-pull-secret
+  initContainer:
+    command: ["/bin/bash", "-c"]
+    args: ["echo 'test migration'"]
