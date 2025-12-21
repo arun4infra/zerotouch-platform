@@ -9,8 +9,7 @@ docs/dev/platform-ref-multi-k8s
 .age-key
 .sops.yaml
 .claude
-.kiro/specs/agent-executor-deployment
-.kiro/specs/twin-docs-workflow/
+.kiro
 docs
 scripts/bootstrap/bootstrap-credentials/*.txt
 bootstrap/talos/nodes/cp01-main/config.yaml.*

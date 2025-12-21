@@ -36,12 +36,12 @@ for script in "$SCRIPT_DIR"/[0-9][0-9]-*.sh; do
         ((TOTAL++))
         
         chmod +x "$script"
-        # Run script and capture output - show details on failure
-        if "$script"; then
+        # Run script and show all output, capture exit code
+        if "$script" 2>&1; then
             echo -e "  ✅ ${GREEN}${api_name} API validation passed${NC}"
         else
             echo -e "  ❌ ${RED}${api_name} API validation failed${NC}"
-            echo -e "  ${YELLOW}Run for details: $script${NC}"
+            echo -e "  ${YELLOW}See detailed error output above${NC}"
             ((FAILED++))
         fi
         echo ""

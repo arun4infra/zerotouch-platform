@@ -171,11 +171,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Run Platform API validations
 if [[ -f "$SCRIPT_DIR/04-apis/validate-apis.sh" ]]; then
     # Run with output visible for debugging
-    if "$SCRIPT_DIR/04-apis/validate-apis.sh"; then
+    echo -e "${BLUE}Running Platform API validation...${NC}"
+    if "$SCRIPT_DIR/04-apis/validate-apis.sh" 2>&1; then
         echo -e "  ✅ ${GREEN}Platform APIs${NC}: All validations passed"
     else
         echo -e "  ❌ ${RED}Platform APIs${NC}: Some validations failed"
-        echo -e "  ${YELLOW}Run for details: $SCRIPT_DIR/04-apis/validate-apis.sh${NC}"
+        echo -e "  ${YELLOW}Check the detailed output above for specific errors${NC}"
         ((FAILED++)) || true
     fi
 else
@@ -239,6 +240,6 @@ else
     echo -e "❌ ${RED}VALIDATION FAILED${NC}"
     echo "$FAILED issue(s) detected"
     echo ""
-    echo "Run './scripts/validate-cluster.sh' to see details"
+    echo "Run './scripts/bootstrap/validation/99-validate-cluster.sh' to see details"
     exit 1
 fi
