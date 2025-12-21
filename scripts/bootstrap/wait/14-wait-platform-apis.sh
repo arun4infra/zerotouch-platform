@@ -72,8 +72,20 @@ _diagnose_xrd_failure() {
         fi
         
         # Check if the XRD file exists in the repository
+        local service_name=$(echo "$display_name" | tr '[:upper:]' '[:lower:]')  # Convert to lowercase
         echo -e "       ${YELLOW}Expected XRD location:${NC}"
-        echo -e "         platform/04-apis/*/definitions/$xrd_name"
+        echo -e "         platform/04-apis/$service_name/definitions/"
+        
+        if [ -d "platform/04-apis/$service_name/definitions" ]; then
+            echo -e "         ${GREEN}✓ XRD definition directory exists${NC}"
+            if [ -f "platform/04-apis/$service_name/definitions/$xrd_name" ]; then
+                echo -e "         ${GREEN}✓ XRD definition file exists${NC}"
+            else
+                echo -e "         ${YELLOW}⚠️  XRD definition file not found: $xrd_name${NC}"
+            fi
+        else
+            echo -e "         ${RED}✗ XRD definition directory missing${NC}"
+        fi
         
     else
         # XRD exists but has issues
@@ -207,12 +219,13 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
                 echo -e "      ${RED}ArgoCD application 'apis' not found${NC}"
             fi
             
-            # Check if CRD directory exists in the repo
-            if [ -d "platform/04-apis/$XRD_NAME/definitions" ]; then
-                echo -e "      ${GREEN}✓ XRD definition files exist locally${NC}"
-            else
-                echo -e "      ${RED}✗ XRD definition directory missing: platform/04-apis/$XRD_NAME/definitions${NC}"
-            fi
+        # Check if CRD directory exists in the repo
+        local service_name=$(echo "$XRD_NAME" | sed 's/^x//')  # Remove 'x' prefix
+        if [ -d "platform/04-apis/$service_name/definitions" ]; then
+            echo -e "      ${GREEN}✓ XRD definition files exist locally${NC}"
+        else
+            echo -e "      ${RED}✗ XRD definition directory missing: platform/04-apis/$service_name/definitions${NC}"
+        fi
             
             ALL_READY=false
             continue
