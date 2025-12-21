@@ -134,10 +134,10 @@ if kubectl_retry get composition webservice &>/dev/null; then
     
     # Count resource templates in Composition
     RESOURCE_COUNT=$(kubectl_retry get composition webservice -o json 2>/dev/null | jq '.spec.resources | length' 2>/dev/null)
-    if [ "$RESOURCE_COUNT" = "5" ]; then
-        echo -e "${GREEN}✓ Composition has 5 resource templates (ServiceAccount, PostgresInstance, Deployment, Service, HTTPRoute)${NC}"
+    if [ "$RESOURCE_COUNT" = "6" ]; then
+        echo -e "${GREEN}✓ Composition has 6 resource templates (ServiceAccount, PostgresInstance, Deployment, BackendConfig, Service, HTTPRoute)${NC}"
     else
-        echo -e "${YELLOW}⚠️  Composition has $RESOURCE_COUNT resource templates (expected: 5)${NC}"
+        echo -e "${YELLOW}⚠️  Composition has $RESOURCE_COUNT resource templates (expected: 6)${NC}"
         ((WARNINGS++))
     fi
 else

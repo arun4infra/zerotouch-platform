@@ -132,10 +132,10 @@ if kubectl_retry get composition event-driven-service &>/dev/null; then
     
     # Check composition has correct number of resources
     RESOURCE_COUNT=$(kubectl_retry get composition event-driven-service -o json 2>/dev/null | jq '.spec.resources | length' 2>/dev/null)
-    if [ "$RESOURCE_COUNT" -ge "4" ]; then
+    if [ "$RESOURCE_COUNT" -ge "5" ]; then
         log_success "EventDrivenService Composition has $RESOURCE_COUNT resources"
     else
-        log_warning "EventDrivenService Composition has $RESOURCE_COUNT resources (expected: >=4)"
+        log_warning "EventDrivenService Composition has $RESOURCE_COUNT resources (expected: >=5)"
     fi
 else
     log_error "EventDrivenService Composition not deployed"
@@ -146,10 +146,10 @@ if kubectl_retry get composition webservice &>/dev/null; then
     
     # Check composition has correct number of resources
     RESOURCE_COUNT=$(kubectl_retry get composition webservice -o json 2>/dev/null | jq '.spec.resources | length' 2>/dev/null)
-    if [ "$RESOURCE_COUNT" -ge "5" ]; then
+    if [ "$RESOURCE_COUNT" -ge "6" ]; then
         log_success "WebService Composition has $RESOURCE_COUNT resources"
     else
-        log_warning "WebService Composition has $RESOURCE_COUNT resources (expected: >=5)"
+        log_warning "WebService Composition has $RESOURCE_COUNT resources (expected: >=6)"
     fi
 else
     log_error "WebService Composition not deployed"

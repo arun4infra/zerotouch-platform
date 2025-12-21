@@ -151,10 +151,10 @@ if kubectl_retry get composition event-driven-service &>/dev/null; then
     
     # Count resource templates in Composition
     RESOURCE_COUNT=$(kubectl_retry get composition event-driven-service -o json 2>/dev/null | jq '.spec.resources | length' 2>/dev/null)
-    if [ "$RESOURCE_COUNT" = "4" ]; then
-        echo -e "${GREEN}✓ Composition has 4 resource templates (ServiceAccount, Deployment, Service, ScaledObject)${NC}"
+    if [ "$RESOURCE_COUNT" = "5" ]; then
+        echo -e "${GREEN}✓ Composition has 5 resource templates (ServiceAccount, Deployment, Service, HTTP-Service, ScaledObject)${NC}"
     else
-        echo -e "${YELLOW}⚠️  Composition has $RESOURCE_COUNT resource templates (expected: 4)${NC}"
+        echo -e "${YELLOW}⚠️  Composition has $RESOURCE_COUNT resource templates (expected: 5)${NC}"
         ((WARNINGS++))
     fi
 else
