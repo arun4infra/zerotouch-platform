@@ -69,9 +69,10 @@ Use this workflow when:
 
 ### Phase 1: Prepare Feature Branch for Merge
 1. **Update Target Revisions**: Change all `targetRevision` references from target branch (usually `main`) to feature branch name. Use scripts/bootstrap/update-target-revision.sh script to update the target revision on files that has references to `targetRevision`.
-2. **Disable Auto-Delete**: Turn off "Automatically delete head branches" in GitHub repository settings
-3. **Test CI**: Ensure CI passes with updated target revisions
-4. **Merge**: Merge feature branch to target branch
+2. **Local testing**: Test the updated target revisions locally to ensure that the ArgoCD applications sync successfully - "./scripts/bootstrap/01-master-bootstrap.sh --mode preview". Fix all issues reported by the CI in local testing.
+3. **Disable Auto-Delete**: Turn off "Automatically delete head branches" in GitHub repository settings
+4. **Test CI**: Ensure CI passes with updated target revisions
+5. **Merge**: Merge feature branch to target branch
 
 ### Phase 2: Clean Up Target Branch
 1. **Sync Local**: Pull latest changes from target branch
