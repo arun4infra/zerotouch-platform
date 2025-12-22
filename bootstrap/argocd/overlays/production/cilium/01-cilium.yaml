@@ -12,7 +12,7 @@ spec:
   source:
     repoURL: https://github.com/arun4infra/zerotouch-platform.git
     path: platform/01-foundation
-    targetRevision: main
+    targetRevision: chore/targetVersion-update
     directory:
       include: cilium.yaml
   destination:
