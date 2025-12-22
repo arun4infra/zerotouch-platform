@@ -79,7 +79,7 @@ if kubectl_retry get application apis -n argocd &>/dev/null; then
         echo -e "${GREEN}✓ Application sync status: Synced${NC}"
     else
         echo -e "${YELLOW}⚠️  Application sync status: $SYNC_STATUS (expected: Synced)${NC}"
-        ((WARNINGS++))
+        WARNINGS=$((WARNINGS + 1))
     fi
     
     HEALTH_STATUS=$(kubectl_retry get application apis -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null)
@@ -87,12 +87,12 @@ if kubectl_retry get application apis -n argocd &>/dev/null; then
         echo -e "${GREEN}✓ Application health status: Healthy${NC}"
     else
         echo -e "${YELLOW}⚠️  Application health status: $HEALTH_STATUS (expected: Healthy)${NC}"
-        ((WARNINGS++))
+        WARNINGS=$((WARNINGS + 1))
     fi
 else
     echo -e "${RED}✗ Application 'apis' not found${NC}"
     echo -e "${BLUE}ℹ  Check if platform/04-apis.yaml exists and is applied${NC}"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 fi
 
 echo ""
@@ -108,7 +108,7 @@ if kubectl_retry get crd xwebservices.platform.bizmatters.io &>/dev/null; then
         echo -e "${GREEN}✓ Claim CRD 'webservices.platform.bizmatters.io' is installed${NC}"
     else
         echo -e "${RED}✗ Claim CRD 'webservices.platform.bizmatters.io' not found${NC}"
-        ((ERRORS++))
+        ERRORS=$((ERRORS + 1))
     fi
     
     # Verify XRD has correct API version
@@ -117,12 +117,12 @@ if kubectl_retry get crd xwebservices.platform.bizmatters.io &>/dev/null; then
         echo -e "${GREEN}✓ XRD API version: v1alpha1${NC}"
     else
         echo -e "${YELLOW}⚠️  XRD API version: $API_VERSION (expected: v1alpha1)${NC}"
-        ((WARNINGS++))
+        WARNINGS=$((WARNINGS + 1))
     fi
 else
     echo -e "${RED}✗ XRD 'xwebservices.platform.bizmatters.io' not found${NC}"
     echo -e "${BLUE}ℹ  Check if platform/04-apis/webservice/definitions/xwebservices.yaml is applied${NC}"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 fi
 
 echo ""
@@ -139,7 +139,7 @@ if kubectl_retry get composition webservice &>/dev/null; then
         echo -e "${GREEN}✓ Composition references correct XRD: XWebService${NC}"
     else
         echo -e "${YELLOW}⚠️  Composition references: $COMPOSITE_TYPE (expected: XWebService)${NC}"
-        ((WARNINGS++))
+        WARNINGS=$((WARNINGS + 1))
     fi
     
     # Count resource templates in Composition
@@ -148,12 +148,12 @@ if kubectl_retry get composition webservice &>/dev/null; then
         echo -e "${GREEN}✓ Composition has 6 resource templates (ServiceAccount, PostgresInstance, Deployment, BackendConfig, Service, HTTPRoute)${NC}"
     else
         echo -e "${YELLOW}⚠️  Composition has $RESOURCE_COUNT resource templates (expected: 6)${NC}"
-        ((WARNINGS++))
+        WARNINGS=$((WARNINGS + 1))
     fi
 else
     echo -e "${RED}✗ Composition 'webservice' not found${NC}"
     echo -e "${BLUE}ℹ  Check if platform/04-apis/webservice/compositions/webservice-composition.yaml is applied${NC}"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 fi
 
 echo ""
@@ -170,13 +170,13 @@ if kubectl_retry get crd xpostgresinstances.database.bizmatters.io &>/dev/null; 
     else
         echo -e "${YELLOW}⚠️  PostgresInstance claim CRD not found${NC}"
         echo -e "${BLUE}ℹ  This is optional - database features will be limited${NC}"
-        ((WARNINGS++))
+        WARNINGS=$((WARNINGS + 1))
     fi
 else
     echo -e "${YELLOW}⚠️  PostgresInstance XRD not found${NC}"
     echo -e "${BLUE}ℹ  This is optional - WebService can work without database provisioning${NC}"
     echo -e "${BLUE}ℹ  To enable database features, install the database XRDs first${NC}"
-    ((WARNINGS++))
+    WARNINGS=$((WARNINGS + 1))
 fi
 
 echo ""
@@ -194,7 +194,7 @@ if kubectl apply --dry-run=server -f "$WEBSERVICE_DIR/tests/fixtures/valid-minim
     echo -e "${GREEN}✓ Minimal WebService claim validates successfully${NC}"
 else
     echo -e "${RED}✗ Minimal WebService claim validation failed${NC}"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 fi
 
 # Test valid full claim
@@ -202,13 +202,13 @@ if kubectl apply --dry-run=server -f "$WEBSERVICE_DIR/tests/fixtures/valid-full.
     echo -e "${GREEN}✓ Full WebService claim validates successfully${NC}"
 else
     echo -e "${RED}✗ Full WebService claim validation failed${NC}"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 fi
 
 # Test invalid claim (missing image) - should fail
 if kubectl apply --dry-run=server -f "$WEBSERVICE_DIR/tests/fixtures/invalid-missing-image.yaml" &>/dev/null; then
     echo -e "${RED}✗ Invalid WebService claim was accepted (should have been rejected)${NC}"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 else
     echo -e "${GREEN}✓ Invalid WebService claim correctly rejected${NC}"
 fi
@@ -230,12 +230,12 @@ if kubectl_retry get crd httproutes.gateway.networking.k8s.io &>/dev/null; then
     else
         echo -e "${YELLOW}⚠️  Gateway 'cilium-gateway' not found in default namespace${NC}"
         echo -e "${BLUE}ℹ  WebService external ingress requires a Gateway to be configured${NC}"
-        ((WARNINGS++))
+        WARNINGS=$((WARNINGS + 1))
     fi
 else
     echo -e "${YELLOW}⚠️  HTTPRoute CRD not found${NC}"
     echo -e "${BLUE}ℹ  WebService external ingress requires Gateway API to be installed${NC}"
-    ((WARNINGS++))
+    WARNINGS=$((WARNINGS + 1))
 fi
 
 echo ""

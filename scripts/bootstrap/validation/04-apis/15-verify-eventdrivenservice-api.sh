@@ -87,7 +87,7 @@ if kubectl_retry get application apis -n argocd &>/dev/null; then
         echo -e "${GREEN}✓ Application sync status: Synced${NC}"
     else
         echo -e "${YELLOW}⚠️  Application sync status: $SYNC_STATUS (expected: Synced)${NC}"
-        ((WARNINGS++))
+        WARNINGS=$((WARNINGS + 1))
     fi
     
     HEALTH_STATUS=$(kubectl_retry get application apis -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null)
@@ -95,12 +95,12 @@ if kubectl_retry get application apis -n argocd &>/dev/null; then
         echo -e "${GREEN}✓ Application health status: Healthy${NC}"
     else
         echo -e "${YELLOW}⚠️  Application health status: $HEALTH_STATUS (expected: Healthy)${NC}"
-        ((WARNINGS++))
+        WARNINGS=$((WARNINGS + 1))
     fi
 else
     echo -e "${RED}✗ Application 'apis' not found${NC}"
     echo -e "${BLUE}ℹ  Check if platform/04-apis.yaml exists and is applied${NC}"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 fi
 
 echo ""
@@ -116,7 +116,7 @@ if kubectl_retry get crd xeventdrivenservices.platform.bizmatters.io &>/dev/null
         echo -e "${GREEN}✓ Claim CRD 'eventdrivenservices.platform.bizmatters.io' is installed${NC}"
     else
         echo -e "${RED}✗ Claim CRD 'eventdrivenservices.platform.bizmatters.io' not found${NC}"
-        ((ERRORS++))
+        ERRORS=$((ERRORS + 1))
     fi
     
     # Verify XRD has correct API version
@@ -125,12 +125,12 @@ if kubectl_retry get crd xeventdrivenservices.platform.bizmatters.io &>/dev/null
         echo -e "${GREEN}✓ XRD API version: v1alpha1${NC}"
     else
         echo -e "${YELLOW}⚠️  XRD API version: $API_VERSION (expected: v1alpha1)${NC}"
-        ((WARNINGS++))
+        WARNINGS=$((WARNINGS + 1))
     fi
 else
     echo -e "${RED}✗ XRD 'xeventdrivenservices.platform.bizmatters.io' not found${NC}"
     echo -e "${BLUE}ℹ  Check if platform/04-apis/definitions/xeventdrivenservices.yaml is applied${NC}"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 fi
 
 echo ""
@@ -147,7 +147,7 @@ if kubectl_retry get composition event-driven-service &>/dev/null; then
         echo -e "${GREEN}✓ Composition references correct XRD: XEventDrivenService${NC}"
     else
         echo -e "${YELLOW}⚠️  Composition references: $COMPOSITE_TYPE (expected: XEventDrivenService)${NC}"
-        ((WARNINGS++))
+        WARNINGS=$((WARNINGS + 1))
     fi
     
     # Count resource templates in Composition
@@ -156,12 +156,12 @@ if kubectl_retry get composition event-driven-service &>/dev/null; then
         echo -e "${GREEN}✓ Composition has 5 resource templates (ServiceAccount, Deployment, Service, HTTP-Service, ScaledObject)${NC}"
     else
         echo -e "${YELLOW}⚠️  Composition has $RESOURCE_COUNT resource templates (expected: 5)${NC}"
-        ((WARNINGS++))
+        WARNINGS=$((WARNINGS + 1))
     fi
 else
     echo -e "${RED}✗ Composition 'event-driven-service' not found${NC}"
     echo -e "${BLUE}ℹ  Check if platform/04-apis/compositions/event-driven-service-composition.yaml is applied${NC}"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 fi
 
 echo ""
@@ -179,7 +179,7 @@ if kubectl apply --dry-run=server -f "$EVENTDRIVENSERVICE_DIR/tests/fixtures/val
     echo -e "${GREEN}✓ Minimal EventDrivenService claim validates successfully${NC}"
 else
     echo -e "${RED}✗ Minimal EventDrivenService claim validation failed${NC}"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 fi
 
 # Test valid full claim
@@ -187,13 +187,13 @@ if kubectl apply --dry-run=server -f "$EVENTDRIVENSERVICE_DIR/tests/fixtures/val
     echo -e "${GREEN}✓ Full EventDrivenService claim validates successfully${NC}"
 else
     echo -e "${RED}✗ Full EventDrivenService claim validation failed${NC}"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 fi
 
 # Test invalid claim (missing stream) - should fail
 if kubectl apply --dry-run=server -f "$EVENTDRIVENSERVICE_DIR/tests/fixtures/missing-stream.yaml" &>/dev/null; then
     echo -e "${RED}✗ Invalid EventDrivenService claim was accepted (should have been rejected)${NC}"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 else
     echo -e "${GREEN}✓ Invalid EventDrivenService claim correctly rejected${NC}"
 fi
@@ -207,29 +207,44 @@ echo ""
 echo -e "${BLUE}Verifying schema file...${NC}"
 
 SCHEMA_FILE="$REPO_ROOT/platform/04-apis/event-driven-service/schemas/eventdrivenservice.schema.json"
+echo "DEBUG: Checking schema file at: $SCHEMA_FILE"
+
 if [ -f "$SCHEMA_FILE" ]; then
     echo -e "${GREEN}✓ Schema file exists at $SCHEMA_FILE${NC}"
     
-    # Verify schema is valid JSON
-    if jq empty "$SCHEMA_FILE" 2>/dev/null; then
-        echo -e "${GREEN}✓ Schema file is valid JSON${NC}"
+    # Check if jq is available
+    echo "DEBUG: Checking if jq is available..."
+    if command -v jq >/dev/null 2>&1; then
+        echo "DEBUG: jq is available at $(which jq)"
+        
+        # Verify schema is valid JSON using cat to avoid file access issues
+        echo "DEBUG: Validating JSON..."
+        if cat "$SCHEMA_FILE" | jq empty >/dev/null 2>&1; then
+            echo -e "${GREEN}✓ Schema file is valid JSON${NC}"
+            
+            # Verify schema has required fields
+            echo "DEBUG: Checking spec properties..."
+            if cat "$SCHEMA_FILE" | jq -e '.properties.spec' >/dev/null 2>&1; then
+                echo -e "${GREEN}✓ Schema contains spec properties${NC}"
+            else
+                echo -e "${YELLOW}⚠️  Schema may be incomplete (missing spec properties)${NC}"
+                WARNINGS=$((WARNINGS + 1))
+            fi
+        else
+            echo -e "${RED}✗ Schema file is not valid JSON${NC}"
+            ERRORS=$((ERRORS + 1))
+        fi
     else
-        echo -e "${RED}✗ Schema file is not valid JSON${NC}"
-        ((ERRORS++))
-    fi
-    
-    # Verify schema has required fields
-    if jq -e '.properties.spec' "$SCHEMA_FILE" &>/dev/null; then
-        echo -e "${GREEN}✓ Schema contains spec properties${NC}"
-    else
-        echo -e "${YELLOW}⚠️  Schema may be incomplete (missing spec properties)${NC}"
-        ((WARNINGS++))
+        echo -e "${YELLOW}⚠️  jq not available - skipping JSON validation${NC}"
+        WARNINGS=$((WARNINGS + 1))
     fi
 else
     echo -e "${RED}✗ Schema file not found at $SCHEMA_FILE${NC}"
     echo -e "${BLUE}ℹ  Run: ./scripts/publish-schema.sh${NC}"
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 fi
+
+echo "DEBUG: Schema validation complete. ERRORS=$ERRORS, WARNINGS=$WARNINGS"
 
 echo ""
 
