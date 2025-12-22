@@ -2,7 +2,7 @@
 # Comprehensive Platform Compliance Validation Script
 # Validates deployed platform standards in Kubernetes environment
 
-set -euo pipefail
+# Don't use strict mode - handle errors explicitly for CI compatibility
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"

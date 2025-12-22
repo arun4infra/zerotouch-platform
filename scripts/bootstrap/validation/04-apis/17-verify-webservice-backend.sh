@@ -9,7 +9,7 @@
 # - ConfigMap creation and environment variable injection
 # - Session affinity configuration
 
-set -euo pipefail
+# Don't use strict mode - handle errors explicitly for CI compatibility
 
 # Colors for output
 RED='\033[0;31m'

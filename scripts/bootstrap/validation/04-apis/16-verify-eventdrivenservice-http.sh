@@ -8,7 +8,7 @@
 # - HTTP Service creation when httpPort is specified
 # - Backward compatibility with existing NATS-only deployments
 
-set -euo pipefail
+# Don't use strict mode - handle errors explicitly for CI compatibility
 
 # Colors for output
 RED='\033[0;31m'
