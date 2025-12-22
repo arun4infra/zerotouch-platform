@@ -45,15 +45,16 @@ for script in "$SCRIPT_DIR"/[0-9][0-9]-*.sh; do
         
         chmod +x "$script"
         echo "  - Starting validation..."
+        echo ""
         
-        # Capture both stdout and stderr, and preserve exit code
+        # Run script directly (no output capture) to ensure all output is visible in CI
+        # Use a subshell to capture exit code without stopping on error
         set +e  # Temporarily disable exit on error
-        output=$("$script" 2>&1)  # Capture all output
+        "$script"
         validation_exit_code=$?
         set -e  # Re-enable exit on error
         
-        # Always show the output
-        echo "$output"
+        echo ""
         
         if [ $validation_exit_code -eq 0 ]; then
             echo -e "  ✅ ${GREEN}${api_name} validation passed${NC}"
