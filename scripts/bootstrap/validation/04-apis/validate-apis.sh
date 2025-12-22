@@ -6,14 +6,13 @@
 #
 # Validates EventDrivenService and WebService Platform APIs
 
-set -e
+# Don't use set -e as it causes early exit before showing output
+# We handle errors manually with exit codes
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Source diagnostics helper
-source "$SCRIPT_DIR/../../helpers/diagnostics.sh" 2>/dev/null || {
-    echo "Warning: Could not load diagnostics helper"
-}
+# Source diagnostics helper (optional)
+source "$SCRIPT_DIR/../../helpers/diagnostics.sh" 2>/dev/null || true
 
 # Colors
 RED='\033[0;31m'
@@ -47,12 +46,13 @@ for script in "$SCRIPT_DIR"/[0-9][0-9]-*.sh; do
         echo "  - Starting validation..."
         echo ""
         
-        # Run script directly (no output capture) to ensure all output is visible in CI
-        # Use a subshell to capture exit code without stopping on error
-        set +e  # Temporarily disable exit on error
-        "$script"
-        validation_exit_code=$?
-        set -e  # Re-enable exit on error
+        # Run script and capture exit code
+        # Don't use set -e/+e as it can cause issues
+        if "$script"; then
+            validation_exit_code=0
+        else
+            validation_exit_code=$?
+        fi
         
         echo ""
         
