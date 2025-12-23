@@ -7,6 +7,8 @@ resources:
 - components-tenants/99-tenants.yaml
 - components-tenants/argocd-repo-configs.yaml
 - components-tenants/argocd-repo-registry.yaml
+# ADD: Tenant Infrastructure (Production Only - manages namespaces from zerotouch-tenants)
+- components-tenants/tenant-infrastructure.yaml
 
 # In production, we ensure targetRevision is main (or specific tag)
 patches:

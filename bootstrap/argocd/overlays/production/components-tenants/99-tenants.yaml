@@ -39,7 +39,8 @@ spec:
           selfHeal: true
           allowEmpty: false
         syncOptions:
-          - CreateNamespace=true
+          # REMOVED: - CreateNamespace=true  <-- DELETED per namespace policy
+          # This forces the app to wait for tenant-infrastructure to sync first.
           - PrunePropagationPolicy=foreground
           - PruneLast=true
         retry:

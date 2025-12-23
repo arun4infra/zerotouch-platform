@@ -240,13 +240,17 @@ echo -e "${YELLOW}[10/14] Verifying ESO...${NC}"
 "$SCRIPT_DIR/validation/11-verify-eso.sh"
 
 # Step 11: Verify child applications
-echo -e "${YELLOW}[11/14] Verifying child applications...${NC}"
+echo -e "${YELLOW}[11/15] Verifying child applications...${NC}"
 "$SCRIPT_DIR/validation/12-verify-child-apps.sh"
 
-# Step 12: Skipped (no longer needed - storage class auto-detected)
+# Step 12: Verify tenant landing zones
+echo -e "${YELLOW}[12/15] Verifying tenant landing zones...${NC}"
+"$SCRIPT_DIR/validation/16-verify-landing-zones.sh"
+
+# Step 13: Skipped (no longer needed - storage class auto-detected)
 
 # Step 13: Wait for all apps to be healthy
-echo -e "${YELLOW}[13/15] Waiting for all applications to be healthy...${NC}"
+echo -e "${YELLOW}[13/16] Waiting for all applications to be healthy...${NC}"
 if [ "$MODE" = "preview" ]; then
     "$SCRIPT_DIR/wait/12a-wait-apps-healthy.sh" --timeout 600 --preview-mode
 else
@@ -254,7 +258,7 @@ else
 fi
 
 # Step 14: Wait for service dependencies
-echo -e "${YELLOW}[14/15] Waiting for platform services to be ready...${NC}"
+echo -e "${YELLOW}[14/16] Waiting for platform services to be ready...${NC}"
 if [ "$MODE" = "preview" ]; then
     "$SCRIPT_DIR/wait/13-wait-service-dependencies.sh" --timeout 300 --preview-mode
 else
@@ -288,7 +292,7 @@ fi
 
 if [ "$MODE" = "production" ]; then
     # Step 15: Configure repository credentials
-    echo -e "${YELLOW}[15/15] Configuring repository credentials...${NC}"
+    echo -e "${YELLOW}[15/16] Configuring repository credentials...${NC}"
     "$SCRIPT_DIR/install/13-configure-repo-credentials.sh" --auto || {
         echo -e "${YELLOW}⚠️  Repository credentials configuration had issues${NC}"
         echo -e "${BLUE}ℹ  You can configure manually: ./scripts/bootstrap/install/13-configure-repo-credentials.sh --auto${NC}"
@@ -300,7 +304,7 @@ Verify:
   kubectl get secret -n argocd -l argocd.argoproj.io/secret-type=repository
   kubectl get externalsecret -n argocd"
 else
-    echo -e "${BLUE}[15/15] Skipping repository credentials configuration (preview mode)${NC}"
+    echo -e "${BLUE}[15/16] Skipping repository credentials configuration (preview mode)${NC}"
 fi
 
 # Final cluster validation (optional)
