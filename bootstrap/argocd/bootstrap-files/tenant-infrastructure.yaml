@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tenant-infrastructure
+  namespace: argocd
+  annotations:
+    # Wave 5 ensures this runs AFTER Cluster Bootstrapping but BEFORE Apps
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/arun4infra/zerotouch-tenants.git
+    targetRevision: main
+    path: tenants
+    directory:
+      recurse: true
+      # CRITICAL: Only sync infrastructure files. Ignore config.yaml.
+      include: '0*.yaml'
+  destination:
+    server: https://kubernetes.default.svc
+    # Namespaces are cluster-scoped, so destination namespace acts as a placeholder
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
