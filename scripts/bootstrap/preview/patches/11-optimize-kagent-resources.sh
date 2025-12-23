@@ -36,45 +36,24 @@ fi
 if [ "$IS_PREVIEW_MODE" = true ]; then
     echo -e "${BLUE}Optimizing Kagent resources for preview mode...${NC}"
     
-    # Find all Kagent claim files across the platform
-    KAGENT_FILES=$(find "$REPO_ROOT" -type f -name "*kagent*.yaml" -path "*/platform/claims/*" 2>/dev/null || true)
+    # Find Kagent ArgoCD application file
+    KAGENT_FILE="$REPO_ROOT/bootstrap/argocd/base/01-kagent.yaml"
     
-    if [ -z "$KAGENT_FILES" ]; then
-        echo -e "${YELLOW}⚠${NC} No Kagent claim files found"
-    else
-        for KAGENT_FILE in $KAGENT_FILES; do
-            echo -e "${BLUE}Processing: $(basename "$KAGENT_FILE")${NC}"
-            
-            # Reduce Kagent size for preview
-            if grep -q "size: medium" "$KAGENT_FILE" 2>/dev/null; then
-                sed -i.bak 's/size: medium/size: micro/g' "$KAGENT_FILE"
-                rm -f "$KAGENT_FILE.bak"
-                echo -e "  ${GREEN}✓${NC} Kagent: medium → micro (25m-100m CPU, 64Mi-256Mi RAM)"
-            fi
-            
-            if grep -q "size: large" "$KAGENT_FILE" 2>/dev/null; then
-                sed -i.bak 's/size: large/size: micro/g' "$KAGENT_FILE"
-                rm -f "$KAGENT_FILE.bak"
-                echo -e "  ${GREEN}✓${NC} Kagent: large → micro (25m-100m CPU, 64Mi-256Mi RAM)"
-            fi
-            
-            # Disable Kagent replicas for preview (not needed for testing)
-            if grep -q "replicas: [1-9]" "$KAGENT_FILE" 2>/dev/null; then
-                sed -i.bak 's/replicas: [1-9]/replicas: 0/g' "$KAGENT_FILE"
-                rm -f "$KAGENT_FILE.bak"
-                echo -e "  ${GREEN}✓${NC} Kagent: disabled for preview (0 replicas)"
-            fi
-            
-            # Also handle enabled: true -> enabled: false
-            if grep -q "enabled: true" "$KAGENT_FILE" 2>/dev/null; then
-                sed -i.bak 's/enabled: true/enabled: false/g' "$KAGENT_FILE"
-                rm -f "$KAGENT_FILE.bak"
-                echo -e "  ${GREEN}✓${NC} Kagent: disabled for preview"
-            fi
-        done
+    if [ -f "$KAGENT_FILE" ]; then
+        echo -e "${BLUE}Processing: $(basename "$KAGENT_FILE")${NC}"
+        
+        # Disable Kagent for preview mode by setting enabled: false in helm values
+        if grep -q "kmcp:" "$KAGENT_FILE" 2>/dev/null; then
+            # Add agents.enabled: false to disable all agents
+            sed -i.bak '/kmcp:/i\        agents:\n          enabled: false\n          replicas: 0' "$KAGENT_FILE"
+            rm -f "$KAGENT_FILE.bak"
+            echo -e "  ${GREEN}✓${NC} Kagent: disabled all agents for preview"
+        fi
         
         echo -e "${GREEN}✓ Kagent optimization complete${NC}"
-        echo -e "${BLUE}  Kagent disabled for preview (saves ~200m CPU, ~512Mi memory)${NC}"
+        echo -e "${BLUE}  Kagent agents disabled for preview (saves ~500m CPU, ~1Gi memory)${NC}"
+    else
+        echo -e "${YELLOW}⚠${NC} Kagent file not found: $KAGENT_FILE"
     fi
 else
     echo -e "${YELLOW}⊘${NC} Not in preview mode, skipping Kagent optimization"
