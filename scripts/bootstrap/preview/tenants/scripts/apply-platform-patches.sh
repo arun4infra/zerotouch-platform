@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # ==============================================================================
-# Apply Platform Patches for IDE Orchestrator
+# Apply Platform Patches for Preview Environment
 # ==============================================================================
-# Applies ide-orchestrator-specific patches to the platform BEFORE bootstrap
+# Applies platform patches for preview/CI environments BEFORE bootstrap
 # This script:
 # 1. Disables ArgoCD auto-sync to prevent conflicts during patching
 # 2. Applies resource optimization patches
@@ -24,11 +24,18 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 log_warn() { echo -e "${YELLOW}[WARNING]${NC} $*" >&2; }
 
 main() {
-    log_info "Applying ide-orchestrator-specific platform patches..."
+    log_info "Applying platform patches for preview environment..."
+    
+    # Change to the zerotouch-platform root directory
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PLATFORM_ROOT="$(cd "$SCRIPT_DIR/../../../../.." && pwd)"
+    cd "$PLATFORM_ROOT"
     
     # Ensure we're in the zerotouch-platform directory
     if [[ ! -d "bootstrap" ]]; then
-        log_error "bootstrap directory not found - script must run from zerotouch-platform directory"
+        log_error "bootstrap directory not found - could not find zerotouch-platform directory"
+        log_error "Current directory: $(pwd)"
+        log_error "Expected to find bootstrap/ directory here"
         exit 1
     fi
     
@@ -71,82 +78,34 @@ EOF
     log_info "Step 2: Applying resource optimization patches..."
     log_info "✓ Resource optimization patches applied (placeholder for future optimizations)"
     
-    # Step 3: Disable resource-intensive components for preview mode
-    log_info "Step 3: Disabling resource-intensive components (kagent, keda) for preview mode..."
+    # Step 3: Apply conditional service patches based on service configuration
+    log_info "Step 3: Applying conditional service patches based on service configuration..."
     
-    # Disable kagent by setting replicas to 0
-    KAGENT_FILES=(
-        "platform/03-intelligence/compositions/kagents/librarian/qdrant-mcp-deployment.yaml"
-        "platform/03-intelligence/compositions/kagents/librarian/docs-mcp-deployment.yaml"
-    )
+    # Call the conditional services patch script
+    PATCHES_DIR="$(dirname "$0")/../../patches"
+    CONDITIONAL_PATCH_SCRIPT="$PATCHES_DIR/02-disable-undeclared-services.sh"
     
-    KAGENT_DISABLED=0
-    for file in "${KAGENT_FILES[@]}"; do
-        if [[ -f "$file" ]]; then
-            log_info "Processing kagent file: $file"
-            
-            # Check if already disabled
-            if grep -q "replicas: 0" "$file" 2>/dev/null; then
-                log_warn "Kagent already disabled in $(basename "$file"), skipping..."
-            else
-                # Backup original file
-                cp "$file" "$file.backup"
-                
-                # Set replicas to 0 to disable the deployment
-                sed -i.tmp 's/replicas: [0-9]*/replicas: 0/g' "$file"
-                rm -f "$file.tmp"
-                
-                log_success "✓ Kagent disabled in $(basename "$file")"
-                ((KAGENT_DISABLED++))
-            fi
+    if [[ -f "$CONDITIONAL_PATCH_SCRIPT" ]]; then
+        log_info "Running conditional services patch: $CONDITIONAL_PATCH_SCRIPT"
+        bash "$CONDITIONAL_PATCH_SCRIPT"
+        
+        if [[ $? -eq 0 ]]; then
+            log_success "✓ Conditional services patch completed successfully"
         else
-            log_warn "Kagent file not found: $file"
+            log_error "✗ Conditional services patch failed"
+            exit 1
         fi
-    done
-    
-    # Disable KEDA by setting replicas to 0
-    KEDA_DIRS=(
-        "platform/02-workloads/keda"
-    )
-    
-    KEDA_DISABLED=0
-    for keda_dir in "${KEDA_DIRS[@]}"; do
-        if [[ -d "$keda_dir" ]]; then
-            log_info "Processing KEDA directory: $keda_dir"
-            
-            # Find all YAML files with Deployment kind and set replicas to 0
-            while IFS= read -r -d '' file; do
-                if grep -q "kind: Deployment" "$file" 2>/dev/null; then
-                    log_info "Processing KEDA deployment: $file"
-                    
-                    # Check if already disabled
-                    if grep -q "replicas: 0" "$file" 2>/dev/null; then
-                        log_warn "KEDA already disabled in $(basename "$file"), skipping..."
-                    else
-                        # Backup original file
-                        cp "$file" "$file.backup"
-                        
-                        # Set replicas to 0
-                        sed -i.tmp 's/replicas: [0-9]*/replicas: 0/g' "$file"
-                        rm -f "$file.tmp"
-                        
-                        log_success "✓ KEDA deployment disabled in $(basename "$file")"
-                        ((KEDA_DISABLED++))
-                    fi
-                fi
-            done < <(find "$keda_dir" -name "*.yaml" -type f -print0)
-        else
-            log_warn "KEDA directory not found: $keda_dir"
-        fi
-    done
+    else
+        log_error "Conditional services patch script not found: $CONDITIONAL_PATCH_SCRIPT"
+        exit 1
+    fi
     
     # Final summary
     log_success "Platform patches applied successfully"
     echo ""
     log_info "=== PATCH SUMMARY ==="
     log_info "✓ ArgoCD auto-sync disabled"
-    log_info "✓ Kagent components disabled: $KAGENT_DISABLED files"
-    log_info "✓ KEDA components disabled: $KEDA_DISABLED files"
+    log_info "✓ Conditional services patch applied (based on service config)"
     log_info "✓ Ready for stable bootstrap process"
     echo ""
 }
