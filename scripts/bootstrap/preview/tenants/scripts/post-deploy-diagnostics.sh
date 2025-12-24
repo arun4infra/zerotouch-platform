@@ -22,24 +22,23 @@ log_warn() { echo -e "${YELLOW}[POST-DEPLOY]${NC} $*"; }
 
 # Load service configuration from ci/config.yaml
 load_service_config() {
-    if [[ ! -f "ci/config.yaml" ]]; then
+    # Look for ci/config.yaml in service directory (one level up from platform)
+    local config_file="../ci/config.yaml"
+    
+    if [[ ! -f "$config_file" ]]; then
         log_error "ci/config.yaml not found - cannot run diagnostics"
         exit 1
     fi
     
     if command -v yq &> /dev/null; then
-        SERVICE_NAME=$(yq eval '.service.name' ci/config.yaml)
-        NAMESPACE=$(yq eval '.service.namespace' ci/config.yaml)
-        HEALTH_ENDPOINT=$(yq eval '.deployment.health_endpoint // "/ready"' ci/config.yaml)
-        LIVENESS_ENDPOINT=$(yq eval '.deployment.liveness_endpoint // "/health"' ci/config.yaml)
-        WAIT_TIMEOUT=$(yq eval '.deployment.wait_timeout // 300' ci/config.yaml)
+        SERVICE_NAME=$(yq eval '.service.name' "$config_file")
+        NAMESPACE=$(yq eval '.service.namespace' "$config_file")
+        HEALTH_ENDPOINT=$(yq eval '.deployment.health_endpoint // "/ready"' "$config_file")
+        LIVENESS_ENDPOINT=$(yq eval '.deployment.liveness_endpoint // "/health"' "$config_file")
+        WAIT_TIMEOUT=$(yq eval '.deployment.wait_timeout // 300' "$config_file")
     else
-        # Fallback parsing
-        SERVICE_NAME=$(grep -E '^\s*name:' ci/config.yaml | sed 's/.*name:\s*["\x27]*\([^"\x27]*\)["\x27]*.*/\1/' | tr -d ' ')
-        NAMESPACE=$(grep -E '^\s*namespace:' ci/config.yaml | sed 's/.*namespace:\s*["\x27]*\([^"\x27]*\)["\x27]*.*/\1/' | tr -d ' ')
-        HEALTH_ENDPOINT="/ready"
-        LIVENESS_ENDPOINT="/health"
-        WAIT_TIMEOUT=300
+        log_error "yq is required but not installed"
+        exit 1
     fi
     
     # Set deployment name to service name (platform standard)
