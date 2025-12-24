@@ -8,6 +8,33 @@ set -euo pipefail
 # Usage: ./02-conditional-optional-services.sh
 # ==============================================================================
 
+# Install required dependencies
+install_dependencies() {
+    if ! command -v yq &> /dev/null; then
+        echo "Installing yq..."
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS
+            if command -v brew &> /dev/null; then
+                brew install yq
+            else
+                echo "Error: Homebrew not found. Please install yq manually."
+                exit 1
+            fi
+        else
+            # Linux
+            YQ_VERSION="v4.35.2"
+            YQ_BINARY="yq_linux_amd64"
+            curl -L "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY}" -o /tmp/yq
+            chmod +x /tmp/yq
+            sudo mv /tmp/yq /usr/local/bin/yq
+        fi
+        echo "yq installed successfully"
+    fi
+}
+
+# Install dependencies first
+install_dependencies
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
@@ -55,8 +82,8 @@ get_service_platform_dependencies() {
     if command -v yq &> /dev/null; then
         yq eval '.dependencies.platform[]' "$config_file" 2>/dev/null | tr '\n' ' ' || echo ""
     else
-        # Fallback: basic grep parsing - scan for any service names in platform dependencies
-        grep -A 10 "platform:" "$config_file" | grep -E "^\s*-\s*" | sed 's/^\s*-\s*//' | tr '\n' ' ' || echo ""
+        log_error "yq is required but not installed"
+        exit 1
     fi
 }
 
@@ -70,7 +97,7 @@ discover_all_services() {
     if [[ -f "$kustomization_file" ]]; then
         # Extract resource file names from kustomization
         local resource_files
-        resource_files=$(yq eval '.resources[]' "$kustomization_file" 2>/dev/null || grep -A 20 "resources:" "$kustomization_file" | grep -E "^\s*-\s*" | sed 's/^\s*-\s*//')
+        resource_files=$(yq eval '.resources[]' "$kustomization_file" 2>/dev/null)
         
         for resource_file in $resource_files; do
             if [[ "$resource_file" == *.yaml ]]; then
@@ -78,7 +105,7 @@ discover_all_services() {
                 if [[ -f "$app_file" ]]; then
                     # Extract application name from the YAML file
                     local app_name
-                    app_name=$(yq eval '.metadata.name' "$app_file" 2>/dev/null || grep -E "^\s*name:" "$app_file" | head -1 | sed 's/.*name:\s*//' | tr -d '"')
+                    app_name=$(yq eval '.metadata.name' "$app_file" 2>/dev/null)
                     
                     if [[ -n "$app_name" ]]; then
                         all_services+=("$app_name")
@@ -88,7 +115,7 @@ discover_all_services() {
         done
     fi
     
-    echo "${all_services[@]}"
+    echo "${all_services[@]:-}"
 }
 
 # Foundation services (always enabled) - these are never disabled
@@ -111,8 +138,8 @@ get_foundation_services() {
                     local sync_wave
                     
                     # Extract application name and sync-wave
-                    app_name=$(yq eval '.metadata.name' "$app_file" 2>/dev/null || grep -E "^\s*name:" "$app_file" | head -1 | sed 's/.*name:\s*//' | tr -d '"')
-                    sync_wave=$(yq eval '.metadata.annotations."argocd.argoproj.io/sync-wave"' "$app_file" 2>/dev/null || grep -E 'sync-wave.*:' "$app_file" | sed 's/.*sync-wave.*:\s*["\x27]*\([0-9]*\)["\x27]*.*/\1/')
+                    app_name=$(yq eval '.metadata.name' "$app_file" 2>/dev/null)
+                    sync_wave=$(yq eval '.metadata.annotations."argocd.argoproj.io/sync-wave"' "$app_file" 2>/dev/null)
                     
                     if [[ -n "$app_name" && -n "$sync_wave" ]]; then
                         # Foundation services: sync-wave 0-3 (core platform infrastructure)
@@ -129,7 +156,7 @@ get_foundation_services() {
         done
     fi
     
-    echo "${foundation_services[@]}"
+    echo "${foundation_services[@]:-}"
 }
 
 # Get optional services by excluding foundation services from all services
@@ -141,9 +168,9 @@ get_optional_services() {
     all_services=($(discover_all_services))
     foundation_services=($(get_foundation_services))
     
-    for service in "${all_services[@]}"; do
+    for service in "${all_services[@]:-}"; do
         local is_foundation=false
-        for foundation in "${foundation_services[@]}"; do
+        for foundation in "${foundation_services[@]:-}"; do
             if [[ "$service" == "$foundation" ]]; then
                 is_foundation=true
                 break
@@ -155,7 +182,7 @@ get_optional_services() {
         fi
     done
     
-    echo "${optional_services[@]}"
+    echo "${optional_services[@]:-}"
 }
 
 echo "================================================================================"
@@ -168,8 +195,8 @@ FOUNDATION_SERVICES=($(get_foundation_services))
 OPTIONAL_SERVICES=($(get_optional_services))
 
 log_info "Discovered services from ArgoCD base applications:"
-log_info "  Foundation services: ${FOUNDATION_SERVICES[*]}"
-log_info "  Optional services: ${OPTIONAL_SERVICES[*]}"
+log_info "  Foundation services: ${FOUNDATION_SERVICES[*]:-}"
+log_info "  Optional services: ${OPTIONAL_SERVICES[*]:-}"
 
 # Find service configuration
 SERVICE_CONFIG=$(find_service_config)
@@ -182,7 +209,7 @@ if [[ -n "$SERVICE_CONFIG" ]]; then
     log_info "Service platform dependencies: ${PLATFORM_DEPS:-none}"
     
     # Check each optional service
-    for service in "${OPTIONAL_SERVICES[@]}"; do
+    for service in "${OPTIONAL_SERVICES[@]:-}"; do
         if echo "$PLATFORM_DEPS" | grep -q "$service"; then
             log_success "✓ $service - ENABLED (declared in service config)"
         else
@@ -193,7 +220,7 @@ if [[ -n "$SERVICE_CONFIG" ]]; then
     
     # Show foundation services (always enabled)
     log_info "Foundation services (always enabled):"
-    for service in "${FOUNDATION_SERVICES[@]}"; do
+    for service in "${FOUNDATION_SERVICES[@]:-}"; do
         log_success "✓ $service - ENABLED (foundation service)"
     done
     
