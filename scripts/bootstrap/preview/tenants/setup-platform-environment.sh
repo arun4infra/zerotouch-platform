@@ -11,6 +11,7 @@ set -euo pipefail
 # Default values
 SERVICE_NAME=""
 IMAGE_TAG="ci-test"
+BUILD_MODE="test"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Color codes
@@ -34,9 +35,13 @@ while [[ $# -gt 0 ]]; do
             IMAGE_TAG="${1#*=}"
             shift
             ;;
+        --build-mode=*)
+            BUILD_MODE="${1#*=}"
+            shift
+            ;;
         *)
             log_error "Unknown argument: $1"
-            echo "Usage: $0 --service=<service-name> [--image-tag=<tag>]"
+            echo "Usage: $0 --service=<service-name> [--image-tag=<tag>] [--build-mode=<mode>]"
             exit 1
             ;;
     esac
@@ -51,8 +56,9 @@ fi
 echo "================================================================================"
 echo "Platform Environment Setup Orchestrator"
 echo "================================================================================"
-echo "  Service:   ${SERVICE_NAME}"
-echo "  Image Tag: ${IMAGE_TAG}"
+echo "  Service:    ${SERVICE_NAME}"
+echo "  Image Tag:  ${IMAGE_TAG}"
+echo "  Build Mode: ${BUILD_MODE}"
 echo "================================================================================"
 
 # Step 1: Setup Kind cluster first (before building image)
@@ -104,13 +110,7 @@ kubectl label nodes --all workload.bizmatters.dev/databases=true --overwrite
 log_info "Step 2: Building Docker image..."
 export SERVICE_NAME="${SERVICE_NAME}"
 export BUILD_ONLY=true
-
-# Change to service directory before building
-# Go up from zerotouch-platform to parent directory, then into service directory
-SERVICE_DIR="$(cd "${SCRIPT_DIR}/../../../../${SERVICE_NAME}" && pwd)"
-cd "${SERVICE_DIR}"
-"${SCRIPT_DIR}/scripts/build.sh" --mode=test
-cd - > /dev/null
+"${SCRIPT_DIR}/scripts/build.sh" --mode="${BUILD_MODE}"
 
 # Step 3: Load Docker image into Kind cluster (now that cluster exists)
 log_info "Step 3: Loading Docker image into Kind cluster..."
