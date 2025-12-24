@@ -22,16 +22,19 @@ log_warn() { echo -e "${YELLOW}[PLATFORM-READINESS]${NC} $*"; }
 
 # Get platform dependencies from service config
 get_platform_dependencies() {
-    if [[ ! -f "ci/config.yaml" ]]; then
+    # Look for ci/config.yaml in service directory (one level up from platform)
+    local config_file="../ci/config.yaml"
+    
+    if [[ ! -f "$config_file" ]]; then
         echo ""
         return
     fi
     
     if command -v yq &> /dev/null; then
-        yq eval '.dependencies.platform[]' ci/config.yaml 2>/dev/null | tr '\n' ' ' || echo ""
+        yq eval '.dependencies.platform[]' "$config_file" 2>/dev/null | tr '\n' ' ' || echo ""
     else
-        # Fallback: basic grep parsing
-        grep -A 10 "platform:" ci/config.yaml | grep -E "^\s*-\s*" | sed 's/^\s*-\s*//' | tr '\n' ' ' || echo ""
+        log_error "yq is required but not installed"
+        exit 1
     fi
 }
 

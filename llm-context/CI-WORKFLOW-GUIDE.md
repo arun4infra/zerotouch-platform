@@ -26,25 +26,37 @@ The platform provides a centralized CI workflow that services consume through a 
 
 ### CI Workflow Stages
 
-**Stage 1: Platform Readiness**
-- **Why:** Fail fast if platform isn't ready
-- **What:** Validates platform components service needs exist
-- **Script:** `check_platform_readiness()` in `in-cluster-test.sh`
+**Infrastructure Setup (CI Environment Only):**
+- **Stage 0a:** Setup Platform Environment
+  - **Why:** Create Kind cluster and build service image
+  - **What:** Creates Kind cluster, builds Docker image, loads image, applies platform patches
+  - **Script:** `setup-platform-environment.sh`
 
-**Stage 2: External Dependencies**  
-- **Why:** Deploy dependencies before dependent services
-- **What:** Sets up other services this service needs
-- **Script:** `setup_external_dependencies()` in `in-cluster-test.sh`
+- **Stage 0b:** Master Bootstrap
+  - **Why:** Deploy platform infrastructure and ArgoCD
+  - **What:** Bootstraps ArgoCD, deploys platform services, validates platform APIs
+  - **Script:** `01-master-bootstrap.sh --mode preview`
 
-**Stage 3: Service Deployment**
-- **Why:** Deploy the actual service after dependencies are ready
-- **What:** Applies platform claims, runs migrations
-- **Script:** `deploy.sh`, `run-migrations.sh`
+**Service CI Workflow:**
+- **Stage 1: Platform Readiness**
+  - **Why:** Fail fast if platform isn't ready
+  - **What:** Validates platform components service needs exist
+  - **Script:** `check-platform-readiness.sh`
 
-**Stage 4: Internal Validation**
-- **Why:** Verify service's own infrastructure works
-- **What:** Tests databases, caches, health endpoints created by service
-- **Script:** `validate_internal_dependencies()` in `post-deploy-diagnostics.sh`
+- **Stage 2: External Dependencies**  
+  - **Why:** Deploy dependencies before dependent services
+  - **What:** Sets up other services this service needs
+  - **Script:** `setup-external-dependencies.sh`
+
+- **Stage 3: Service Deployment**
+  - **Why:** Deploy the actual service after dependencies are ready
+  - **What:** Applies platform claims, runs migrations
+  - **Script:** `deploy.sh`, `run-migrations.sh`
+
+- **Stage 4: Internal Validation**
+  - **Why:** Verify service's own infrastructure works
+  - **What:** Tests databases, caches, health endpoints created by service
+  - **Script:** `post-deploy-diagnostics.sh`
 
 ## How Services Use It
 
@@ -59,11 +71,15 @@ The platform provides a centralized CI workflow that services consume through a 
 - `ci-config.md` - Configuration reference
 
 **Platform Scripts:**
-- `in-cluster-test.sh` - Main orchestration script
+- `setup-platform-environment.sh` - Infrastructure setup (Kind cluster, Docker build, platform patches)
+- `01-master-bootstrap.sh` - Platform bootstrap (ArgoCD, platform services)
+- `check-platform-readiness.sh` - Platform readiness validation
+- `setup-external-dependencies.sh` - External dependency setup
 - `pre-deploy-diagnostics.sh` - External dependency validation  
-- `post-deploy-diagnostics.sh` - Internal dependency validation
 - `deploy.sh` - Service deployment
 - `run-migrations.sh` - Database migrations
+- `post-deploy-diagnostics.sh` - Internal dependency validation
+- `in-cluster-test.sh` - Main orchestration script (calls all above scripts)
 
 **Examples:**
 - `examples/deepagents-runtime-ci-config.yaml` - Complex service with all dependency types
