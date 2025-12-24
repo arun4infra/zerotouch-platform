@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ==============================================================================
-# CI Deploy Script for ide-orchestrator
+# CI Deploy Script
 # ==============================================================================
 # Purpose: GitOps service deployment automation
 # 
@@ -12,13 +12,37 @@ set -euo pipefail
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../../.." && pwd)"  # Go back to service root
+
+# Load service configuration from ci/config.yaml
+load_service_config() {
+    local config_file="../ci/config.yaml"
+    
+    if [[ ! -f "$config_file" ]]; then
+        echo "❌ Service config not found: $config_file"
+        exit 1
+    fi
+    
+    if command -v yq &> /dev/null; then
+        SERVICE_NAME=$(yq eval '.service.name' "$config_file")
+        NAMESPACE=$(yq eval '.service.namespace' "$config_file")
+    else
+        echo "❌ yq is required but not installed"
+        exit 1
+    fi
+    
+    if [[ -z "$SERVICE_NAME" || -z "$NAMESPACE" ]]; then
+        echo "❌ service.name and service.namespace are required in ci/config.yaml"
+        exit 1
+    fi
+}
+
+# Load configuration
+load_service_config
 
 # Default values
 ENVIRONMENT="${1:-ci}"
 IMAGE_TAG="${2:-latest}"
-SERVICE_NAME="${SERVICE_NAME:-ide-orchestrator}"  # Can be overridden by environment variable
-NAMESPACE="${NAMESPACE:-intelligence-orchestrator}"
 WAIT_TIMEOUT="${WAIT_TIMEOUT:-300}"
 
 echo "🚀 Deploying ${SERVICE_NAME} to ${ENVIRONMENT} environment..."
@@ -58,9 +82,11 @@ echo "✅ Mock landing zone '${NAMESPACE}' created"
 
 # Apply platform claims and manifests
 echo "📋 Applying platform claims..."
-if [[ -d "platform/claims/${NAMESPACE}" ]]; then
+echo "🔍 Checking for platform claims in: ${PROJECT_ROOT}/platform/claims/${NAMESPACE}"
+if [[ -d "${PROJECT_ROOT}/platform/claims/${NAMESPACE}" ]]; then
+    echo "✅ Found platform claims directory"
     # Apply platform claims for the namespace
-    kubectl apply -f "platform/claims/${NAMESPACE}/" -n "${NAMESPACE}"
+    kubectl apply -f "${PROJECT_ROOT}/platform/claims/${NAMESPACE}/" -n "${NAMESPACE}"
     echo "✅ Platform claims applied"
 elif [[ -d "k8s/${ENVIRONMENT}" ]]; then
     # Environment-specific manifests (fallback)
@@ -69,7 +95,11 @@ elif [[ -d "k8s/base" ]]; then
     # Base manifests with kustomization (fallback)
     kubectl apply -k "k8s/base" -n "${NAMESPACE}"
 else
-    echo "❌ No platform claims found in platform/claims/${NAMESPACE} or k8s manifests"
+    echo "❌ No platform claims found in ${PROJECT_ROOT}/platform/claims/${NAMESPACE} or k8s manifests"
+    echo "🔍 Debug: Current directory: $(pwd)"
+    echo "🔍 Debug: PROJECT_ROOT: ${PROJECT_ROOT}"
+    echo "🔍 Debug: Listing ${PROJECT_ROOT}/platform/claims/:"
+    ls -la "${PROJECT_ROOT}/platform/claims/" || echo "Directory not found"
     exit 1
 fi
 
