@@ -36,7 +36,7 @@ install_dependencies() {
 install_dependencies
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 
 # Color codes
 RED='\033[0;31m'
@@ -56,15 +56,29 @@ find_service_config() {
     local current_dir="$(pwd)"
     local config_file=""
     
+    # Debug: show current directory (redirect to stderr)
+    log_info "Current directory: $current_dir" >&2
+    
     # Check current directory first
     if [[ -f "${current_dir}/ci/config.yaml" ]]; then
         config_file="${current_dir}/ci/config.yaml"
+        log_info "Found config in current dir: $config_file" >&2
     # Check parent directory (common when running from platform checkout)
     elif [[ -f "${current_dir}/../ci/config.yaml" ]]; then
         config_file="${current_dir}/../ci/config.yaml"
-    # Check if we're in a service subdirectory
+        log_info "Found config in parent dir: $config_file" >&2
+    # Check if we're in a service subdirectory (2 levels up)
     elif [[ -f "${current_dir}/../../ci/config.yaml" ]]; then
         config_file="${current_dir}/../../ci/config.yaml"
+        log_info "Found config 2 levels up: $config_file" >&2
+    # Check if we're deep in platform structure (6 levels up for zerotouch-platform/scripts/bootstrap/preview/tenants/scripts/)
+    elif [[ -f "${current_dir}/../../../../../ci/config.yaml" ]]; then
+        config_file="${current_dir}/../../../../../ci/config.yaml"
+        log_info "Found config 6 levels up: $config_file" >&2
+    # Check if we're in patches directory (7 levels up for zerotouch-platform/scripts/bootstrap/preview/patches/)
+    elif [[ -f "${current_dir}/../../../../../../ci/config.yaml" ]]; then
+        config_file="${current_dir}/../../../../../../ci/config.yaml"
+        log_info "Found config 7 levels up: $config_file" >&2
     fi
     
     echo "$config_file"
@@ -74,16 +88,81 @@ find_service_config() {
 get_service_platform_dependencies() {
     local config_file="$1"
     
+    log_info "Debug: Checking config file: $config_file" >&2
+    
     if [[ ! -f "$config_file" ]]; then
+        log_warn "Debug: Config file not found: $config_file" >&2
         echo ""
         return
     fi
     
     if command -v yq &> /dev/null; then
-        yq eval '.dependencies.platform[]' "$config_file" 2>/dev/null | tr '\n' ' ' || echo ""
+        local deps=$(yq eval '.dependencies.platform[]' "$config_file" 2>/dev/null | tr '\n' ' ' || echo "")
+        log_info "Debug: Raw dependencies: '$deps'" >&2
+        echo "$deps"
     else
         log_error "yq is required but not installed"
         exit 1
+    fi
+}
+
+# Generic function to disable any service by commenting out its kustomization entry
+disable_service() {
+    local service="$1"
+    
+    log_info "Disabling service: $service" >&2
+    log_info "Debug: PLATFORM_ROOT = $PLATFORM_ROOT" >&2
+    
+    # Find the corresponding YAML file for this service
+    local service_file=""
+    log_info "Debug: Looking for YAML file for service: $service" >&2
+    log_info "Debug: Glob pattern: ${PLATFORM_ROOT}/bootstrap/argocd/base/*.yaml" >&2
+    
+    for yaml_file in "${PLATFORM_ROOT}/bootstrap/argocd/base"/*.yaml; do
+        log_info "Debug: Processing file: $yaml_file" >&2
+        if [[ -f "$yaml_file" ]]; then
+            local app_name
+            app_name=$(yq eval '.metadata.name' "$yaml_file" 2>/dev/null | head -1 || echo "")
+            
+            log_info "Debug: Checking $yaml_file -> app_name: $app_name"
+            
+            if [[ -n "$app_name" && "$app_name" == "$service" ]]; then
+                service_file="$yaml_file"
+                log_info "Debug: Found matching file: $service_file" >&2
+                break
+            fi
+        else
+            log_warn "Debug: File not found: $yaml_file" >&2
+        fi
+    done
+    
+    if [[ -n "$service_file" ]]; then
+        # Comment out the service in the kustomization file
+        local kustomization_file="${PLATFORM_ROOT}/bootstrap/argocd/base/kustomization.yaml"
+        local resource_name=$(basename "$service_file")
+        
+        log_info "Debug: kustomization_file: $kustomization_file" >&2
+        log_info "Debug: resource_name: $resource_name" >&2
+        
+        if [[ -f "$kustomization_file" ]]; then
+            # Create backup
+            cp "$kustomization_file" "${kustomization_file}.bak"
+            log_info "Debug: Created backup file" >&2
+            
+            # Comment out the resource line (macOS compatible)
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' "s|^- ${resource_name}|# DISABLED by conditional patch: ${resource_name}|" "$kustomization_file"
+            else
+                sed -i "s|^- ${resource_name}|# DISABLED by conditional patch: ${resource_name}|" "$kustomization_file"
+            fi
+            
+            log_info "Debug: Applied sed command" >&2
+            log_success "Disabled $service by commenting out $resource_name in kustomization.yaml" >&2
+        else
+            log_error "Kustomization file not found: $kustomization_file" >&2
+        fi
+    else
+        log_warn "Could not find YAML file for service: $service" >&2
     fi
 }
 
@@ -94,27 +173,40 @@ discover_all_services() {
     # Read the base kustomization to get all ArgoCD applications
     local kustomization_file="${PLATFORM_ROOT}/bootstrap/argocd/base/kustomization.yaml"
     
+    log_info "Debug: Looking for kustomization file: $kustomization_file" >&2
+    
     if [[ -f "$kustomization_file" ]]; then
+        log_info "Debug: Found kustomization file" >&2
         # Extract resource file names from kustomization
         local resource_files
         resource_files=$(yq eval '.resources[]' "$kustomization_file" 2>/dev/null)
         
+        log_info "Debug: Resource files: $resource_files" >&2
+        
         for resource_file in $resource_files; do
             if [[ "$resource_file" == *.yaml ]]; then
                 local app_file="${PLATFORM_ROOT}/bootstrap/argocd/base/$resource_file"
+                log_info "Debug: Checking app file: $app_file" >&2
                 if [[ -f "$app_file" ]]; then
                     # Extract application name from the YAML file
+                    # Handle multi-document YAML files by taking only the first document
                     local app_name
-                    app_name=$(yq eval '.metadata.name' "$app_file" 2>/dev/null)
+                    app_name=$(yq eval '.metadata.name' "$app_file" 2>/dev/null | head -1)
                     
-                    if [[ -n "$app_name" ]]; then
+                    if [[ -n "$app_name" && "$app_name" != "---" ]]; then
+                        log_info "Debug: Found app: $app_name" >&2
                         all_services+=("$app_name")
                     fi
+                else
+                    log_warn "Debug: App file not found: $app_file" >&2
                 fi
             fi
         done
+    else
+        log_error "Debug: Kustomization file not found: $kustomization_file" >&2
     fi
     
+    log_info "Debug: All services found: ${all_services[*]:-}" >&2
     echo "${all_services[@]:-}"
 }
 
@@ -138,16 +230,22 @@ get_foundation_services() {
                     local sync_wave
                     
                     # Extract application name and sync-wave
-                    app_name=$(yq eval '.metadata.name' "$app_file" 2>/dev/null)
-                    sync_wave=$(yq eval '.metadata.annotations."argocd.argoproj.io/sync-wave"' "$app_file" 2>/dev/null)
+                    # Handle multi-document YAML files by taking only the first document
+                    app_name=$(yq eval '.metadata.name' "$app_file" 2>/dev/null | head -1)
+                    sync_wave=$(yq eval '.metadata.annotations."argocd.argoproj.io/sync-wave"' "$app_file" 2>/dev/null | head -1)
                     
-                    if [[ -n "$app_name" && -n "$sync_wave" ]]; then
+                    # Set default sync-wave if not found or null
+                    if [[ -z "$sync_wave" || "$sync_wave" == "null" ]]; then
+                        sync_wave="999"
+                    fi
+                    
+                    if [[ -n "$app_name" && "$app_name" != "---" ]]; then
                         # Foundation services: sync-wave 0-3 (core platform infrastructure)
                         # Wave 0: external-secrets
                         # Wave 1: crossplane-operator, kagent-crds  
                         # Wave 2: cnpg
                         # Wave 3: foundation-config
-                        if [[ "$sync_wave" -le 3 ]]; then
+                        if [[ "$sync_wave" =~ ^[0-9]+$ && "$sync_wave" -le 3 ]]; then
                             foundation_services+=("$app_name")
                         fi
                     fi
@@ -230,46 +328,5 @@ else
 fi
 
 echo "================================================================================"
-
-# Generic function to disable any service by commenting out its kustomization entry
-disable_service() {
-    local service="$1"
-    
-    log_info "Disabling service: $service"
-    
-    # Find the corresponding YAML file for this service
-    local service_file=""
-    for yaml_file in "${PLATFORM_ROOT}/bootstrap/argocd/base"/*.yaml; do
-        if [[ -f "$yaml_file" ]]; then
-            local app_name
-            app_name=$(yq eval '.metadata.name' "$yaml_file" 2>/dev/null || grep -E "^\s*name:" "$yaml_file" | head -1 | sed 's/.*name:\s*//' | tr -d '"')
-            
-            if [[ "$app_name" == "$service" ]]; then
-                service_file="$yaml_file"
-                break
-            fi
-        fi
-    done
-    
-    if [[ -n "$service_file" ]]; then
-        # Comment out the service in the kustomization file
-        local kustomization_file="${PLATFORM_ROOT}/bootstrap/argocd/base/kustomization.yaml"
-        local resource_name=$(basename "$service_file")
-        
-        if [[ -f "$kustomization_file" ]]; then
-            # Create backup
-            cp "$kustomization_file" "${kustomization_file}.bak"
-            
-            # Comment out the resource line
-            sed -i "s|^- ${resource_name}|# DISABLED by conditional patch: ${resource_name}|" "$kustomization_file"
-            
-            log_success "Disabled $service by commenting out $resource_name in kustomization.yaml"
-        else
-            log_error "Kustomization file not found: $kustomization_file"
-        fi
-    else
-        log_warn "Could not find YAML file for service: $service"
-    fi
-}
 
 log_success "Conditional optional services patch completed"
