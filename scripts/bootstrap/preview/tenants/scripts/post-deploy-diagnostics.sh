@@ -22,22 +22,20 @@ log_warn() { echo -e "${YELLOW}[POST-DEPLOY]${NC} $*"; }
 
 # Load service configuration from ci/config.yaml
 load_service_config() {
-    # Look for ci/config.yaml in current directory (service directory)
-    local config_file="ci/config.yaml"
+    # Get the script directory and calculate service root
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local service_root="$(cd "$script_dir/../../../../../.." && pwd)"
+    local config_file="$service_root/ci/config.yaml"
     
-    # If not found in current directory, try one level up (in case we're in platform dir)
-    if [[ ! -f "$config_file" ]]; then
-        config_file="../ci/config.yaml"
-    fi
+    log_info "Debug: Script dir: $script_dir"
+    log_info "Debug: Service root: $service_root" 
+    log_info "Debug: Config file: $config_file"
     
     if [[ ! -f "$config_file" ]]; then
         log_error "ci/config.yaml not found - cannot run diagnostics"
-        log_error "Looked in: ./ci/config.yaml and ../ci/config.yaml"
-        log_error "Current directory: $(pwd)"
+        log_error "Looked for: $config_file"
         exit 1
     fi
-    
-    log_info "Using config file: $config_file"
     
     if command -v yq &> /dev/null; then
         SERVICE_NAME=$(yq eval '.service.name' "$config_file")
