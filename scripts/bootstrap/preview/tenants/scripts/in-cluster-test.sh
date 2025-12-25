@@ -352,8 +352,10 @@ trap cleanup EXIT
     SERVICE_PATCHES_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/apply-service-patches.sh"
     if [[ -f "$SERVICE_PATCHES_SCRIPT" ]]; then
         chmod +x "$SERVICE_PATCHES_SCRIPT"
-        # Get the service root directory (where ci/config.yaml is located)
-        SERVICE_ROOT_DIR="$(cd "${PLATFORM_ROOT}/.." && pwd)"
+        # Get the actual service root directory (parent of zerotouch-platform)
+        SERVICE_ROOT_DIR="$(dirname "${PLATFORM_ROOT}")"
+        log_info "Service root directory: $SERVICE_ROOT_DIR"
+        log_info "Platform root directory: $PLATFORM_ROOT"
         "$SERVICE_PATCHES_SCRIPT" --service-dir "$SERVICE_ROOT_DIR"
     else
         log_error "Service patches script not found: $SERVICE_PATCHES_SCRIPT"
