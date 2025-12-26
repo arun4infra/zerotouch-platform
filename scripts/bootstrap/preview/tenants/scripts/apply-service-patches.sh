@@ -54,11 +54,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_ROOT="$(cd "$SCRIPT_DIR/../../../../../.." && pwd)"
 
 if [[ "$SERVICE_DIR" == /* ]]; then
-    # Absolute path provided
-    SERVICE_DIR="$SERVICE_DIR"
+    # Absolute path provided - use as-is
+    log_info "Using absolute service directory: $SERVICE_DIR"
 else
     # Relative path provided - resolve from workspace root
-    SERVICE_DIR="$(cd "$WORKSPACE_ROOT/$SERVICE_DIR" && pwd)"
+    log_info "Resolving relative service directory: $SERVICE_DIR from workspace: $WORKSPACE_ROOT"
+    if ! SERVICE_DIR="$(cd "$WORKSPACE_ROOT/$SERVICE_DIR" && pwd)"; then
+        log_error "Failed to resolve service directory: $WORKSPACE_ROOT/$SERVICE_DIR"
+        exit 1
+    fi
 fi
 SERVICE_PATCHES_DIR="$SERVICE_DIR/scripts/patches"
 
@@ -92,10 +96,10 @@ for patch in "$SERVICE_PATCHES_DIR"/[0-9][0-9]-*.sh; do
         # Apply patch with --force flag (for preview mode)
         if "$patch" --force; then
             log_success "✓ Applied: $patch_name"
-            ((PATCHES_APPLIED++))
+            PATCHES_APPLIED=$((PATCHES_APPLIED + 1))
         else
             log_warn "⚠ Failed: $patch_name (continuing...)"
-            ((PATCHES_FAILED++))
+            PATCHES_FAILED=$((PATCHES_FAILED + 1))
         fi
     fi
 done
