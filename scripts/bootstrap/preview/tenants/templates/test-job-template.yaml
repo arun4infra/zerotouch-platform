@@ -52,16 +52,37 @@ spec:
           echo "Available disk space:"
           df -h /app || echo "Could not check disk space"
           echo ""
+          echo "=== DATABASE ENVIRONMENT VARIABLES ==="
+          echo "POSTGRES_USER: ${POSTGRES_USER:-not set}"
+          echo "POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-not set}"
+          echo "POSTGRES_DB: ${POSTGRES_DB:-not set}"
+          echo "POSTGRES_HOST: ${POSTGRES_HOST:-not set}"
+          echo "POSTGRES_PORT: ${POSTGRES_PORT:-not set}"
+          echo ""
           
           echo "=== TEST PATH VALIDATION ==="
-          if [ -f "{{TEST_PATH}}" ] || [ -d "{{TEST_PATH}}" ]; then
-            echo "✅ Test path exists: {{TEST_PATH}}"
-            if [ -d "{{TEST_PATH}}" ]; then
+          TEST_FILE_PATH="{{TEST_PATH}}"
+          # Extract just the file path (before ::) for validation
+          case "$TEST_FILE_PATH" in
+            *::*)
+              FILE_PART="${TEST_FILE_PATH%%::*}"
+              echo "Pytest-style path detected: {{TEST_PATH}}"
+              echo "Validating file part: $FILE_PART"
+              ;;
+            *)
+              FILE_PART="$TEST_FILE_PATH"
+              echo "Direct path: {{TEST_PATH}}"
+              ;;
+          esac
+          
+          if [ -f "$FILE_PART" ] || [ -d "$FILE_PART" ]; then
+            echo "✅ Test path exists: $FILE_PART"
+            if [ -d "$FILE_PART" ]; then
               echo "Test files in directory:"
-              find "{{TEST_PATH}}" -name "*test*" | head -10
+              find "$FILE_PART" -name "*test*" | head -10
             fi
           else
-            echo "❌ Test path does not exist: {{TEST_PATH}}"
+            echo "❌ Test path does not exist: $FILE_PART"
             echo "Available files/directories:"
             ls -la . | head -10
             echo "Looking for test files:"
