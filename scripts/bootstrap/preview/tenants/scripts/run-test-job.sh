@@ -14,6 +14,23 @@ TIMEOUT="${3:-600}"
 NAMESPACE="${4:-intelligence-deepagents}"
 IMAGE_TAG="${5:-ci-test}"
 
+# Determine full image reference based on build mode
+# In CI, the image is built with full registry path
+# We need to use the same image reference that was built
+if [[ "$IMAGE_TAG" == *":"* ]]; then
+    # Full image reference provided (e.g., ghcr.io/org/service:tag)
+    FULL_IMAGE="$IMAGE_TAG"
+elif [[ "$IMAGE_TAG" == "ci-test" ]]; then
+    # Local test mode - use short name (loaded into Kind)
+    FULL_IMAGE="SERVICE_NAME_PLACEHOLDER:ci-test"
+else
+    # CI mode - construct full registry path
+    # Get registry and org from environment or use defaults
+    REGISTRY="${CONTAINER_REGISTRY:-ghcr.io}"
+    GITHUB_REPOSITORY_OWNER="${BOT_GITHUB_USERNAME:-arun4infra}"
+    FULL_IMAGE="${REGISTRY}/${GITHUB_REPOSITORY_OWNER}/SERVICE_NAME_PLACEHOLDER:${IMAGE_TAG}"
+fi
+
 # Platform root directory (when running from service directory)
 PLATFORM_ROOT="./zerotouch-platform"
 
@@ -73,9 +90,12 @@ main() {
     mv /tmp/new-template.yaml /tmp/base-template.yaml
     
     # Substitute variables in template
+    # Replace SERVICE_NAME_PLACEHOLDER with actual service name in FULL_IMAGE
+    FINAL_IMAGE="${FULL_IMAGE//SERVICE_NAME_PLACEHOLDER/$SERVICE_NAME}"
+    
     sed -e "s/{{JOB_NAME}}/$JOB_NAME/g" \
         -e "s/{{NAMESPACE}}/$NAMESPACE/g" \
-        -e "s/{{IMAGE}}/$SERVICE_NAME:$IMAGE_TAG/g" \
+        -e "s|{{IMAGE}}|$FINAL_IMAGE|g" \
         -e "s|{{TEST_PATH}}|$TEST_PATH|g" \
         -e "s/{{TEST_NAME}}/$TEST_NAME/g" \
         -e "s/{{SERVICE_NAME}}/$SERVICE_NAME/g" \
