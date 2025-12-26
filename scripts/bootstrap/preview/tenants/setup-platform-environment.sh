@@ -68,6 +68,30 @@ find "${SCRIPT_DIR}/../patches" -name "*.sh" -type f -exec chmod +x {} \; 2>/dev
 find "${SCRIPT_DIR}/../../../.." -name "*.sh" -path "*/zerotouch-platform/*" -type f -exec chmod +x {} \; 2>/dev/null || true
 log_info "Execute permissions set on all platform scripts"
 
+# Install required tools
+log_info "Installing required tools..."
+if ! command -v yq &> /dev/null; then
+    log_info "Installing yq..."
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        if command -v brew &> /dev/null; then
+            brew install yq
+        else
+            curl -L https://github.com/mikefarah/yq/releases/latest/download/yq_darwin_amd64 -o /tmp/yq
+            chmod +x /tmp/yq
+            sudo mv /tmp/yq /usr/local/bin/yq
+        fi
+    else
+        # Linux
+        curl -L https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /tmp/yq
+        chmod +x /tmp/yq
+        sudo mv /tmp/yq /usr/local/bin/yq
+    fi
+    log_success "yq installed successfully"
+else
+    log_info "yq is already installed"
+fi
+
 # Step 1: Setup Kind cluster first (before building image)
 log_info "Step 1: Setting up Kind cluster..."
 

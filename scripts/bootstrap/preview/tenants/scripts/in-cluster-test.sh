@@ -48,25 +48,20 @@ load_service_config() {
     
     log_info "Loading service configuration from ci/config.yaml"
     
-    # Parse YAML using yq or fallback to basic parsing
-    if command -v yq &> /dev/null; then
-        SERVICE_NAME=$(yq eval '.service.name' ci/config.yaml)
-        NAMESPACE=$(yq eval '.service.namespace' ci/config.yaml)
-        TIMEOUT=$(yq eval '.test.timeout // 600' ci/config.yaml)
-        IMAGE_TAG=$(yq eval '.build.tag // "ci-test"' ci/config.yaml)
-        PLATFORM_BRANCH=$(yq eval '.platform.branch // "main"' ci/config.yaml)
-        
-        # Load environment variables from config
-        ENV_VARS=$(yq eval '.env // {}' ci/config.yaml -o json 2>/dev/null || echo "{}")
-    else
-        # Fallback: basic grep parsing
-        SERVICE_NAME=$(grep -E '^\s*name:' ci/config.yaml | sed 's/.*name:\s*["\x27]*\([^"\x27]*\)["\x27]*.*/\1/' | tr -d ' ')
-        NAMESPACE=$(grep -E '^\s*namespace:' ci/config.yaml | sed 's/.*namespace:\s*["\x27]*\([^"\x27]*\)["\x27]*.*/\1/' | tr -d ' ')
-        TIMEOUT=$(grep -E '^\s*timeout:' ci/config.yaml | sed 's/.*timeout:\s*\([0-9]*\).*/\1/' || echo "600")
-        IMAGE_TAG=$(grep -E '^\s*tag:' ci/config.yaml | sed 's/.*tag:\s*["\x27]*\([^"\x27]*\)["\x27]*.*/\1/' | tr -d ' ' || echo "ci-test")
-        PLATFORM_BRANCH=$(grep -E '^\s*branch:' ci/config.yaml | sed 's/.*branch:\s*["\x27]*\([^"\x27]*\)["\x27]*.*/\1/' | tr -d ' ' || echo "main")
-        ENV_VARS="{}"
+    # Parse YAML using yq (required)
+    if ! command -v yq &> /dev/null; then
+        log_error "yq is required but not installed. Please install yq."
+        exit 1
     fi
+    
+    SERVICE_NAME=$(yq eval '.service.name' ci/config.yaml)
+    NAMESPACE=$(yq eval '.service.namespace' ci/config.yaml)
+    TIMEOUT=$(yq eval '.test.timeout // 600' ci/config.yaml)
+    IMAGE_TAG=$(yq eval '.build.tag // "ci-test"' ci/config.yaml)
+    PLATFORM_BRANCH=$(yq eval '.platform.branch // "main"' ci/config.yaml)
+    
+    # Load environment variables from config
+    ENV_VARS=$(yq eval '.env // {}' ci/config.yaml -o json 2>/dev/null || echo "{}")
     
     # Validate required fields
     if [[ -z "$SERVICE_NAME" ]]; then
@@ -98,38 +93,21 @@ load_service_config() {
 # Helper function to check if a config flag is enabled
 config_enabled() {
     local config_path="$1"
-    if command -v yq &> /dev/null; then
-        local value=$(yq eval ".$config_path // false" ci/config.yaml 2>/dev/null)
-        [[ "$value" == "true" ]]
-    else
-        # Fallback: assume enabled if not specified
-        return 0
-    fi
+    local value=$(yq eval ".$config_path // false" ci/config.yaml 2>/dev/null)
+    [[ "$value" == "true" ]]
 }
 
 # Helper function to get dependencies by type
 get_platform_dependencies() {
-    if command -v yq &> /dev/null; then
-        yq eval '.dependencies.platform[]' ci/config.yaml 2>/dev/null | tr '\n' ' ' || echo ""
-    else
-        echo ""
-    fi
+    yq eval '.dependencies.platform[]' ci/config.yaml 2>/dev/null | tr '\n' ' ' || echo ""
 }
 
 get_external_dependencies() {
-    if command -v yq &> /dev/null; then
-        yq eval '.dependencies.external[]' ci/config.yaml 2>/dev/null | tr '\n' ' ' || echo ""
-    else
-        echo ""
-    fi
+    yq eval '.dependencies.external[]' ci/config.yaml 2>/dev/null | tr '\n' ' ' || echo ""
 }
 
 get_internal_dependencies() {
-    if command -v yq &> /dev/null; then
-        yq eval '.dependencies.internal[]' ci/config.yaml 2>/dev/null | tr '\n' ' ' || echo ""
-    else
-        echo ""
-    fi
+    yq eval '.dependencies.internal[]' ci/config.yaml 2>/dev/null | tr '\n' ' ' || echo ""
 }
 
 # Legacy function for backward compatibility
@@ -446,38 +424,48 @@ setup_ci_infrastructure() {
     # Step 2: Checkout zerotouch-platform
     log_info "Checkout zerotouch-platform"
     
-    # Check if we're already running from a platform checkout (service script provided it)
+    # Always use fresh checkout for CI reliability - never trust existing checkouts
     CURRENT_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     if [[ "$CURRENT_SCRIPT_DIR" == *"zerotouch-platform"* ]]; then
-        # We're already running from a platform checkout, use it
-        PLATFORM_ROOT="$(cd "$CURRENT_SCRIPT_DIR/../../../../.." && pwd)"
-        log_success "Using existing platform checkout at: $PLATFORM_ROOT"
+        # We're running from an existing checkout - this is not ideal for CI
+        # Get the service root directory and ensure fresh checkout there
+        SERVICE_ROOT="$(cd "$CURRENT_SCRIPT_DIR/../../../../../.." && pwd)"
+        PLATFORM_CHECKOUT_DIR="$SERVICE_ROOT/zerotouch-platform"
+        
+        log_info "Running from existing platform checkout, ensuring fresh checkout..."
+        
+        # Remove existing checkout and clone fresh
+        if [[ -d "$PLATFORM_CHECKOUT_DIR" ]]; then
+            log_info "Removing existing platform checkout for fresh clone..."
+            rm -rf "$PLATFORM_CHECKOUT_DIR"
+        fi
+        
+        log_info "Cloning fresh zerotouch-platform repository (branch: $PLATFORM_BRANCH)..."
+        cd "$SERVICE_ROOT"
+        git clone -b "$PLATFORM_BRANCH" \
+            https://github.com/arun4infra/zerotouch-platform.git \
+            "zerotouch-platform"
+        
+        PLATFORM_ROOT="$PLATFORM_CHECKOUT_DIR"
+        log_success "Fresh platform checkout at: $PLATFORM_ROOT (branch: $PLATFORM_BRANCH)"
     else
-        # We need to clone the platform - handle this automatically
-        # PLATFORM_BRANCH is now loaded from service config in load_service_config()
+        # We're running from service directory - standard fresh checkout
         PLATFORM_CHECKOUT_DIR="zerotouch-platform"
         
-        if [[ -d "$PLATFORM_CHECKOUT_DIR/.git" ]]; then
-            log_info "Platform repo exists ($PLATFORM_CHECKOUT_DIR), updating..."
-            pushd "$PLATFORM_CHECKOUT_DIR" > /dev/null
-            git fetch origin
-            if git show-ref --verify --quiet "refs/heads/$PLATFORM_BRANCH"; then
-                git checkout "$PLATFORM_BRANCH"
-            else
-                git checkout -b "$PLATFORM_BRANCH" "origin/$PLATFORM_BRANCH"
-            fi
-            git pull --ff-only origin "$PLATFORM_BRANCH"
-            popd > /dev/null
-        else
-            log_info "Cloning zerotouch-platform repository (branch: $PLATFORM_BRANCH)..."
-            git clone -b "$PLATFORM_BRANCH" \
-                https://github.com/arun4infra/zerotouch-platform.git \
-                "$PLATFORM_CHECKOUT_DIR"
+        # Always remove and clone fresh for CI reliability
+        if [[ -d "$PLATFORM_CHECKOUT_DIR" ]]; then
+            log_info "Removing existing platform checkout for fresh clone..."
+            rm -rf "$PLATFORM_CHECKOUT_DIR"
         fi
+        
+        log_info "Cloning fresh zerotouch-platform repository (branch: $PLATFORM_BRANCH)..."
+        git clone -b "$PLATFORM_BRANCH" \
+            https://github.com/arun4infra/zerotouch-platform.git \
+            "$PLATFORM_CHECKOUT_DIR"
         
         # Update platform root path now that we have the checkout
         PLATFORM_ROOT="$(cd "${PLATFORM_CHECKOUT_DIR}" && pwd)"
-        log_success "Platform checked out at: $PLATFORM_ROOT (branch: $PLATFORM_BRANCH)"
+        log_success "Fresh platform checkout at: $PLATFORM_ROOT (branch: $PLATFORM_BRANCH)"
     fi
 
     # Step 3: Configure AWS credentials (skip for local - assume already configured)
