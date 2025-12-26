@@ -27,6 +27,8 @@ spec:
           value: "{{SERVICE_NAME}}"
         - name: NAMESPACE
           value: "{{NAMESPACE}}"
+        - name: PYTHONPATH
+          value: "/app"
         # END_DYNAMIC_ENV
         command: 
         - "/bin/sh"
@@ -83,39 +85,28 @@ spec:
           echo "🧪 Running integration tests..."
           echo "=============================================="
           
-          # Generic test execution - services provide their own test runner
-          if [ -f "./scripts/ci/run.sh" ]; then
-            echo "Using service CI runner: ./scripts/ci/run.sh"
-            if ./scripts/ci/run.sh test 2>&1 | tee artifacts/test-output.log; then
-              TEST_EXIT_CODE=0
-              echo "✅ Tests passed"
-            else
-              TEST_EXIT_CODE=$?
-              echo "❌ Tests failed with exit code: $TEST_EXIT_CODE"
-            fi
-          elif [ -f "./scripts/ci/run-tests.sh" ]; then
-            echo "Using service-specific test runner: ./scripts/ci/run-tests.sh"
-            if ./scripts/ci/run-tests.sh "{{TEST_PATH}}" 2>&1 | tee artifacts/test-output.log; then
-              TEST_EXIT_CODE=0
-              echo "✅ Tests passed"
-            else
-              TEST_EXIT_CODE=$?
-              echo "❌ Tests failed with exit code: $TEST_EXIT_CODE"
-            fi
-          elif [ -f "./run.sh" ]; then
-            echo "Using service run script for tests: ./run.sh"
-            if ./run.sh test 2>&1 | tee artifacts/test-output.log; then
-              TEST_EXIT_CODE=0
-              echo "✅ Tests passed"
-            else
-              TEST_EXIT_CODE=$?
-              echo "❌ Tests failed with exit code: $TEST_EXIT_CODE"
-            fi
+          # Platform-owned test execution - run pytest directly
+          echo "Platform executing tests: pytest {{TEST_PATH}}"
+          
+          # Check if pytest is available
+          if ! command -v pytest &> /dev/null; then
+            echo "Installing pytest..."
+            pip install pytest pytest-asyncio
+          fi
+          
+          # Run integration tests directly
+          if pytest "{{TEST_PATH}}" \
+              -v \
+              --tb=short \
+              --disable-warnings \
+              --maxfail=5 \
+              --durations=10 \
+              2>&1 | tee artifacts/test-output.log; then
+            TEST_EXIT_CODE=0
+            echo "✅ Tests passed"
           else
-            echo "❌ No test runner found. Expected: ./scripts/ci/run.sh, ./scripts/ci/run-tests.sh, or ./run.sh"
-            echo "Available scripts:"
-            find . -name "*.sh" -type f | head -10
-            exit 1
+            TEST_EXIT_CODE=$?
+            echo "❌ Tests failed with exit code: $TEST_EXIT_CODE"
           fi
           
           echo ""

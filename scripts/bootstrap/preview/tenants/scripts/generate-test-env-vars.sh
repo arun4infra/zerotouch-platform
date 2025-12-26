@@ -92,7 +92,9 @@ generate_env_vars() {
         - name: SERVICE_NAME
           value: \"$SERVICE_NAME\"
         - name: NAMESPACE
-          value: \"$NAMESPACE\""
+          value: \"$NAMESPACE\"
+        - name: PYTHONPATH
+          value: \"/app\""
     
     echo "$env_vars"
 }
