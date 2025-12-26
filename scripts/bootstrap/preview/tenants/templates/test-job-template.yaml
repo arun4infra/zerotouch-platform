@@ -21,32 +21,6 @@ spec:
         workingDir: /app
         env:
         # Database credentials from K8s secrets (dynamic service name)
-        - name: POSTGRES_USER
-          valueFrom:
-            secretKeyRef:
-              name: "{{SERVICE_NAME}}-db-conn"
-              key: POSTGRES_USER
-        - name: POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: "{{SERVICE_NAME}}-db-conn"
-              key: POSTGRES_PASSWORD
-        - name: POSTGRES_DB
-          valueFrom:
-            secretKeyRef:
-              name: "{{SERVICE_NAME}}-db-conn"
-              key: POSTGRES_DB
-        - name: POSTGRES_HOST
-          valueFrom:
-            secretKeyRef:
-              name: "{{SERVICE_NAME}}-db-conn"
-              key: POSTGRES_HOST
-        - name: POSTGRES_PORT
-          valueFrom:
-            secretKeyRef:
-              name: "{{SERVICE_NAME}}-db-conn"
-              key: POSTGRES_PORT
-        # Test configuration (generic)
         - name: TEST_ENV
           value: "integration"
         - name: SERVICE_NAME

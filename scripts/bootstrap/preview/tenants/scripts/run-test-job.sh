@@ -49,6 +49,23 @@ main() {
     # Create and run test job using template
     export JOB_NAME="${TEST_NAME}-$(date +%s)"
     
+    # Generate dynamic environment variables using modular script
+    ENV_GENERATOR="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/generate-test-env-vars.sh"
+    if [[ ! -f "$ENV_GENERATOR" ]]; then
+        log_error "Environment variable generator not found: $ENV_GENERATOR"
+        return 1
+    fi
+    
+    chmod +x "$ENV_GENERATOR"
+    DYNAMIC_ENV_VARS=$("$ENV_GENERATOR" "$SERVICE_NAME" "$NAMESPACE")
+    
+    # Create temporary template with dynamic environment variables
+    cp "${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/templates/test-job-template.yaml" /tmp/base-template.yaml
+    
+    # Replace the placeholder environment section with dynamic variables
+    sed -i.bak "/# Database credentials from K8s secrets (dynamic service name)/,/value: \"{{NAMESPACE}}\"/c\\
+$DYNAMIC_ENV_VARS" /tmp/base-template.yaml
+    
     # Substitute variables in template
     sed -e "s/{{JOB_NAME}}/$JOB_NAME/g" \
         -e "s/{{NAMESPACE}}/$NAMESPACE/g" \
@@ -56,7 +73,7 @@ main() {
         -e "s|{{TEST_PATH}}|$TEST_PATH|g" \
         -e "s/{{TEST_NAME}}/$TEST_NAME/g" \
         -e "s/{{SERVICE_NAME}}/$SERVICE_NAME/g" \
-        "${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/templates/test-job-template.yaml" > /tmp/test-job.yaml
+        /tmp/base-template.yaml > /tmp/test-job.yaml
     
     # Apply job and wait for completion
     kubectl apply -f /tmp/test-job.yaml
