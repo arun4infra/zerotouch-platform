@@ -87,8 +87,8 @@ echo "📋 Applying platform claims..."
 echo "🔍 Checking for platform claims in: ${PROJECT_ROOT}/platform/claims/${NAMESPACE}"
 if [[ -d "${PROJECT_ROOT}/platform/claims/${NAMESPACE}" ]]; then
     echo "✅ Found platform claims directory"
-    # Apply platform claims for the namespace
-    kubectl apply -f "${PROJECT_ROOT}/platform/claims/${NAMESPACE}/" -n "${NAMESPACE}"
+    # Apply platform claims for the namespace (recursive to include subdirectories)
+    kubectl apply -f "${PROJECT_ROOT}/platform/claims/${NAMESPACE}/" -n "${NAMESPACE}" --recursive
     echo "✅ Platform claims applied"
     
     # Wait for ghcr-pull-secret to be synced by ExternalSecrets Operator
