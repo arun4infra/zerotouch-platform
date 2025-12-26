@@ -91,6 +91,16 @@ if [[ -d "${PROJECT_ROOT}/platform/claims/${NAMESPACE}" ]]; then
     kubectl apply -f "${PROJECT_ROOT}/platform/claims/${NAMESPACE}/" -n "${NAMESPACE}"
     echo "✅ Platform claims applied"
     
+    # Wait for ghcr-pull-secret to be synced by ExternalSecrets Operator
+    WAIT_SECRET_SCRIPT="${SCRIPT_DIR}/../../../wait/wait-for-external-secret.sh"
+    if [[ -f "$WAIT_SECRET_SCRIPT" ]]; then
+        chmod +x "$WAIT_SECRET_SCRIPT"
+        "$WAIT_SECRET_SCRIPT" ghcr-pull-secret "${NAMESPACE}" --timeout 120
+    else
+        echo "❌ Wait script not found: $WAIT_SECRET_SCRIPT"
+        exit 1
+    fi
+    
     # Use platform's generalized wait script for Platform Services (EventDrivenService or WebService)
     WAIT_SCRIPT="${SCRIPT_DIR}/../../../wait/wait-for-platform-service.sh"
     if [[ -f "$WAIT_SCRIPT" ]]; then
