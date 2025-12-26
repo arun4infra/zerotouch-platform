@@ -70,25 +70,39 @@ service:
 
 ### `build` (Optional)
 
-Controls Docker image building during CI.
+Controls Docker image building during CI. The platform automatically detects the environment and builds appropriate images.
 
 | Field | Type | Required | Default | Impact |
 |-------|------|----------|---------|---------|
 | `dockerfile` | string | ❌ | `"Dockerfile"` | Path to Dockerfile for building |
 | `context` | string | ❌ | `"."` | Docker build context directory |
-| `tag` | string | ❌ | `"ci-test"` | Image tag used in CI environment |
+| `tag` | string | ❌ | `"ci-test"` | Image tag used in local CI environment |
+
+**Build Modes (Auto-Detected):**
+
+| Environment | Mode | Image Built | Registry Push |
+|-------------|------|-------------|---------------|
+| Local execution | `test` | `service:ci-test` | ❌ No (Kind only) |
+| GitHub Actions PR | `pr` | `ghcr.io/org/service:branch-sha` | ✅ Yes |
+| GitHub Actions main | `prod` | `ghcr.io/org/service:latest` + `main-sha` | ✅ Yes |
 
 **CI Impact:**
-- Platform runs: `docker build -f ${dockerfile} -t ${name}:${tag} ${context}`
-- Image is loaded into Kind cluster for testing
-- Deployment uses `${name}:${tag}` image reference
+- Platform runs: `docker build -f ${dockerfile} -t <image> ${context}`
+- **Local CI:** Image loaded into Kind cluster for testing
+- **PR/Production:** Image pushed to container registry
+- Deployment manifests automatically patched to use correct image
+
+**Image Strategy:**
+- **Git Default:** Deployment files contain `service:latest` (production-ready)
+- **CI Patching:** Platform temporarily patches manifests based on build mode
+- **No Registry Dependencies:** Local CI never tries to pull from registry
 
 **Example:**
 ```yaml
 build:
   dockerfile: "docker/Dockerfile.ci"  # Custom Dockerfile location
   context: "."
-  tag: "test-v1.0"
+  tag: "test-v1.0"                   # Custom local CI tag
 ```
 
 ### `test` (Optional)

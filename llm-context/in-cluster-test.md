@@ -16,8 +16,9 @@ A service is CI-compatible if it follows this filesystem layout:
 service-repo/
 ├── ci/
 │   └── config.yaml              # Required: All service configuration
-└── platform/
-    └── claims/<namespace>/      # Required: Kubernetes manifests
+├── platform/
+│   └── claims/<namespace>/      # Required: Kubernetes manifests (with production-ready image references)
+└── Dockerfile                   # Required: Service container build instructions
 ```
 
 ### Optional Structure
@@ -129,7 +130,50 @@ secrets:
 - `redis` - Provisions Redis/Dragonfly cache via platform claims
 - `deepagents-runtime` - Sets up deepagents-runtime service
 
-## Platform Script Behavior
+## Platform Build System
+
+The platform provides a centralized build system that automatically detects the environment and builds appropriate images.
+
+### Build Modes (Auto-Detected)
+
+| Mode | Environment Detection | Image Built | Registry Push | Use Case |
+|------|----------------------|-------------|---------------|----------|
+| `test` | Local execution | `service:ci-test` | ❌ No (Kind only) | Local CI, developer testing |
+| `pr` | GitHub Actions + PR | `ghcr.io/org/service:branch-sha` | ✅ Yes | PR testing, staging |
+| `prod` | GitHub Actions + main | `ghcr.io/org/service:latest` + `main-sha` | ✅ Yes | Production deployment |
+
+### Image Strategy
+
+**Git Repository (Default State):**
+```yaml
+# platform/claims/namespace/service-deployment.yaml
+spec:
+  image: service:latest  # Production-ready default
+```
+
+**CI Patching (Temporary):**
+- **Local CI:** Patches to `service:ci-test` (built and loaded into Kind)
+- **PR CI:** Patches to `ghcr.io/org/service:branch-sha` (pushed to registry)
+- **Production:** Uses default `service:latest` (no patching needed)
+
+**Benefits:**
+- Git always contains production-ready configuration
+- No registry dependencies for local development
+- Automatic environment detection
+- Consistent across all services
+
+### Platform Scripts
+
+The platform automatically:
+1. **Detects environment** (local vs GitHub Actions, PR vs main branch)
+2. **Builds appropriate image** based on detected mode
+3. **Patches deployment manifests** to use correct image
+4. **Deploys service** using patched manifests
+
+Services only need to provide:
+- `Dockerfile` for building the service
+- `ci/config.yaml` for configuration
+- `platform/claims/` with production-ready image references
 
 The platform's `in-cluster-test.sh` script discovers inputs by location and uses boolean flags to control behavior:
 

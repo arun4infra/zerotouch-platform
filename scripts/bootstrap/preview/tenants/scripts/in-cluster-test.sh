@@ -331,7 +331,44 @@ trap cleanup EXIT
     fi
 
     # Stage 3: Service Deployment
-    log_info "Stage 3: Service Deployment - Deploy the actual service and run migrations"
+    log_info "Stage 3: Service Deployment - Build, patch, and deploy the service"
+    
+    # Step 3a: Build service image (Platform auto-detects mode)
+    log_info "Building service image..."
+    BUILD_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/build-service.sh"
+    if [[ -f "$BUILD_SCRIPT" ]]; then
+        chmod +x "$BUILD_SCRIPT"
+        # Run build script from service directory
+        "$BUILD_SCRIPT" "${SERVICE_NAME}"
+        
+        # Read back vars (For local run, we manually set defaults if GITHUB_OUTPUT missing)
+        if [[ -f "${GITHUB_OUTPUT:-}" ]]; then
+            BUILD_MODE=$(grep "BUILD_MODE=" "$GITHUB_OUTPUT" | cut -d'=' -f2 || echo "test")
+            IMAGE_TAG=$(grep "IMAGE_TAG=" "$GITHUB_OUTPUT" | cut -d'=' -f2 || echo "ci-test")
+        else
+            # Fallback for local execution if not in GHA
+            BUILD_MODE="test"
+            IMAGE_TAG="ci-test"
+        fi
+        
+        log_success "Build completed - Mode: $BUILD_MODE, Tag: $IMAGE_TAG"
+    else
+        log_error "Build script not found: $BUILD_SCRIPT"
+        exit 1
+    fi
+
+    # Step 3b: Patch service deployment manifests
+    log_info "Patching service deployment manifests..."
+    PATCH_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/patch-service-images.sh"
+    if [[ -f "$PATCH_SCRIPT" ]]; then
+        chmod +x "$PATCH_SCRIPT"
+        # Run patch script from service directory to access platform/claims
+        "$PATCH_SCRIPT" "${SERVICE_NAME}" "${BUILD_MODE}" "${IMAGE_TAG}"
+        log_success "Manifest patching completed"
+    else
+        log_error "Patch script not found: $PATCH_SCRIPT"
+        exit 1
+    fi
     
     # Apply service-specific patches to claims before deployment
     log_info "Applying service-specific patches to platform claims..."

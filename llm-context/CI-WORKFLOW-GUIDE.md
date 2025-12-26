@@ -49,14 +49,37 @@ The platform provides a centralized CI workflow that services consume through a 
   - **Script:** `setup-external-dependencies.sh`
 
 - **Stage 3: Service Deployment**
-  - **Why:** Deploy the actual service after dependencies are ready
-  - **What:** Applies platform claims, runs migrations
-  - **Script:** `deploy.sh`, `run-migrations.sh`
+  - **Why:** Build, patch, and deploy the service after dependencies are ready
+  - **What:** Builds service image (auto-detects mode), patches deployment manifests, applies platform claims, runs migrations
+  - **Scripts:** `build-service.sh`, `patch-service-images.sh`, `deploy.sh`, `run-migrations.sh`
 
 - **Stage 4: Internal Validation**
   - **Why:** Verify service's own infrastructure works
   - **What:** Tests databases, caches, health endpoints created by service
   - **Script:** `post-deploy-diagnostics.sh`
+
+## Build System
+
+The platform provides a centralized build system that auto-detects the environment and builds appropriate images:
+
+### Build Modes (Auto-Detected)
+
+| Mode | Environment | Image Tag | Registry Push | Use Case |
+|------|-------------|-----------|---------------|----------|
+| `test` | Local development | `service:ci-test` | ❌ No | Local CI, developer testing |
+| `pr` | GitHub CI (PR) | `service:branch-sha` | ✅ Yes | PR testing, staging |
+| `prod` | GitHub CI (main) | `service:latest` + `service:main-sha` | ✅ Yes | Production deployment |
+
+### Image Strategy
+
+**Default State (Git Repository):**
+- Deployment files contain production-ready image references: `service:latest`
+- Git repository always represents production state
+
+**CI Patching:**
+- Local CI: Patches to `service:ci-test` (locally built)
+- PR CI: Patches to `ghcr.io/org/service:branch-sha` (registry)
+- Production: Uses default `service:latest` (no patching needed)
 
 ## How Services Use It
 
@@ -73,6 +96,8 @@ The platform provides a centralized CI workflow that services consume through a 
 **Platform Scripts:**
 - `setup-platform-environment.sh` - Infrastructure setup (Kind cluster, Docker build, platform patches)
 - `01-master-bootstrap.sh` - Platform bootstrap (ArgoCD, platform services)
+- `build-service.sh` - Service image building (auto-detects test/pr/prod mode)
+- `patch-service-images.sh` - Deployment manifest patching based on build mode
 - `check-platform-readiness.sh` - Platform readiness validation
 - `setup-external-dependencies.sh` - External dependency setup
 - `pre-deploy-diagnostics.sh` - External dependency validation  
