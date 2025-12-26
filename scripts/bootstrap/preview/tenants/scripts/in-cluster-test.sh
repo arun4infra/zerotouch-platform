@@ -453,22 +453,26 @@ setup_ci_infrastructure() {
         PLATFORM_ROOT="$(cd "$CURRENT_SCRIPT_DIR/../../../../.." && pwd)"
         log_success "Using existing platform checkout at: $PLATFORM_ROOT"
     else
-        # We need to clone the platform (legacy mode)
+        # We need to clone the platform - handle this automatically
         # PLATFORM_BRANCH is now loaded from service config in load_service_config()
-        # Create folder name with branch (replace / with -)
-        BRANCH_FOLDER_NAME=$(echo "$PLATFORM_BRANCH" | sed 's/\//-/g')
-        PLATFORM_CHECKOUT_DIR="zerotouch-platform-${BRANCH_FOLDER_NAME}"
+        PLATFORM_CHECKOUT_DIR="zerotouch-platform"
         
-        if [[ -d "$PLATFORM_CHECKOUT_DIR" ]]; then
-            log_info "Platform directory exists ($PLATFORM_CHECKOUT_DIR), updating..."
-            cd "$PLATFORM_CHECKOUT_DIR"
+        if [[ -d "$PLATFORM_CHECKOUT_DIR/.git" ]]; then
+            log_info "Platform repo exists ($PLATFORM_CHECKOUT_DIR), updating..."
+            pushd "$PLATFORM_CHECKOUT_DIR" > /dev/null
             git fetch origin
-            git checkout "$PLATFORM_BRANCH"
-            git pull origin "$PLATFORM_BRANCH"
-            cd - > /dev/null
+            if git show-ref --verify --quiet "refs/heads/$PLATFORM_BRANCH"; then
+                git checkout "$PLATFORM_BRANCH"
+            else
+                git checkout -b "$PLATFORM_BRANCH" "origin/$PLATFORM_BRANCH"
+            fi
+            git pull --ff-only origin "$PLATFORM_BRANCH"
+            popd > /dev/null
         else
             log_info "Cloning zerotouch-platform repository (branch: $PLATFORM_BRANCH)..."
-            git clone -b "$PLATFORM_BRANCH" https://github.com/arun4infra/zerotouch-platform.git "$PLATFORM_CHECKOUT_DIR"
+            git clone -b "$PLATFORM_BRANCH" \
+                https://github.com/arun4infra/zerotouch-platform.git \
+                "$PLATFORM_CHECKOUT_DIR"
         fi
         
         # Update platform root path now that we have the checkout
