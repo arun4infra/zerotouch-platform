@@ -8,9 +8,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-# Source common utilities
-source "${SCRIPT_DIR}/lib/common.sh"
-source "${SCRIPT_DIR}/lib/logging.sh"
+# Inline logging functions (lib directory removed)
+log_info() { echo -e "\033[0;34m[INFO]\033[0m $*"; }
+log_success() { echo -e "\033[0;32m[SUCCESS]\033[0m $*"; }
+log_error() { echo -e "\033[0;31m[ERROR]\033[0m $*"; }
+log_phase() { echo -e "\033[1;35m=== $* ===\033[0m"; }
+init_logging() { :; }  # No-op for compatibility
+log_environment() { :; }  # No-op for compatibility
 
 # Default values
 ENVIRONMENT=""
