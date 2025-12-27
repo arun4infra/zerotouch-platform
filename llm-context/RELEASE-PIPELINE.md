@@ -14,17 +14,19 @@ The release pipeline uses a **GitHub Actions + GitOps** approach with native pro
 ## Active Scripts
 
 ### Core Scripts
-- `build-and-push.sh` - Builds and pushes container artifacts with GitHub Output
 - `deploy-direct.sh` - Direct GitOps deployment via Git commits (no PRs)
 
 ### GitHub Actions Workflows
-- `.github/workflows/pipeline.yml` - Reusable workflow for all tenants
-- `.github/workflows/example-tenant-workflow.yml` - Example tenant implementation
+- `.github/workflows/ci-build.yml` - Reusable build workflow (uses native GitHub Actions)
+- `.github/workflows/ci-test.yml` - Reusable test workflow (uses bootstrap scripts)
+- `.github/workflows/release-pipeline.yml` - Reusable release workflow (uses deploy-direct.sh)
 
-### Utility Libraries
-- `lib/common.sh` - Common utility functions
-- `lib/logging.sh` - Logging utilities
-- `lib/config-discovery.sh` - Configuration discovery (simplified)
+### Templates
+- `template/example-tenant-workflow.yml` - Template for tenant services implementing "Build Once, Validate Many, Release One"
+
+### Archived Scripts
+- `archived/build-and-push.sh` - Legacy build script (replaced by native GitHub Actions)
+- `archived/lib/` - Legacy utility libraries (no longer needed)
 
 ## Usage
 
