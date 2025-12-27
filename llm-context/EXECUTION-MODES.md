@@ -1,4 +1,4 @@
-# Deployment Modes
+# Execution Modes
 
 ZeroTouch supports **Production** (bare-metal Talos) and **Preview** (GitHub Actions with Kind) modes.
 
