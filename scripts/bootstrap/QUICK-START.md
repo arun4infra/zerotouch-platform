@@ -167,8 +167,8 @@ Ensure these exist in AWS SSM Parameter Store (use `06-inject-ssm-parameters.sh`
 - `/zerotouch/prod/kagent/openai_api_key` - OpenAI API key for kagent
 - `/zerotouch/prod/agent-executor/openai_api_key` - OpenAI API key for agent-executor
 - `/zerotouch/prod/agent-executor/anthropic_api_key` - Anthropic API key
-- `/zerotouch/prod/platform/ghcr/username` - GitHub username for GHCR
-- `/zerotouch/prod/platform/ghcr/password` - GitHub token for GHCR
+- `/zerotouch/prod/ghcr/username` - GitHub username for GHCR
+- `/zerotouch/prod/ghcr/password` - GitHub token for GHCR
 - `/zerotouch/prod/platform/github/username` - GitHub username for ArgoCD
 - `/zerotouch/prod/platform/github/token` - GitHub token for ArgoCD
 

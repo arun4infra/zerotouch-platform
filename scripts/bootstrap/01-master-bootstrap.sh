@@ -139,6 +139,25 @@ echo ""
 if [ "$MODE" = "preview" ]; then
     echo -e "${BLUE}Running in PREVIEW mode (GitHub Actions/Kind)${NC}"
     echo ""
+    
+    # Copy service .env file to platform folder for bootstrap scripts to use
+    SERVICE_ENV_FILE="$(cd "$SCRIPT_DIR/../../.." && pwd)/.env"
+    PLATFORM_ENV_FILE="$SCRIPT_DIR/.env"
+    
+    if [[ -f "$SERVICE_ENV_FILE" ]]; then
+        echo -e "${BLUE}Copying service .env file to platform folder...${NC}"
+        cp "$SERVICE_ENV_FILE" "$PLATFORM_ENV_FILE"
+        echo -e "${GREEN}✓ Service .env file copied to: $PLATFORM_ENV_FILE${NC}"
+        
+        # Source the copied .env file
+        set -a  # automatically export all variables
+        source "$PLATFORM_ENV_FILE"
+        set +a  # stop automatically exporting
+        echo -e "${GREEN}✓ Environment variables loaded${NC}"
+    else
+        echo -e "${YELLOW}⚠ Service .env file not found at: $SERVICE_ENV_FILE${NC}"
+    fi
+    
     "$SCRIPT_DIR/preview/setup-preview.sh"
 fi
 

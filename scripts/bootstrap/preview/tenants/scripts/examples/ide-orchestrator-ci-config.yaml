@@ -1,0 +1,55 @@
+# ide-orchestrator ci/config.yaml  
+# Based on analysis of ide-orchestrator/scripts/ci/ scripts
+
+service:
+  name: "ide-orchestrator"
+  namespace: "intelligence-orchestrator"
+
+build:
+  dockerfile: "Dockerfile"
+  context: "."
+  tag: "ci-test"
+
+test:
+  timeout: 300    # Shorter timeout for ide-orchestrator
+  parallel: true
+  
+deployment:
+  wait_timeout: 300
+  health_endpoint: "/api/health"    # Non-standard endpoint used by ide-orchestrator
+  liveness_endpoint: "/health"      # Standard liveness endpoint
+
+# Three types of dependencies based on CI stages
+dependencies:
+  # Platform services (checked in platform readiness)
+  # Foundation services (external-secrets, crossplane-operator, cnpg, foundation-config) are always deployed
+  # Only declare optional services that your service actually uses
+  platform: []              # No optional platform services needed (uses foundation only)
+  
+  # External services (deployed before this service)
+  external:
+    - deepagents-runtime     # Must be deployed before ide-orchestrator
+  
+  # Internal services (validated after deployment)
+  internal:
+    - postgres               # Validates ide-orchestrator-db cluster
+
+# Environment variables from ide-orchestrator
+env:
+  NODE_ENV: "test"
+  LOG_LEVEL: "debug"
+  JWT_SECRET: "test-secret-key-for-ci-testing"
+
+# Diagnostic configuration based on ide-orchestrator scripts
+diagnostics:
+  pre_deploy:
+    check_dependencies: true      # Check platform and external dependencies
+    check_platform_apis: true    # Check XRDs, compositions
+  post_deploy:
+    test_health_endpoint: true        # Test /api/health endpoint
+    test_database_connection: true    # Test PostgreSQL connection
+    test_service_connectivity: true   # Test service accessibility
+
+# Platform configuration
+platform:
+  branch: "main"

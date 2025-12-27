@@ -8,7 +8,7 @@ resources:
 
 # Add control-plane tolerations to all workloads
 patches:
-  # Patch argocd-cm ConfigMap with resource exclusions
+  # Patch argocd-cm ConfigMap with resource exclusions (required for production)
   - path: argocd-cm-patch.yaml
     target:
       kind: ConfigMap

@@ -1,0 +1,177 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "{{JOB_NAME}}"
+  namespace: "{{NAMESPACE}}"
+  labels:
+    app: "{{SERVICE_NAME}}-tests"
+    test-type: integration
+    test-suite: "{{TEST_NAME}}"
+spec:
+  template:
+    metadata:
+      labels:
+        app: "{{SERVICE_NAME}}-tests"
+        test-type: integration
+        test-suite: "{{TEST_NAME}}"
+    spec:
+      containers:
+      - name: test-runner
+        image: "{{IMAGE}}"
+        workingDir: /app
+        env:
+        # BEGIN_DYNAMIC_ENV
+        - name: TEST_ENV
+          value: "integration"
+        - name: SERVICE_NAME
+          value: "{{SERVICE_NAME}}"
+        - name: NAMESPACE
+          value: "{{NAMESPACE}}"
+        - name: PYTHONPATH
+          value: "/app"
+        # END_DYNAMIC_ENV
+        command: 
+        - "/bin/sh"
+        - "-c"
+        - |
+          set -e  # Exit on any error
+          set -o pipefail  # Exit on pipe failures
+          
+          echo "=============================================="
+          echo "🚀 Starting in-cluster integration tests"
+          echo "=============================================="
+          echo "Service: {{SERVICE_NAME}}"
+          echo "Test Path: {{TEST_PATH}}"
+          echo "Test Name: {{TEST_NAME}}"
+          echo "Namespace: {{NAMESPACE}}"
+          echo "Timestamp: $(date)"
+          echo ""
+          
+          echo "=== ENVIRONMENT CHECK ==="
+          echo "Working directory: $(pwd)"
+          echo "Available disk space:"
+          df -h /app || echo "Could not check disk space"
+          echo ""
+          echo "=== DATABASE ENVIRONMENT VARIABLES ==="
+          echo "POSTGRES_USER: ${POSTGRES_USER:-not set}"
+          echo "POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-not set}"
+          echo "POSTGRES_DB: ${POSTGRES_DB:-not set}"
+          echo "POSTGRES_HOST: ${POSTGRES_HOST:-not set}"
+          echo "POSTGRES_PORT: ${POSTGRES_PORT:-not set}"
+          echo ""
+          
+          echo "=== TEST PATH VALIDATION ==="
+          TEST_FILE_PATH="{{TEST_PATH}}"
+          # Extract just the file path (before ::) for validation
+          case "$TEST_FILE_PATH" in
+            *::*)
+              FILE_PART="${TEST_FILE_PATH%%::*}"
+              echo "Pytest-style path detected: {{TEST_PATH}}"
+              echo "Validating file part: $FILE_PART"
+              ;;
+            *)
+              FILE_PART="$TEST_FILE_PATH"
+              echo "Direct path: {{TEST_PATH}}"
+              ;;
+          esac
+          
+          if [ -f "$FILE_PART" ] || [ -d "$FILE_PART" ]; then
+            echo "✅ Test path exists: $FILE_PART"
+            if [ -d "$FILE_PART" ]; then
+              echo "Test files in directory:"
+              find "$FILE_PART" -name "*test*" | head -10
+            fi
+          else
+            echo "❌ Test path does not exist: $FILE_PART"
+            echo "Available files/directories:"
+            ls -la . | head -10
+            echo "Looking for test files:"
+            find . -name "*test*" | head -10
+            exit 1
+          fi
+          echo ""
+          
+          echo "=== ARTIFACTS DIRECTORY ==="
+          mkdir -p artifacts
+          if [ -d "artifacts" ] && [ -w "artifacts" ]; then
+            echo "✅ Artifacts directory ready: $(pwd)/artifacts"
+          else
+            echo "❌ Cannot create or write to artifacts directory"
+            ls -la . | grep artifacts || echo "No artifacts directory found"
+            exit 1
+          fi
+          echo ""
+          
+          echo "=============================================="
+          echo "🧪 Running integration tests..."
+          echo "=============================================="
+          
+          # Platform-owned test execution - run pytest directly
+          echo "Platform executing tests: pytest {{TEST_PATH}}"
+          
+          # Check if pytest is available
+          if ! command -v pytest &> /dev/null; then
+            echo "Installing pytest..."
+            pip install pytest pytest-asyncio
+          fi
+          
+          # Run integration tests directly
+          if pytest "{{TEST_PATH}}" \
+              -v \
+              --tb=short \
+              --disable-warnings \
+              --maxfail=5 \
+              --durations=10 \
+              2>&1 | tee artifacts/test-output.log; then
+            TEST_EXIT_CODE=0
+            echo "✅ Tests passed"
+          else
+            TEST_EXIT_CODE=$?
+            echo "❌ Tests failed with exit code: $TEST_EXIT_CODE"
+          fi
+          
+          echo ""
+          echo "=============================================="
+          echo "📊 Test Execution Complete"
+          echo "=============================================="
+          echo "Test exit code: $TEST_EXIT_CODE"
+          echo ""
+          
+          echo "=== ARTIFACTS GENERATED ==="
+          if [ -d "artifacts" ]; then
+            echo "Artifacts directory contents:"
+            ls -la artifacts/ || echo "No artifacts generated"
+          else
+            echo "❌ No artifacts directory found"
+          fi
+          echo ""
+          
+          # Exit with test's exit code
+          if [ $TEST_EXIT_CODE -eq 0 ]; then
+            echo "✅ All tests completed successfully!"
+          else
+            echo "❌ Tests failed with exit code: $TEST_EXIT_CODE"
+          fi
+          
+          echo "=============================================="
+          echo "🏁 Test execution finished"
+          echo "=============================================="
+          
+          exit $TEST_EXIT_CODE
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1.5Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: artifacts
+          mountPath: /app/artifacts
+      volumes:
+      - name: artifacts
+        emptyDir: {}
+      restartPolicy: Never
+      serviceAccountName: default
+  backoffLimit: 0  # Don't retry failed pods - fail fast
+  ttlSecondsAfterFinished: 3600  # Keep job for 1 hour after completion for debugging

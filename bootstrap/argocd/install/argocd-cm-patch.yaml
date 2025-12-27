@@ -7,6 +7,7 @@ data:
   # Exclude Crossplane-generated composite resources from ArgoCD tracking
   # These X* resources are dynamically created by Crossplane when Claims are applied
   # ArgoCD should only manage the Claims, not the Composites
+  # This is required in BOTH preview and production environments
   resource.exclusions: |
     - apiGroups:
         - platform.bizmatters.io

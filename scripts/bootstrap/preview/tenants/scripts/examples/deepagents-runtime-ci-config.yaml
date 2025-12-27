@@ -1,0 +1,59 @@
+# deepagents-runtime ci/config.yaml
+# Based on analysis of deepagents-runtime/scripts/ci/ scripts
+
+service:
+  name: "deepagents-runtime"
+  namespace: "intelligence-deepagents"
+
+build:
+  dockerfile: "Dockerfile"
+  context: "."
+  tag: "ci-test"
+
+test:
+  timeout: 600
+  parallel: true
+  
+deployment:
+  wait_timeout: 300
+  health_endpoint: "/ready"      # Standard readiness endpoint
+  liveness_endpoint: "/health"   # Standard liveness endpoint
+
+# Three types of dependencies based on CI stages
+dependencies:
+  # Platform services (checked in platform readiness)
+  # Foundation services (external-secrets, crossplane-operator, cnpg, foundation-config) are always deployed
+  # Only declare optional services that your service actually uses
+  platform:
+    - nats                   # NATS messaging platform (required for agent communication)
+    - keda                   # KEDA autoscaling platform (required for scaling agents)
+  
+  # External services (deployed before this service)
+  external: []               # deepagents-runtime has no external service dependencies
+  
+  # Internal services (validated after deployment)
+  internal:
+    - postgres               # Validates deepagents-runtime-db cluster
+    - redis                  # Validates deepagents-runtime-cache (Dragonfly)
+    - nats-streams          # Validates NATS streams and consumers
+    - keda-scaler           # Validates KEDA ScaledObject
+
+# Environment variables from deepagents-runtime
+env:
+  USE_MOCK_LLM: "true"
+  LOG_LEVEL: "debug"
+  FEATURE_FLAGS: "experimental_api"
+
+# Diagnostic configuration based on deepagents-runtime scripts
+diagnostics:
+  pre_deploy:
+    check_dependencies: true      # Check platform and external dependencies
+    check_platform_apis: true    # Check XRDs, compositions
+  post_deploy:
+    test_health_endpoint: true        # Test /health and /ready
+    test_database_connection: true    # Test PostgreSQL connection
+    test_service_connectivity: true   # Test service accessibility
+
+# Platform configuration
+platform:
+  branch: "main"

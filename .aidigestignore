@@ -16,3 +16,5 @@ services
 zerotouch-platform/scripts/local-ci/logs
 artifacts
 codebase.md
+.talos-credentials
+.tenants-cache

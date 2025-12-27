@@ -1,0 +1,56 @@
+# Example ci/config.yaml for services
+# This file defines the complete service CI contract
+
+service:
+  name: "deepagents-runtime"
+  namespace: "intelligence-deepagents"
+
+build:
+  dockerfile: "Dockerfile"    # Default: ./Dockerfile
+  context: "."               # Default: .
+  tag: "ci-test"            # Default: ci-test
+
+test:
+  timeout: 600              # Default: 600 seconds
+  parallel: true            # Default: true
+  
+deployment:
+  wait_timeout: 300         # Default: 300 seconds
+  health_endpoint: "/ready" # Default: /ready
+  liveness_endpoint: "/health" # Default: /health
+
+# Three types of dependencies based on CI stages
+dependencies:
+  # Platform services (checked in platform readiness)
+  platform:
+    - cnpg-operator           # PostgreSQL operator
+    - external-secrets        # Secret management
+    - crossplane-providers    # Infrastructure provisioning
+  
+  # External services (deployed before this service)
+  external:
+    - deepagents-runtime     # Other services this service depends on
+  
+  # Internal services (validated after deployment)
+  internal:
+    - postgres               # Database created by this service's claims
+    - redis                  # Cache created by this service's claims
+
+# Environment variables for CI
+env:
+  USE_MOCK_LLM: "true"
+  LOG_LEVEL: "debug"
+
+# Diagnostic configuration
+diagnostics:
+  pre_deploy:
+    check_dependencies: true
+    check_platform_apis: true
+  post_deploy:
+    test_health_endpoint: true
+    test_database_connection: true
+    test_service_connectivity: true
+
+# Optional: Override platform defaults
+platform:
+  branch: "main"            # Default: main
