@@ -23,10 +23,25 @@ graph LR
 Services create **single orchestration workflow** (`.github/workflows/main-pipeline.yml`):
 
 ```yaml
+name: "Build Once, Validate Many, Release One"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# REQUIRED: Permissions for reusable workflows
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
 jobs:
   # STAGE 1: Build artifact once
   build:
     uses: arun4infra/zerotouch-platform/.github/workflows/ci-build.yml@main
+    secrets: inherit
     
   # STAGE 2: Parallel tests using same artifact  
   test-nats:
@@ -35,6 +50,7 @@ jobs:
     with:
       image_tag: ${{ needs.build.outputs.image_tag }}
       test_suite: "tests/integration/nats"
+    secrets: inherit
       
   test-api:
     needs: build  
@@ -42,6 +58,7 @@ jobs:
     with:
       image_tag: ${{ needs.build.outputs.image_tag }}
       test_suite: "tests/integration/api"
+    secrets: inherit
       
   # STAGE 3: Release only if ALL tests pass
   release:
@@ -50,7 +67,19 @@ jobs:
     uses: arun4infra/zerotouch-platform/.github/workflows/release-pipeline.yml@main
     with:
       image_tag: ${{ needs.build.outputs.image_tag }}
+    secrets: inherit
 ```
+
+### Required Permissions
+
+The reusable workflows require specific permissions that must be granted at the workflow level:
+
+- `contents: read` - Read repository contents and clone code
+- `packages: write` - Push container images to GitHub Container Registry
+- `pull-requests: write` - Comment on PRs with test results and deployment status
+- `id-token: write` - Generate OIDC tokens for AWS authentication
+
+**Critical**: Without these permissions, the workflow will fail with permission errors when calling reusable workflows.
 
 ## Artifact-Aware Testing
 
