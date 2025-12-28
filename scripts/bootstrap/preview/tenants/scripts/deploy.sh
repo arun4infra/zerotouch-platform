@@ -88,8 +88,10 @@ echo "✅ Mock landing zone '${NAMESPACE}' created"
 # Apply platform claims and manifests
 echo "📋 Applying platform claims..."
 echo "🔍 Checking for platform claims in: ${PROJECT_ROOT}/platform/claims/${NAMESPACE}"
+USING_PLATFORM_CLAIMS=false
 if [[ -d "${PROJECT_ROOT}/platform/claims/${NAMESPACE}" ]]; then
     echo "✅ Found platform claims directory"
+    USING_PLATFORM_CLAIMS=true
     # Apply platform claims for the namespace (recursive to include subdirectories)
     kubectl apply -f "${PROJECT_ROOT}/platform/claims/${NAMESPACE}/" -n "${NAMESPACE}" --recursive
     echo "✅ Platform claims applied"
@@ -128,8 +130,8 @@ else
     exit 1
 fi
 
-# Update image tag if provided
-if [[ "${IMAGE_TAG}" != "latest" ]]; then
+# Update image tag if provided (only for non-platform-claims deployments)
+if [[ "${IMAGE_TAG}" != "latest" && "${USING_PLATFORM_CLAIMS}" == "false" ]]; then
     echo "🏷️  Updating image tag to ${IMAGE_TAG}..."
     
     # Determine if this is a full registry image or just a tag
@@ -144,28 +146,34 @@ if [[ "${IMAGE_TAG}" != "latest" ]]; then
     kubectl set image deployment/${SERVICE_NAME} \
         ${SERVICE_NAME}="${FULL_IMAGE_NAME}" \
         -n "${NAMESPACE}"
+elif [[ "${USING_PLATFORM_CLAIMS}" == "true" ]]; then
+    echo "ℹ️  Using platform claims - image already set via patched manifests"
 fi
 
-# Wait for deployment to be ready
-echo "⏳ Waiting for deployment to be ready..."
-kubectl rollout status deployment/${SERVICE_NAME} \
-    -n "${NAMESPACE}" \
-    --timeout="${WAIT_TIMEOUT}s"
+# Wait for deployment to be ready (only for non-platform-claims deployments)
+if [[ "${USING_PLATFORM_CLAIMS}" == "false" ]]; then
+    echo "⏳ Waiting for deployment to be ready..."
+    kubectl rollout status deployment/${SERVICE_NAME} \
+        -n "${NAMESPACE}" \
+        --timeout="${WAIT_TIMEOUT}s"
 
-# Verify deployment
-echo "🔍 Verifying deployment..."
-READY_REPLICAS=$(kubectl get deployment ${SERVICE_NAME} -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}')
-DESIRED_REPLICAS=$(kubectl get deployment ${SERVICE_NAME} -n "${NAMESPACE}" -o jsonpath='{.spec.replicas}')
+    # Verify deployment
+    echo "🔍 Verifying deployment..."
+    READY_REPLICAS=$(kubectl get deployment ${SERVICE_NAME} -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}')
+    DESIRED_REPLICAS=$(kubectl get deployment ${SERVICE_NAME} -n "${NAMESPACE}" -o jsonpath='{.spec.replicas}')
 
-if [[ "${READY_REPLICAS}" == "${DESIRED_REPLICAS}" ]]; then
-    echo "✅ Deployment successful: ${READY_REPLICAS}/${DESIRED_REPLICAS} replicas ready"
+    if [[ "${READY_REPLICAS}" == "${DESIRED_REPLICAS}" ]]; then
+        echo "✅ Deployment successful: ${READY_REPLICAS}/${DESIRED_REPLICAS} replicas ready"
+    else
+        echo "❌ Deployment failed: ${READY_REPLICAS}/${DESIRED_REPLICAS} replicas ready"
+        exit 1
+    fi
+
+    # Show service endpoints
+    echo "🌐 Service endpoints:"
+    kubectl get services -n "${NAMESPACE}" -l app=${SERVICE_NAME}
 else
-    echo "❌ Deployment failed: ${READY_REPLICAS}/${DESIRED_REPLICAS} replicas ready"
-    exit 1
+    echo "✅ Platform service deployment completed (verified by wait script)"
 fi
-
-# Show service endpoints
-echo "🌐 Service endpoints:"
-kubectl get services -n "${NAMESPACE}" -l app=${SERVICE_NAME}
 
 echo "🎉 Deployment completed successfully!"
