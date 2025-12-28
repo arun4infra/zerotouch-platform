@@ -41,6 +41,8 @@ jobs:
   # STAGE 1: Build artifact once
   build:
     uses: arun4infra/zerotouch-platform/.github/workflows/ci-build.yml@main
+    with:
+      service_name: my-service
     secrets: inherit
     
   # STAGE 2: Parallel tests using same artifact  
@@ -50,6 +52,8 @@ jobs:
     with:
       image_tag: ${{ needs.build.outputs.image_tag }}
       test_suite: "tests/integration/nats"
+      test_name: "nats"
+      timeout: 30
     secrets: inherit
       
   test-api:
@@ -58,6 +62,8 @@ jobs:
     with:
       image_tag: ${{ needs.build.outputs.image_tag }}
       test_suite: "tests/integration/api"
+      test_name: "api"
+      timeout: 30
     secrets: inherit
       
   # STAGE 3: Release only if ALL tests pass
@@ -66,6 +72,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     uses: arun4infra/zerotouch-platform/.github/workflows/release-pipeline.yml@main
     with:
+      service_name: my-service
       image_tag: ${{ needs.build.outputs.image_tag }}
     secrets: inherit
 ```

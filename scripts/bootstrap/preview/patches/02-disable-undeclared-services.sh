@@ -59,8 +59,16 @@ find_service_config() {
     # Debug: show current directory (redirect to stderr)
     log_info "Current directory: $current_dir" >&2
     
-    # Check current directory first
-    if [[ -f "${current_dir}/ci/config.yaml" ]]; then
+    # 1. Check SERVICE_ROOT environment variable (Set by in-cluster-test.sh)
+    if [[ -n "${SERVICE_ROOT:-}" && -f "${SERVICE_ROOT}/ci/config.yaml" ]]; then
+        config_file="${SERVICE_ROOT}/ci/config.yaml"
+        log_info "Found config via SERVICE_ROOT: $config_file" >&2
+    # 2. Check sibling 'service-code' directory (GitHub Actions structure)
+    elif [[ -f "${current_dir}/../service-code/ci/config.yaml" ]]; then
+        config_file="${current_dir}/../service-code/ci/config.yaml"
+        log_info "Found config in sibling service-code dir: $config_file" >&2
+    # 3. Check current directory first
+    elif [[ -f "${current_dir}/ci/config.yaml" ]]; then
         config_file="${current_dir}/ci/config.yaml"
         log_info "Found config in current dir: $config_file" >&2
     # Check parent directory (common when running from platform checkout)
