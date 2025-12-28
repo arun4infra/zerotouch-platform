@@ -41,8 +41,11 @@ main() {
     if [[ "$BUILD_MODE" == "test" ]]; then
         # Local Kind cluster uses simple name
         target_image="${SERVICE_NAME}:${IMAGE_TAG}"
+    elif [[ "$IMAGE_TAG" == *"/"* ]]; then
+        # Image tag is already a full path (e.g., ghcr.io/org/service:sha-123)
+        target_image="${IMAGE_TAG}"
     else
-        # Registry for PR/Prod
+        # Registry for PR/Prod - construct full path
         target_image="${REGISTRY}/${SERVICE_NAME}:${IMAGE_TAG}"
     fi
 
