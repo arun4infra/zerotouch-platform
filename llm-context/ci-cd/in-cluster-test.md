@@ -227,7 +227,7 @@ if [[ ! -d "zerotouch-platform" ]]; then
 fi
 
 # Run centralized script (no arguments needed)
-./zerotouch-platform/scripts/bootstrap/preview/tenants/scripts/in-cluster-test.sh
+./zerotouch-platform/scripts/bootstrap/preview/tenants/in-cluster-test.sh
 ```
 
 ## Migration Guide

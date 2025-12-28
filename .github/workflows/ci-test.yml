@@ -136,7 +136,7 @@ jobs:
           echo "🏷️  Test name: ${{ inputs.test_name }}"
           
           # Make platform script executable
-          chmod +x ../zerotouch-platform/scripts/bootstrap/preview/tenants/scripts/in-cluster-test.sh
+          chmod +x ../zerotouch-platform/scripts/bootstrap/preview/tenants/in-cluster-test.sh
           
           # Run the centralized test script
-          ../zerotouch-platform/scripts/bootstrap/preview/tenants/scripts/in-cluster-test.sh
+          ../zerotouch-platform/scripts/bootstrap/preview/tenants/in-cluster-test.sh
