@@ -33,7 +33,11 @@ fi
 
 # Platform root directory (when running from service directory)
 # In CI, we're in service-code subdirectory, so platform is one level up
-if [[ -d "./zerotouch-platform" ]]; then
+# Check if PLATFORM_ROOT is already set by parent script
+if [[ -n "${PLATFORM_ROOT:-}" ]]; then
+    # Use the PLATFORM_ROOT from parent script
+    log_info "Using PLATFORM_ROOT from parent: $PLATFORM_ROOT"
+elif [[ -d "./zerotouch-platform" ]]; then
     PLATFORM_ROOT="./zerotouch-platform"
 elif [[ -d "../zerotouch-platform" ]]; then
     PLATFORM_ROOT="../zerotouch-platform"
