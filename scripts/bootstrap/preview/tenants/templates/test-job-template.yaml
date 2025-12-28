@@ -115,28 +115,39 @@ spec:
             pip install pytest pytest-asyncio
           fi
           
-          # Build ignore patterns to exclude other test files in the same directory
-          # This prevents pytest from discovering and collecting tests from other files
+          # Extract directory and filename to build ignore patterns
           TEST_DIR=$(dirname "{{TEST_PATH}}")
           TEST_FILE=$(basename "{{TEST_PATH}}")
-          IGNORE_ARGS=""
           
-          if [ -d "$TEST_DIR" ]; then
-            echo "Scanning for other test files to ignore in: $TEST_DIR"
-            for other_test in "$TEST_DIR"/test_*.py; do
-              if [ -f "$other_test" ] && [ "$(basename "$other_test")" != "$TEST_FILE" ]; then
-                IGNORE_ARGS="$IGNORE_ARGS --ignore=$other_test"
-                echo "  Will ignore: $other_test"
+          echo "Test directory: $TEST_DIR"
+          echo "Test file: $TEST_FILE"
+          echo ""
+          
+          # Build ignore patterns - only ignore other test files in same directory
+          IGNORE_ARGS=""
+          if [ -d "$TEST_DIR" ] && [ -f "{{TEST_PATH}}" ]; then
+            echo "Building ignore list for other test files..."
+            for test_file in "$TEST_DIR"/test_*.py; do
+              if [ -f "$test_file" ]; then
+                file_basename=$(basename "$test_file")
+                if [ "$file_basename" != "$TEST_FILE" ]; then
+                  IGNORE_ARGS="$IGNORE_ARGS --ignore=$test_file"
+                  echo "  Ignoring: $test_file"
+                fi
               fi
             done
           fi
           
-          echo "Running pytest with ignore args: $IGNORE_ARGS"
+          if [ -z "$IGNORE_ARGS" ]; then
+            echo "No other test files to ignore"
+          else
+            echo "Ignore arguments: $IGNORE_ARGS"
+          fi
           echo ""
           
-          # Run integration tests directly with ignore patterns
-          if pytest "{{TEST_PATH}}" \
-              $IGNORE_ARGS \
+          # Run pytest with ignore args (unquoted to allow word splitting)
+          echo "Executing: pytest {{TEST_PATH}} $IGNORE_ARGS -v --tb=short --disable-warnings --maxfail=5 --durations=10"
+          if pytest "{{TEST_PATH}}" $IGNORE_ARGS \
               -v \
               --tb=short \
               --disable-warnings \

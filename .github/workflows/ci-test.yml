@@ -60,6 +60,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: service-code
+          submodules: recursive
 
       - name: Checkout Platform Scripts
         uses: actions/checkout@v4
