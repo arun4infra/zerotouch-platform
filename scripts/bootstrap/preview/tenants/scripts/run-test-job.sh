@@ -14,6 +14,18 @@ TIMEOUT="${3:-600}"
 NAMESPACE="${4:-intelligence-deepagents}"
 IMAGE_TAG="${5:-ci-test}"
 
+# Color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+log_info() { echo -e "${BLUE}[INFO]${NC} $*" >&2; }
+log_success() { echo -e "${GREEN}[SUCCESS]${NC} $*" >&2; }
+log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+log_warn() { echo -e "${YELLOW}[WARNING]${NC} $*" >&2; }
+
 # Determine full image reference based on build mode
 # In CI, the image is built with full registry path
 # We need to use the same image reference that was built
@@ -45,18 +57,6 @@ else
     log_error "Platform directory not found"
     exit 1
 fi
-
-# Color codes
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-log_info() { echo -e "${BLUE}[INFO]${NC} $*" >&2; }
-log_success() { echo -e "${GREEN}[SUCCESS]${NC} $*" >&2; }
-log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
-log_warn() { echo -e "${YELLOW}[WARNING]${NC} $*" >&2; }
 
 main() {
     log_info "Running in-cluster tests..."
