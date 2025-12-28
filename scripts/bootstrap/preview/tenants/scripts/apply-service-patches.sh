@@ -51,7 +51,7 @@ done
 
 # Resolve absolute path to service directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE_ROOT="$(cd "$SCRIPT_DIR/../../../../../.." && pwd)"
+WORKSPACE_ROOT="${SERVICE_ROOT:-$(pwd)}"  # Use SERVICE_ROOT from parent script
 
 if [[ "$SERVICE_DIR" == /* ]]; then
     # Absolute path provided - use as-is

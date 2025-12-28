@@ -19,7 +19,7 @@ PROJECT_ROOT="$(pwd)"
 
 # Load service configuration from ci/config.yaml
 load_service_config() {
-    local config_file="ci/config.yaml"
+    local config_file="${SERVICE_ROOT:-$(pwd)}/ci/config.yaml"
     
     if [[ ! -f "$config_file" ]]; then
         echo "❌ Service config not found: $config_file"
@@ -97,7 +97,7 @@ if [[ -d "${PROJECT_ROOT}/platform/claims/${NAMESPACE}" ]]; then
     echo "✅ Platform claims applied"
     
     # Wait for ghcr-pull-secret to be synced by ExternalSecrets Operator
-    WAIT_SECRET_SCRIPT="${SCRIPT_DIR}/../../../wait/wait-for-external-secret.sh"
+    WAIT_SECRET_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/wait/wait-for-external-secret.sh"
     if [[ -f "$WAIT_SECRET_SCRIPT" ]]; then
         chmod +x "$WAIT_SECRET_SCRIPT"
         "$WAIT_SECRET_SCRIPT" ghcr-pull-secret "${NAMESPACE}" --timeout 120
@@ -107,7 +107,7 @@ if [[ -d "${PROJECT_ROOT}/platform/claims/${NAMESPACE}" ]]; then
     fi
     
     # Use platform's generalized wait script for Platform Services (EventDrivenService or WebService)
-    WAIT_SCRIPT="${SCRIPT_DIR}/../../../wait/wait-for-platform-service.sh"
+    WAIT_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/wait/wait-for-platform-service.sh"
     if [[ -f "$WAIT_SCRIPT" ]]; then
         chmod +x "$WAIT_SCRIPT"
         "$WAIT_SCRIPT" "${SERVICE_NAME}" "${NAMESPACE}" "${WAIT_TIMEOUT}"

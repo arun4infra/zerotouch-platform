@@ -24,12 +24,13 @@ main() {
     log_info "Running database migrations..."
     
     # Read service name from config
-    if [[ ! -f "ci/config.yaml" ]]; then
-        log_error "Config file not found: ci/config.yaml"
+    CONFIG_FILE="${SERVICE_ROOT:-$(pwd)}/ci/config.yaml"
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        log_error "Config file not found: $CONFIG_FILE"
         return 1
     fi
     
-    SERVICE_NAME=$(yq eval '.service.name' ci/config.yaml)
+    SERVICE_NAME=$(yq eval '.service.name' "$CONFIG_FILE")
     if [[ -z "$SERVICE_NAME" || "$SERVICE_NAME" == "null" ]]; then
         log_error "Service name not found in config"
         return 1

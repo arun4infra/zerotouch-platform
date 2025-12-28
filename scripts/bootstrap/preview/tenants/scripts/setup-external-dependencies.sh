@@ -9,8 +9,15 @@ set -euo pipefail
 # ==============================================================================
 
 # Get script directory for finding platform root
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+# Check if PLATFORM_ROOT is already set by parent script
+if [[ -n "${PLATFORM_ROOT:-}" ]]; then
+    # Use the PLATFORM_ROOT from parent script
+    log_info "Using PLATFORM_ROOT from parent: $PLATFORM_ROOT"
+else
+    # Fallback: calculate from script location
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+fi
 
 # Color codes
 RED='\033[0;31m'
@@ -26,8 +33,7 @@ log_warn() { echo -e "${YELLOW}[EXTERNAL-DEPS]${NC} $*"; }
 
 # Get external dependencies from service config
 get_external_dependencies() {
-    # Look for ci/config.yaml in service directory (one level up from platform)
-    local config_file="../ci/config.yaml"
+    local config_file="${SERVICE_ROOT:-$(pwd)}/ci/config.yaml"
     
     if [[ ! -f "$config_file" ]]; then
         echo ""

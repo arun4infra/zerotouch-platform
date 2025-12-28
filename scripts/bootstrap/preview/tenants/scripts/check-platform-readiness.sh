@@ -22,8 +22,7 @@ log_warn() { echo -e "${YELLOW}[PLATFORM-READINESS]${NC} $*"; }
 
 # Get platform dependencies from service config
 get_platform_dependencies() {
-    # Look for ci/config.yaml in service directory (one level up from platform)
-    local config_file="../ci/config.yaml"
+    local config_file="${SERVICE_ROOT:-$(pwd)}/ci/config.yaml"
     
     if [[ ! -f "$config_file" ]]; then
         echo ""

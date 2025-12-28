@@ -504,9 +504,14 @@ setup_ci_infrastructure() {
         exit 1
     fi
     
-    # Export PLATFORM_ROOT so all child scripts can use it
+    # Set service root path - current working directory where ci/config.yaml is located
+    SERVICE_ROOT="$(pwd)"
+    
+    # Export both paths so all child scripts can use them
     export PLATFORM_ROOT
+    export SERVICE_ROOT
     log_success "Using platform checkout at: $PLATFORM_ROOT"
+    log_success "Using service root at: $SERVICE_ROOT"
 
     # Step 3: Configure AWS credentials (skip for local - assume already configured)
     log_info "Configure AWS credentials (assuming already configured locally)"

@@ -17,12 +17,13 @@ if [[ -z "$SERVICE_NAME" || -z "$NAMESPACE" ]]; then
 fi
 
 # Read internal dependencies from config
-if [[ ! -f "ci/config.yaml" ]]; then
-    echo "Error: ci/config.yaml not found" >&2
+CONFIG_FILE="${SERVICE_ROOT:-$(pwd)}/ci/config.yaml"
+if [[ ! -f "$CONFIG_FILE" ]]; then
+    echo "Error: ci/config.yaml not found at $CONFIG_FILE" >&2
     exit 1
 fi
 
-INTERNAL_DEPS=$(yq eval '.dependencies.internal[]' ci/config.yaml 2>/dev/null | tr '\n' ' ' || echo "")
+INTERNAL_DEPS=$(yq eval '.dependencies.internal[]' "$CONFIG_FILE" 2>/dev/null | tr '\n' ' ' || echo "")
 
 generate_env_vars() {
     local env_vars=""

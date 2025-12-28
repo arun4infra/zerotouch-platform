@@ -17,7 +17,7 @@ set -euo pipefail
 # Configuration
 SERVICE_NAME="${SERVICE_NAME:-ide-orchestrator}"  # Can be overridden by environment variable
 REGISTRY="ghcr.io/arun4infra"
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../../.." && pwd)"  # Adjust path for new location
+REPO_ROOT="${SERVICE_ROOT:-$(pwd)}"  # Use SERVICE_ROOT from parent script
 PLATFORM="linux/amd64"  # Target platform for production builds
 
 # Color codes

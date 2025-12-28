@@ -27,7 +27,7 @@ load_service_config() {
     
     # In CI, we're in service-code subdirectory, so service root is current working directory
     local service_root="$(pwd)"
-    local config_file="$service_root/ci/config.yaml"
+    local config_file="${SERVICE_ROOT:-$(pwd)}/ci/config.yaml"
     
     log_info "Debug: Script dir: $script_dir"
     log_info "Debug: Service root: $service_root" 
@@ -61,7 +61,7 @@ load_service_config() {
 diagnostic_enabled() {
     local diagnostic_path="$1"
     if command -v yq &> /dev/null; then
-        local value=$(yq eval ".diagnostics.post_deploy.${diagnostic_path} // true" ci/config.yaml 2>/dev/null)
+        local value=$(yq eval ".diagnostics.post_deploy.${diagnostic_path} // true" "${SERVICE_ROOT:-$(pwd)}/ci/config.yaml" 2>/dev/null)
         [[ "$value" == "true" ]]
     else
         # Default to enabled if yq not available

@@ -24,7 +24,7 @@ log_warn() { echo -e "${YELLOW}[PRE-DEPLOY]${NC} $*"; }
 config_enabled() {
     local config_path="$1"
     if command -v yq &> /dev/null; then
-        local value=$(yq eval ".$config_path // false" ci/config.yaml 2>/dev/null)
+        local value=$(yq eval ".$config_path // false" "${SERVICE_ROOT:-$(pwd)}/ci/config.yaml" 2>/dev/null)
         [[ "$value" == "true" ]]
     else
         # Fallback: assume enabled if not specified
@@ -34,17 +34,11 @@ config_enabled() {
 
 # Load service configuration from ci/config.yaml
 load_service_config() {
-    # Look for ci/config.yaml in current directory (service directory)
-    local config_file="ci/config.yaml"
-    
-    # If not found in current directory, try one level up (in case we're in platform dir)
-    if [[ ! -f "$config_file" ]]; then
-        config_file="../ci/config.yaml"
-    fi
+    local config_file="${SERVICE_ROOT:-$(pwd)}/ci/config.yaml"
     
     if [[ ! -f "$config_file" ]]; then
         log_error "ci/config.yaml not found - cannot run diagnostics"
-        log_error "Looked in: ./ci/config.yaml and ../ci/config.yaml"
+        log_error "Looked for: $config_file"
         log_error "Current directory: $(pwd)"
         exit 1
     fi
@@ -66,10 +60,7 @@ load_service_config() {
 check_platform_dependencies() {
     log_info "Checking platform dependencies from config..."
     
-    local config_file="ci/config.yaml"
-    if [[ ! -f "$config_file" ]]; then
-        config_file="../ci/config.yaml"
-    fi
+    local config_file="${SERVICE_ROOT:-$(pwd)}/ci/config.yaml"
     
     # Get platform dependencies from config
     local platform_deps=$(yq eval '.dependencies.platform[]?' "$config_file" 2>/dev/null | tr '\n' ' ')
@@ -138,10 +129,7 @@ check_platform_dependencies() {
 check_external_dependencies() {
     log_info "Checking external dependencies from config..."
     
-    local config_file="ci/config.yaml"
-    if [[ ! -f "$config_file" ]]; then
-        config_file="../ci/config.yaml"
-    fi
+    local config_file="${SERVICE_ROOT:-$(pwd)}/ci/config.yaml"
     
     # Get external dependencies from config
     local external_deps=$(yq eval '.dependencies.external[]?' "$config_file" 2>/dev/null | tr '\n' ' ')
@@ -185,10 +173,7 @@ check_external_dependencies() {
 check_platform_apis() {
     log_info "Checking required platform APIs based on dependencies..."
     
-    local config_file="ci/config.yaml"
-    if [[ ! -f "$config_file" ]]; then
-        config_file="../ci/config.yaml"
-    fi
+    local config_file="${SERVICE_ROOT:-$(pwd)}/ci/config.yaml"
     
     # Get all available XRDs in the cluster
     local available_xrds=$(kubectl get xrd -o name 2>/dev/null | sed 's|customresourcedefinition.apiextensions.k8s.io/||' || echo "")
