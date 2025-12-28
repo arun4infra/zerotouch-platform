@@ -12,9 +12,13 @@ set -euo pipefail
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# PROJECT_ROOT should be the current working directory (service root)
-# since the script is called from the service directory
-PROJECT_ROOT="$(pwd)"
+# PROJECT_ROOT should be the service root directory
+# In CI, we're called from service-code/ subdirectory, so go up one level
+if [[ "$(basename "$(pwd)")" == "service-code" ]]; then
+    PROJECT_ROOT="$(cd .. && pwd)"
+else
+    PROJECT_ROOT="$(pwd)"
+fi
 
 # Load service configuration from ci/config.yaml
 load_service_config() {
