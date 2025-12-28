@@ -12,13 +12,10 @@ set -euo pipefail
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# PROJECT_ROOT should be the service root directory
-# In CI, we're called from service-code/ subdirectory, so go up one level
-if [[ "$(basename "$(pwd)")" == "service-code" ]]; then
-    PROJECT_ROOT="$(cd .. && pwd)"
-else
-    PROJECT_ROOT="$(pwd)"
-fi
+# PROJECT_ROOT should point to where the service code is checked out
+# In CI workflows, service code is checked out to 'service-code' subdirectory
+# The deploy script is called from service-code directory, so PROJECT_ROOT is current dir
+PROJECT_ROOT="$(pwd)"
 
 # Load service configuration from ci/config.yaml
 load_service_config() {
