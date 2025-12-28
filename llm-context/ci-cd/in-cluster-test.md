@@ -18,13 +18,14 @@ service-repo/
 │   └── config.yaml              # Required: All service configuration
 ├── platform/
 │   └── claims/<namespace>/      # Required: Kubernetes manifests (with production-ready image references)
-├── patches/                     # Required: If ci/config.yaml declares internal dependencies
-│   ├── 01-downsize-postgres.sh # Required: If postgres in dependencies.internal
-│   └── 02-optimize-resources.sh # Required: Resource optimization for Kind
+├── scripts/
+│   └── patches/                 # Required: If ci/config.yaml declares internal dependencies
+│       ├── 01-downsize-postgres.sh # Required: If postgres in dependencies.internal
+│       └── 02-optimize-resources.sh # Required: Resource optimization for Kind
 └── Dockerfile                   # Required: Service container build instructions
 ```
 
-**CRITICAL RULE**: If `ci/config.yaml` declares any `dependencies.internal` services (postgres, redis, etc.), the service MUST provide corresponding patches in `patches/` directory. These patches adapt the service for Kind/preview environments during CI testing.
+**CRITICAL RULE**: If `ci/config.yaml` declares any `dependencies.internal` services (postgres, redis, etc.), the service MUST provide corresponding patches in `scripts/patches/` directory. These patches adapt the service for Kind/preview environments during CI testing.
 
 ### Optional Structure
 
@@ -184,7 +185,7 @@ The platform's `in-cluster-test.sh` script discovers inputs by location and uses
 if [ -f ci/config.yaml ]; then load_service_config; fi
 if [ -d migrations/ ]; then run_migrations; fi
 if [ -d tests/integration ]; then run_tests; fi
-if [ -d patches/ ]; then apply_patches; fi
+if [ -d scripts/patches/ ]; then apply_patches; fi
 
 # Config-controlled behavior
 if config_enabled "diagnostics.pre_deploy.check_dependencies"; then
@@ -269,7 +270,7 @@ The platform validates service compliance:
 # Required files/directories
 ✓ ci/config.yaml exists
 ✓ platform/claims/<namespace>/ exists
-✓ patches/ exists (if dependencies.internal declared in ci/config.yaml)
+✓ scripts/patches/ exists (if dependencies.internal declared in ci/config.yaml)
 ✓ No scripts under scripts/ci/ (removed)
 
 # Optional validation
@@ -278,8 +279,8 @@ The platform validates service compliance:
 ✓ env/ci.env has valid environment variables
 
 # Internal dependencies validation
-✓ patches/01-downsize-postgres.sh exists (if postgres in dependencies.internal)
-✓ patches/02-optimize-resources.sh exists (if redis in dependencies.internal)
+✓ scripts/patches/01-downsize-postgres.sh exists (if postgres in dependencies.internal)
+✓ scripts/patches/02-optimize-resources.sh exists (if redis in dependencies.internal)
 ```
 
 ## Benefits

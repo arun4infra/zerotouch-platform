@@ -401,11 +401,10 @@ trap cleanup EXIT
     SERVICE_PATCHES_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/apply-service-patches.sh"
     if [[ -f "$SERVICE_PATCHES_SCRIPT" ]]; then
         chmod +x "$SERVICE_PATCHES_SCRIPT"
-        # Get the actual service root directory (parent of zerotouch-platform)
-        SERVICE_ROOT_DIR="$(dirname "${PLATFORM_ROOT}")"
-        log_info "Service root directory: $SERVICE_ROOT_DIR"
+        # Use the SERVICE_ROOT that was set earlier (should be service-code directory)
+        log_info "Service root directory: $SERVICE_ROOT"
         log_info "Platform root directory: $PLATFORM_ROOT"
-        "$SERVICE_PATCHES_SCRIPT" --service-dir "$SERVICE_ROOT_DIR"
+        "$SERVICE_PATCHES_SCRIPT" --service-dir "$SERVICE_ROOT"
     else
         log_error "Service patches script not found: $SERVICE_PATCHES_SCRIPT"
         exit 1
