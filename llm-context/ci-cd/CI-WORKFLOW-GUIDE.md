@@ -123,6 +123,28 @@ env:
   LOG_LEVEL: "debug"
 ```
 
+### Runtime Bootstrapper (Required)
+Services must provide `scripts/ci/run.sh` as the container entrypoint. This script serves as the runtime bootstrapper that bridges platform-provided environment variables and application startup requirements:
+
+```bash
+#!/bin/bash
+set -euo pipefail
+
+# Runtime Bootstrapper - handles environment transformation and startup
+# Purpose: Bridge platform variables to application requirements
+# Called by: Dockerfile CMD ["./scripts/ci/run.sh"]
+
+# Transform platform variables to application format
+if [[ -n "${POSTGRES_HOST:-}" ]]; then
+    export DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable"
+fi
+
+# Start application
+exec ./bin/my-service
+```
+
+**Why Required**: The platform provides granular environment variables (POSTGRES_HOST, POSTGRES_USER, etc.) but applications often expect consolidated formats (DATABASE_URL). The run.sh script handles this transformation and ensures proper startup sequencing.
+
 ### Platform Execution
 Platform handles all complexity:
 1. **Platform Readiness**: Validates required components exist
