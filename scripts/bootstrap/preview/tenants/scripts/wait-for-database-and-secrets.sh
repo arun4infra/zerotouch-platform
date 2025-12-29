@@ -13,7 +13,10 @@ NAMESPACE="${2:?Namespace required}"
 
 # Get script directory for finding other platform scripts
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+# Use PLATFORM_ROOT from environment if set, otherwise calculate it
+if [[ -z "${PLATFORM_ROOT:-}" ]]; then
+    PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+fi
 
 # Color codes
 RED='\033[0;31m'

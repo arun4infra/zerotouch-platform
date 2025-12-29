@@ -45,6 +45,12 @@ on:
       TENANTS_REPO_NAME:
         description: 'Tenant repository name for platform operations'
         required: false
+      IDEO_JWT_SECRET:
+        description: 'JWT secret for ide-orchestrator service'
+        required: false
+      IDEO_SPEC_ENGINE_URL:
+        description: 'Spec Engine URL for ide-orchestrator service'
+        required: false
 
 permissions:
   id-token: write      # Required for AWS OIDC authentication
@@ -130,6 +136,8 @@ jobs:
           USE_REAL_LLM: ${{ inputs.use_real_llm }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          SPEC_ENGINE_URL: ${{ secrets.SPEC_ENGINE_URL }}
           # Override image for in-cluster testing
           OVERRIDE_IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
