@@ -189,7 +189,7 @@ echo ""
 
 
 # Run comprehensive API validation
-API_VALIDATION_SCRIPT="$SCRIPT_DIR/04-apis/validate-apis.sh"
+API_VALIDATION_SCRIPT="$SCRIPT_DIR/apis/validate-apis.sh"
 echo -e "${BLUE}Running comprehensive Platform API validation...${NC}"
 
 if [[ -f "$API_VALIDATION_SCRIPT" ]]; then
@@ -238,7 +238,7 @@ if [[ -f "$API_VALIDATION_SCRIPT" ]]; then
         echo ""
         
         echo -e "  ${YELLOW}For detailed debugging, run:${NC}"
-        echo -e "    ./scripts/bootstrap/validation/06-apis/validate-apis.sh"
+        echo -e "    ./scripts/bootstrap/validation/apis/validate-apis.sh"
         echo -e "    kubectl describe application apis -n argocd"
         echo -e "    kubectl logs -n argocd deployment/argocd-application-controller | grep -i error"
         echo ""

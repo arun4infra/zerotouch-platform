@@ -14,7 +14,7 @@ echo "Starting WebService API verification..."
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Navigate to repo root from script location (4 levels up from scripts/bootstrap/validation/06-apis/)
+# Navigate to repo root from script location (4 levels up from scripts/bootstrap/validation/apis/)
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 # Colors

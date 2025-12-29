@@ -101,7 +101,7 @@ source "${SCRIPT_DIR}/../lib/logging.sh"
 - **Modular Requirement**: Test each helper script independently before testing full workflow
 
 ### 3. Platform API Validation
-- **Location**: `scripts/bootstrap/validation/06-apis/`
+- **Location**: `scripts/bootstrap/validation/apis/`
 - **Purpose**: Validate Crossplane XRDs and Compositions work correctly
 - **Pattern**: Create test claims, verify resources provisioned, test functionality
 
