@@ -148,14 +148,14 @@ spec:
     args: ["cd /app && ./scripts/ci/run-migrations.sh"]
 ```
 
-**Documentation:** See `platform/04-apis/README.md` for complete API reference
+**Documentation:** See `platform/apis/README.md` for complete API reference
 
 ### Sync-Wave Ordering
 
 The 04-apis layer uses sync-wave "1" to deploy after foundation (wave 0):
 
 ```yaml
-# platform/04-apis.yaml
+# platform/apis.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -165,7 +165,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "1"
 spec:
   source:
-    path: platform/04-apis
+    path: platform/apis
   syncPolicy:
     automated:
       prune: true
@@ -192,7 +192,7 @@ kubectl get xrd xeventdrivenservices.platform.bizmatters.io
 kubectl get composition event-driven-service
 
 # Check schema published
-ls -la platform/04-apis/schemas/eventdrivenservice.schema.json
+ls -la platform/apis/schemas/eventdrivenservice.schema.json
 ```
 
 ## Files Modified

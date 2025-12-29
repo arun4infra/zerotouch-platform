@@ -23,42 +23,103 @@ log_warn() { echo -e "${YELLOW}[PATCH-01]${NC} $*"; }
 main() {
     log_info "Disabling ArgoCD auto-sync for stable patching..."
     
-    # Check if ArgoCD namespace exists
-    if ! kubectl get namespace argocd &>/dev/null; then
-        log_warn "ArgoCD namespace not found - skipping auto-sync disable"
-        return 0
+    # Install yq if not available
+    if ! command -v yq &> /dev/null; then
+        log_info "Installing yq..."
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            if command -v brew &> /dev/null; then
+                brew install yq
+            else
+                log_error "Homebrew not found. Please install yq manually."
+                exit 1
+            fi
+        else
+            YQ_VERSION="v4.35.2"
+            YQ_BINARY="yq_linux_amd64"
+            curl -L "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY}" -o /tmp/yq
+            chmod +x /tmp/yq
+            sudo mv /tmp/yq /usr/local/bin/yq
+        fi
     fi
     
-    # Check if ConfigMap exists
-    if ! kubectl get configmap argocd-cm -n argocd &>/dev/null; then
-        log_warn "ArgoCD ConfigMap not found - skipping auto-sync disable"
-        return 0
-    fi
+    # Find platform root directory
+    local current_dir="$(pwd)"
+    local platform_root=""
     
-    # Check if already patched
-    if kubectl get configmap argocd-cm -n argocd -o yaml | grep -q "application.instanceLabelKey" 2>/dev/null; then
-        log_warn "ArgoCD auto-sync already disabled, skipping..."
-        return 0
-    fi
-    
-    log_info "Applying ArgoCD auto-sync disable configuration..."
-    
-    # Create the patch using kubectl patch - only add auto-sync disable
-    # Resource exclusions are already handled at installation time via kustomization.yaml
-    kubectl patch configmap argocd-cm -n argocd --type merge -p '{
-        "data": {
-            "application.instanceLabelKey": "argocd.argoproj.io/instance"
-        }
-    }'
-    
-    # Verify the patch was applied
-    if kubectl get configmap argocd-cm -n argocd -o yaml | grep -q "application.instanceLabelKey"; then
-        log_success "✓ ArgoCD auto-sync disabled successfully"
-        log_info "ArgoCD applications will now require manual sync"
+    # Check SERVICE_ROOT first
+    if [[ -n "${SERVICE_ROOT:-}" && -d "${SERVICE_ROOT}/../bootstrap/argocd/base" ]]; then
+        platform_root="${SERVICE_ROOT}/.."
+    # Check standard locations
+    elif [[ -d "${current_dir}/bootstrap/argocd/base" ]]; then
+        platform_root="${current_dir}"
+    elif [[ -d "${current_dir}/../bootstrap/argocd/base" ]]; then
+        platform_root="${current_dir}/.."
+    elif [[ -d "${current_dir}/../../bootstrap/argocd/base" ]]; then
+        platform_root="${current_dir}/../.."
+    elif [[ -d "${current_dir}/../../../../../bootstrap/argocd/base" ]]; then
+        platform_root="${current_dir}/../../../.."
     else
-        log_error "✗ ArgoCD auto-sync disable verification failed"
+        log_error "Cannot find bootstrap/argocd/base directory"
         exit 1
     fi
+    
+    log_info "Found platform root: $platform_root"
+    
+    # Step 1: Remove automated sync policies from base manifests
+    log_info "Removing automated sync policies from base manifests..."
+    local apps_modified=0
+    
+    for app in "${platform_root}/bootstrap/argocd/base"/*.yaml; do
+        if [[ -f "$app" ]]; then
+            # Check if the app has automated sync policy
+            if yq eval '.spec.syncPolicy.automated' "$app" 2>/dev/null | grep -q -v "null"; then
+                log_info "Removing automated sync from $(basename "$app")"
+                yq eval 'del(.spec.syncPolicy.automated)' -i "$app"
+                apps_modified=$((apps_modified + 1))
+            fi
+        fi
+    done
+    
+    if [[ $apps_modified -gt 0 ]]; then
+        log_success "✓ Removed automated sync from $apps_modified ArgoCD applications"
+    else
+        log_info "No automated sync policies found in base manifests"
+    fi
+    
+    # Step 2: Configure ArgoCD to disable auto-sync globally (if cluster is available)
+    if kubectl get namespace argocd &>/dev/null; then
+        log_info "Configuring ArgoCD global auto-sync disable..."
+        
+        # Check if ConfigMap exists
+        if kubectl get configmap argocd-cm -n argocd &>/dev/null; then
+            # Check if already patched
+            if kubectl get configmap argocd-cm -n argocd -o yaml | grep -q "application.instanceLabelKey" 2>/dev/null; then
+                log_info "ArgoCD ConfigMap already patched"
+            else
+                log_info "Applying ArgoCD ConfigMap patch..."
+                kubectl patch configmap argocd-cm -n argocd --type merge -p '{
+                    "data": {
+                        "application.instanceLabelKey": "argocd.argoproj.io/instance"
+                    }
+                }'
+                
+                # Verify the patch was applied
+                if kubectl get configmap argocd-cm -n argocd -o yaml | grep -q "application.instanceLabelKey"; then
+                    log_success "✓ ArgoCD ConfigMap patched successfully"
+                else
+                    log_error "✗ ArgoCD ConfigMap patch verification failed"
+                    exit 1
+                fi
+            fi
+        else
+            log_warn "ArgoCD ConfigMap not found - skipping ConfigMap patch"
+        fi
+    else
+        log_warn "ArgoCD namespace not found - skipping cluster-level configuration"
+    fi
+    
+    log_success "✓ ArgoCD auto-sync disabled successfully"
+    log_info "ArgoCD applications will now require manual sync during preview"
 }
 
 main "$@"

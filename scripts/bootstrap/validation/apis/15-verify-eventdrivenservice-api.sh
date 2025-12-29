@@ -6,7 +6,7 @@
 # 1. platform-apis Application exists and is synced
 # 2. EventDrivenService XRD (CRD) is installed
 # 3. event-driven-service Composition exists
-# 4. Schema file published at platform/04-apis/schemas/
+# 4. Schema file published at platform/apis/schemas/
 
 # Print output immediately for CI visibility
 echo "Starting EventDrivenService API verification..."
@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" || {
     exit 1
 }
 
-# Navigate to repo root from script location (4 levels up from scripts/bootstrap/validation/04-apis/)
+# Navigate to repo root from script location (4 levels up from scripts/bootstrap/validation/apis/)
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)" || {
     echo "ERROR: Failed to navigate to repo root from $SCRIPT_DIR" >&2
     # Fallback: assume we're in the repo root already
@@ -99,7 +99,7 @@ if kubectl_retry get application apis -n argocd &>/dev/null; then
     fi
 else
     echo -e "${RED}✗ Application 'apis' not found${NC}"
-    echo -e "${BLUE}ℹ  Check if platform/06-apis.yaml exists and is applied${NC}"
+    echo -e "${BLUE}ℹ  Check if platform/apis.yaml exists and is applied${NC}"
     ERRORS=$((ERRORS + 1))
 fi
 
@@ -129,7 +129,7 @@ if kubectl_retry get crd xeventdrivenservices.platform.bizmatters.io &>/dev/null
     fi
 else
     echo -e "${RED}✗ XRD 'xeventdrivenservices.platform.bizmatters.io' not found${NC}"
-    echo -e "${BLUE}ℹ  Check if platform/04-apis/definitions/xeventdrivenservices.yaml is applied${NC}"
+    echo -e "${BLUE}ℹ  Check if platform/apis/definitions/xeventdrivenservices.yaml is applied${NC}"
     ERRORS=$((ERRORS + 1))
 fi
 
@@ -160,7 +160,7 @@ if kubectl_retry get composition event-driven-service &>/dev/null; then
     fi
 else
     echo -e "${RED}✗ Composition 'event-driven-service' not found${NC}"
-    echo -e "${BLUE}ℹ  Check if platform/04-apis/compositions/event-driven-service-composition.yaml is applied${NC}"
+    echo -e "${BLUE}ℹ  Check if platform/apis/compositions/event-driven-service-composition.yaml is applied${NC}"
     ERRORS=$((ERRORS + 1))
 fi
 
@@ -169,7 +169,7 @@ echo ""
 # 4. Test EventDrivenService claim validation using test fixtures
 echo -e "${BLUE}Testing EventDrivenService claim validation...${NC}"
 
-EVENTDRIVENSERVICE_DIR="$REPO_ROOT/platform/04-apis/event-driven-service"
+EVENTDRIVENSERVICE_DIR="$REPO_ROOT/platform/apis/event-driven-service"
 
 # Create temporary namespace for testing (must actually exist for --dry-run=server)
 kubectl create namespace test 2>/dev/null || true
@@ -207,7 +207,7 @@ echo ""
 echo -e "${BLUE}Verifying schema file...${NC}"
 
 # Use a simpler path check that works in CI
-SCHEMA_FILE="$REPO_ROOT/platform/04-apis/event-driven-service/schemas/eventdrivenservice.schema.json"
+SCHEMA_FILE="$REPO_ROOT/platform/apis/event-driven-service/schemas/eventdrivenservice.schema.json"
 echo "Checking for schema at: $SCHEMA_FILE"
 
 # Check if file exists using test command explicitly
@@ -243,9 +243,9 @@ if [ $ERRORS -eq 0 ] && [ $WARNINGS -eq 0 ]; then
     echo -e "${GREEN}✓ All checks passed! EventDrivenService API is ready.${NC}"
     echo ""
     echo -e "${BLUE}ℹ  Next steps:${NC}"
-    echo "  - Validate example claims: ./scripts/validate-claim.sh $REPO_ROOT/platform/04-apis/examples/minimal-claim.yaml"
-    echo "  - Test deployment: kubectl apply -f $REPO_ROOT/platform/04-apis/examples/minimal-claim.yaml"
-    echo "  - Run composition tests: $REPO_ROOT/platform/04-apis/tests/verify-composition.sh"
+    echo "  - Validate example claims: ./scripts/validate-claim.sh $REPO_ROOT/platform/apis/examples/minimal-claim.yaml"
+    echo "  - Test deployment: kubectl apply -f $REPO_ROOT/platform/apis/examples/minimal-claim.yaml"
+    echo "  - Run composition tests: $REPO_ROOT/platform/apis/tests/verify-composition.sh"
     exit 0
 elif [ $ERRORS -eq 0 ]; then
     echo -e "${YELLOW}⚠️  EventDrivenService API has $WARNINGS warning(s) but no errors${NC}"
@@ -259,6 +259,6 @@ else
     echo "  1. Check ArgoCD Application: kubectl describe application apis -n argocd"
     echo "  2. Check XRD status: kubectl get xrd xeventdrivenservices.platform.bizmatters.io"
     echo "  3. Check Composition: kubectl describe composition event-driven-service"
-    echo "  4. Review platform/04-apis/README.md for setup instructions"
+    echo "  4. Review platform/apis/README.md for setup instructions"
     exit 1
 fi

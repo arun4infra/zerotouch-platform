@@ -107,11 +107,11 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
             
             # Check if XRD definition files exist locally
             if [ "$XRD_NAME" = "xwebservices" ]; then
-                LOCAL_PATH="platform/04-apis/webservice/definitions"
+                LOCAL_PATH="platform/apis/webservice/definitions"
             elif [ "$XRD_NAME" = "xeventdrivenservices" ]; then
-                LOCAL_PATH="platform/04-apis/event-driven-service/definitions"
+                LOCAL_PATH="platform/apis/event-driven-service/definitions"
             else
-                LOCAL_PATH="platform/04-apis/unknown/definitions"
+                LOCAL_PATH="platform/apis/unknown/definitions"
             fi
             
             echo -e "      ${BLUE}Local files:${NC}"

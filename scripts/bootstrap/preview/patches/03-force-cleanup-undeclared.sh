@@ -79,6 +79,11 @@ force_delete_service() {
     # 1. Delete ArgoCD Application
     if kubectl get application "$service" -n argocd &>/dev/null; then
         log_info "Deleting undeclared ArgoCD application: $service"
+        
+        # Show current sync policy before deletion
+        local sync_policy=$(kubectl get application "$service" -n argocd -o jsonpath='{.spec.syncPolicy.automated}' 2>/dev/null || echo "null")
+        log_info "Application $service sync policy: ${sync_policy}"
+        
         # Patch to remove finalizers for instant deletion
         kubectl patch application "$service" -n argocd -p '{"metadata":{"finalizers":[]}}' --type=merge || true
         kubectl delete application "$service" -n argocd --force --grace-period=0 || true
@@ -98,14 +103,34 @@ force_delete_service() {
     
     if [[ "$is_system" == "false" ]] && kubectl get namespace "$service" &>/dev/null; then
         log_info "Deleting undeclared namespace: $service"
-        # Patch to remove finalizers
-        kubectl get namespace "$service" -o json | jq '.spec = {"finalizers":[]}' > "/tmp/${service}.json" 2>/dev/null || true
-        kubectl replace --raw "/api/v1/namespaces/${service}/finalize" -f "/tmp/${service}.json" 2>/dev/null || true
+        
+        # Step 1: Remove finalizers to prevent hangs
+        log_info "Cleaning finalizers for $service..."
+        if kubectl get namespace "$service" -o json > "/tmp/${service}-ns.json" 2>/dev/null; then
+            # Create finalize payload with empty finalizers
+            jq '.spec.finalizers = []' "/tmp/${service}-ns.json" > "/tmp/${service}-finalize.json" 2>/dev/null || {
+                log_warn "jq not available, using manual finalizer removal"
+                kubectl patch namespace "$service" -p '{"spec":{"finalizers":[]}}' --type=merge || true
+            }
+            
+            # Apply finalizer removal via finalize endpoint
+            if [[ -f "/tmp/${service}-finalize.json" ]]; then
+                kubectl replace --raw "/api/v1/namespaces/${service}/finalize" -f "/tmp/${service}-finalize.json" 2>/dev/null || {
+                    log_warn "Finalize endpoint failed, trying patch method"
+                    kubectl patch namespace "$service" -p '{"spec":{"finalizers":[]}}' --type=merge || true
+                }
+            fi
+        else
+            log_warn "Could not get namespace JSON, trying direct patch"
+            kubectl patch namespace "$service" -p '{"spec":{"finalizers":[]}}' --type=merge || true
+        fi
+        
+        # Step 2: Force delete the namespace (should be instant now)
         kubectl delete namespace "$service" --force --grace-period=0 || true
         log_success "✓ Deleted namespace: $service"
         
-        # Clean up temp file
-        rm -f "/tmp/${service}.json"
+        # Clean up temp files
+        rm -f "/tmp/${service}-ns.json" "/tmp/${service}-finalize.json"
     fi
 }
 

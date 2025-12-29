@@ -44,7 +44,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/bizmatters/infra-platform"
-Documentation = "https://github.com/bizmatters/infra-platform/tree/main/platform/03-intelligence"
+Documentation = "https://github.com/bizmatters/infra-platform/tree/main/platform/intelligence"
 Repository = "https://github.com/bizmatters/infra-platform"
 
 [tool.black]

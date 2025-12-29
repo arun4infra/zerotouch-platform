@@ -4,7 +4,7 @@ category: spec
 resource: RESOURCE_NAME              # Must match composition filename (kebab-case)
 api_version: platform.bizmatters.io/v1alpha1
 kind: ResourceKind                   # e.g., WebService, PostgreSQL, Dragonfly
-composition_file: platform/04-apis/compositions/RESOURCE_NAME.yaml
+composition_file: platform/apis/compositions/RESOURCE_NAME.yaml
 created_at: YYYY-MM-DDTHH:MM:SSZ
 last_updated: YYYY-MM-DDTHH:MM:SSZ
 tags:

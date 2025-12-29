@@ -14,7 +14,7 @@ echo "Starting WebService API verification..."
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Navigate to repo root from script location (4 levels up from scripts/bootstrap/validation/04-apis/)
+# Navigate to repo root from script location (4 levels up from scripts/bootstrap/validation/apis/)
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 # Colors
@@ -91,7 +91,7 @@ if kubectl_retry get application apis -n argocd &>/dev/null; then
     fi
 else
     echo -e "${RED}✗ Application 'apis' not found${NC}"
-    echo -e "${BLUE}ℹ  Check if platform/06-apis.yaml exists and is applied${NC}"
+    echo -e "${BLUE}ℹ  Check if platform/apis.yaml exists and is applied${NC}"
     ERRORS=$((ERRORS + 1))
 fi
 
@@ -121,7 +121,7 @@ if kubectl_retry get crd xwebservices.platform.bizmatters.io &>/dev/null; then
     fi
 else
     echo -e "${RED}✗ XRD 'xwebservices.platform.bizmatters.io' not found${NC}"
-    echo -e "${BLUE}ℹ  Check if platform/04-apis/webservice/definitions/xwebservices.yaml is applied${NC}"
+    echo -e "${BLUE}ℹ  Check if platform/apis/webservice/definitions/xwebservices.yaml is applied${NC}"
     ERRORS=$((ERRORS + 1))
 fi
 
@@ -152,7 +152,7 @@ if kubectl_retry get composition webservice &>/dev/null; then
     fi
 else
     echo -e "${RED}✗ Composition 'webservice' not found${NC}"
-    echo -e "${BLUE}ℹ  Check if platform/04-apis/webservice/compositions/webservice-composition.yaml is applied${NC}"
+    echo -e "${BLUE}ℹ  Check if platform/apis/webservice/compositions/webservice-composition.yaml is applied${NC}"
     ERRORS=$((ERRORS + 1))
 fi
 
@@ -184,7 +184,7 @@ echo ""
 # 5. Test claim validation using test fixtures
 echo -e "${BLUE}Testing WebService claim validation...${NC}"
 
-WEBSERVICE_DIR="$REPO_ROOT/platform/04-apis/webservice"
+WEBSERVICE_DIR="$REPO_ROOT/platform/apis/webservice"
 
 # Create temporary namespace for testing (must actually exist for --dry-run=server)
 kubectl create namespace test 2>/dev/null || true
@@ -250,9 +250,9 @@ if [ $ERRORS -eq 0 ] && [ $WARNINGS -eq 0 ]; then
     echo -e "${GREEN}✓ All checks passed! WebService API is ready.${NC}"
     echo ""
     echo -e "${BLUE}ℹ  Next steps:${NC}"
-    echo "  - Validate example claims: $REPO_ROOT/platform/04-apis/webservice/scripts/validate-claim.sh $REPO_ROOT/platform/04-apis/webservice/examples/minimal-claim.yaml"
-    echo "  - Test deployment: kubectl apply -f $REPO_ROOT/platform/04-apis/webservice/examples/minimal-claim.yaml"
-    echo "  - Run test suite: $REPO_ROOT/platform/04-apis/webservice/scripts/validate-claim.sh --test"
+    echo "  - Validate example claims: $REPO_ROOT/platform/apis/webservice/scripts/validate-claim.sh $REPO_ROOT/platform/apis/webservice/examples/minimal-claim.yaml"
+    echo "  - Test deployment: kubectl apply -f $REPO_ROOT/platform/apis/webservice/examples/minimal-claim.yaml"
+    echo "  - Run test suite: $REPO_ROOT/platform/apis/webservice/scripts/validate-claim.sh --test"
     exit 0
 elif [ $ERRORS -eq 0 ]; then
     echo -e "${YELLOW}⚠️  WebService API has $WARNINGS warning(s) but no errors${NC}"
@@ -268,6 +268,6 @@ else
     echo "  2. Check XRD status: kubectl get xrd xwebservices.platform.bizmatters.io"
     echo "  3. Check Composition: kubectl describe composition webservice"
     echo "  4. Verify database XRDs: kubectl get xrd xpostgresinstances.database.bizmatters.io"
-    echo "  5. Review platform/04-apis/webservice/README.md for setup instructions"
+    echo "  5. Review platform/apis/webservice/README.md for setup instructions"
     exit 1
 fi

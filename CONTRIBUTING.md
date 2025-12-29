@@ -51,7 +51,7 @@ The ZeroTouch Platform follows a layered GitOps architecture:
 When creating a new platform API, follow this exact structure:
 
 ```
-platform/04-apis/your-service/
+platform/apis/your-service/
 ├── definitions/
 │   └── xyourservices.yaml          # XRD definition
 ├── compositions/
@@ -170,7 +170,7 @@ Platform APIs are automatically deployed by ArgoCD via the `04-apis.yaml` applic
 # bootstrap/argocd/base/04-apis.yaml
 spec:
   source:
-    path: platform/04-apis
+    path: platform/apis
     directory:
       recurse: true
       exclude: '{**/schemas/*,**/tests/*,**/examples/*,**/*.md,**/*.json}'

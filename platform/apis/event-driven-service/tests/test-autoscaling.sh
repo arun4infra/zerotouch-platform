@@ -9,7 +9,7 @@
 # Check 2 (Scale Up on Message Load) may fail in cold-start scenarios due to
 # KEDA's NATS JetStream scaler implementation. The scaler uses num_pending
 # (messages actively being pulled) rather than unprocessed messages.
-# See: platform/04-apis/docs/KEDA-NATS-LIMITATIONS.md for details.
+# See: platform/apis/docs/KEDA-NATS-LIMITATIONS.md for details.
 #
 # In production, autoscaling works correctly once workers are running and
 # actively pulling messages from the stream.
@@ -30,7 +30,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 # Test configuration
 TEST_NAMESPACE="test-autoscale-$(date +%s)"
 CLAIM_NAME="autoscale-worker"
-CLAIM_FILE="${PROJECT_ROOT}/platform/04-apis/event-driven-service/examples/minimal-claim.yaml"
+CLAIM_FILE="${PROJECT_ROOT}/platform/apis/event-driven-service/examples/minimal-claim.yaml"
 MESSAGE_COUNT=50
 NATS_STREAM="SIMPLE_JOBS"
 NATS_CONSUMER="simple-workers"
@@ -343,7 +343,7 @@ run_check \
     "Publishes ${MESSAGE_COUNT} messages and verifies pods scale up from 1 to multiple replicas"
 
 echo -e "${YELLOW}NOTE: This check may fail due to KEDA's NATS JetStream scaler limitation${NC}"
-echo -e "${YELLOW}      See platform/04-apis/docs/KEDA-NATS-LIMITATIONS.md for details${NC}"
+echo -e "${YELLOW}      See platform/apis/docs/KEDA-NATS-LIMITATIONS.md for details${NC}"
 echo ""
 echo "Publishing ${MESSAGE_COUNT} messages to NATS stream '${NATS_STREAM}'..."
 

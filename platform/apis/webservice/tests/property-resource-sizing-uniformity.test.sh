@@ -213,8 +213,8 @@ validate_resource_sizing_uniformity() {
     fi
     
     # Get composition files
-    local eds_composition="${PROJECT_ROOT}/platform/04-apis/event-driven-service/compositions/event-driven-service-composition.yaml"
-    local ws_composition="${PROJECT_ROOT}/platform/04-apis/webservice/compositions/webservice-composition.yaml"
+    local eds_composition="${PROJECT_ROOT}/platform/apis/event-driven-service/compositions/event-driven-service-composition.yaml"
+    local ws_composition="${PROJECT_ROOT}/platform/apis/webservice/compositions/webservice-composition.yaml"
     
     if [[ ! -f "$eds_composition" ]]; then
         echo "COMPOSITION_ERROR: EventDrivenService composition not found"

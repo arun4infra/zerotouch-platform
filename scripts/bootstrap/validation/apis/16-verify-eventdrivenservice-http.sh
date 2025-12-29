@@ -22,10 +22,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 
 # Paths
-XRD_FILE="${PROJECT_ROOT}/platform/04-apis/event-driven-service/definitions/xeventdrivenservices.yaml"
-COMPOSITION_FILE="${PROJECT_ROOT}/platform/04-apis/event-driven-service/compositions/event-driven-service-composition.yaml"
-EXAMPLES_DIR="${PROJECT_ROOT}/platform/04-apis/event-driven-service/examples"
-FIXTURES_DIR="${PROJECT_ROOT}/platform/04-apis/event-driven-service/tests/fixtures"
+XRD_FILE="${PROJECT_ROOT}/platform/apis/event-driven-service/definitions/xeventdrivenservices.yaml"
+COMPOSITION_FILE="${PROJECT_ROOT}/platform/apis/event-driven-service/compositions/event-driven-service-composition.yaml"
+EXAMPLES_DIR="${PROJECT_ROOT}/platform/apis/event-driven-service/examples"
+FIXTURES_DIR="${PROJECT_ROOT}/platform/apis/event-driven-service/tests/fixtures"
 
 # Test counters
 TESTS_RUN=0

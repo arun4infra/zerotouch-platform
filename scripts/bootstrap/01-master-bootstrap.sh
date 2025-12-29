@@ -242,7 +242,7 @@ if [ "$MODE" = "preview" ]; then
         echo -e "${BLUE}Preview overlay kustomization:${NC}"
         docker exec "$KIND_CONTAINER" cat /repo/bootstrap/argocd/overlays/preview/kustomization.yaml || echo "Overlay not found"
         echo -e "${BLUE}Cilium status in container:${NC}"
-        docker exec "$KIND_CONTAINER" ls -la /repo/platform/01-foundation/cilium.yaml* || echo "Cilium files not found"
+        docker exec "$KIND_CONTAINER" ls -la /repo/platform/foundation/cilium.yaml* || echo "Cilium files not found"
     fi
 fi
 

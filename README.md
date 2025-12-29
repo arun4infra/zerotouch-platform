@@ -99,7 +99,7 @@ zerotouch-platform/
 
 ### How to Deploy (The "Zero-Touch" Way)
 We do not use shell scripts to deploy services.
-1.  **Define:** Create a Claim YAML (e.g., `agent-executor-claim.yaml`) in `platform/03-intelligence/` or `tenants/`.
+1.  **Define:** Create a Claim YAML (e.g., `agent-executor-claim.yaml`) in `platform/intelligence/` or `tenants/`.
 2.  **Commit:** Push to Git.
 3.  **Wait:** ArgoCD detects the change and syncs the cluster.
 

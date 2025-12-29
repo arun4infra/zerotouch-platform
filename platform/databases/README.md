@@ -15,7 +15,7 @@ See [POSTGRES.md](POSTGRES.md) and [DRAGONFLY.md](DRAGONFLY.md) for details.
 ## Structure
 
 ```
-platform/05-databases/
+platform/databases/
 ├── definitions/                # XRDs (cluster-scoped API definitions)
 │   ├── postgres-xrd.yaml
 │   └── dragonfly-xrd.yaml

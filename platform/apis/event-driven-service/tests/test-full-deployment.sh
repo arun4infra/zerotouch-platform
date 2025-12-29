@@ -21,7 +21,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 # Test configuration
 TEST_NAMESPACE="test-eds-full-$(date +%s)"
 CLAIM_NAME="full-featured-worker"
-CLAIM_FILE="${PROJECT_ROOT}/platform/04-apis/examples/full-claim.yaml"
+CLAIM_FILE="${PROJECT_ROOT}/platform/apis/examples/full-claim.yaml"
 TIMEOUT_SECONDS=300
 POLL_INTERVAL=5
 
@@ -167,14 +167,14 @@ fi
 # Check if EventDrivenService CRD exists
 if ! kubectl get crd eventdrivenservices.platform.bizmatters.io &>/dev/null; then
     echo -e "${RED}ERROR: EventDrivenService CRD not installed${NC}"
-    echo "Please apply the XRD first: kubectl apply -f platform/04-apis/definitions/xeventdrivenservices.yaml"
+    echo "Please apply the XRD first: kubectl apply -f platform/apis/definitions/xeventdrivenservices.yaml"
     exit 1
 fi
 
 # Check if Composition exists
 if ! kubectl get composition event-driven-service &>/dev/null; then
     echo -e "${RED}ERROR: event-driven-service Composition not found${NC}"
-    echo "Please apply the Composition first: kubectl apply -f platform/04-apis/compositions/event-driven-service-composition.yaml"
+    echo "Please apply the Composition first: kubectl apply -f platform/apis/compositions/event-driven-service-composition.yaml"
     exit 1
 fi
 

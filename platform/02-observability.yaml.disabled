@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/arun4infra/bizmatters-infra.git
     targetRevision: HEAD
-    path: platform/02-observability
+    path: platform/observability
     directory:
       recurse: true
   destination:

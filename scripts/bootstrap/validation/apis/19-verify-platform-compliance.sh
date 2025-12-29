@@ -288,7 +288,7 @@ echo -e "${BLUE}Verifying GitOps deployment configuration...${NC}"
 # Check if platform APIs are deployed in correct sync wave
 ARGOCD_APP_PATH="$REPO_ROOT/bootstrap/argocd/base/06-apis.yaml"
 if [ -f "$ARGOCD_APP_PATH" ]; then
-    if grep -q "platform/06-apis" "$ARGOCD_APP_PATH"; then
+    if grep -q "platform/apis" "$ARGOCD_APP_PATH"; then
         log_success "ArgoCD application configured for platform APIs"
     else
         log_error "ArgoCD application not properly configured for platform APIs"

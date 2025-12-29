@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/arun4infra/zerotouch-platform.git
     targetRevision: main
-    path: platform/04-apis
+    path: platform/apis
     directory:
       recurse: true
       exclude: '{**/schemas/*,**/tests/*,**/examples/*,**/*.md,**/*.json}'

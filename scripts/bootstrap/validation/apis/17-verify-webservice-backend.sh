@@ -23,10 +23,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 
 # Paths
-XRD_FILE="${PROJECT_ROOT}/platform/04-apis/webservice/definitions/xwebservices.yaml"
-COMPOSITION_FILE="${PROJECT_ROOT}/platform/04-apis/webservice/compositions/webservice-composition.yaml"
-EXAMPLES_DIR="${PROJECT_ROOT}/platform/04-apis/webservice/examples"
-FIXTURES_DIR="${PROJECT_ROOT}/platform/04-apis/webservice/tests/fixtures"
+XRD_FILE="${PROJECT_ROOT}/platform/apis/webservice/definitions/xwebservices.yaml"
+COMPOSITION_FILE="${PROJECT_ROOT}/platform/apis/webservice/compositions/webservice-composition.yaml"
+EXAMPLES_DIR="${PROJECT_ROOT}/platform/apis/webservice/examples"
+FIXTURES_DIR="${PROJECT_ROOT}/platform/apis/webservice/tests/fixtures"
 
 # Test counters
 TESTS_RUN=0

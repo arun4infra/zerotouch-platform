@@ -1,3 +1,0 @@
-[submodule "platform/03-intelligence/build"]
-	path = platform/03-intelligence/build
-	url = https://github.com/upbound/build.git

@@ -76,7 +76,7 @@ if [[ -n "${COMPOSITION_EXISTS}" ]]; then
     report_result "true" ""
 else
     report_result "false" "Composition '${COMPOSITION_NAME}' not found in cluster"
-    echo "Hint: Apply the composition with: kubectl apply -f platform/04-apis/compositions/event-driven-service-composition.yaml"
+    echo "Hint: Apply the composition with: kubectl apply -f platform/apis/compositions/event-driven-service-composition.yaml"
     echo ""
     echo "Exiting early - remaining checks require the Composition to exist"
     exit 1

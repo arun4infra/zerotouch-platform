@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # Paths
-SCHEMA_FILE="${PROJECT_ROOT}/platform/04-apis/schemas/eventdrivenservice.schema.json"
+SCHEMA_FILE="${PROJECT_ROOT}/platform/apis/schemas/eventdrivenservice.schema.json"
 
 # Usage function
 usage() {
@@ -30,8 +30,8 @@ Arguments:
   claim-file    Path to the YAML claim file to validate
 
 Examples:
-  $(basename "$0") platform/04-apis/examples/minimal-claim.yaml
-  $(basename "$0") platform/04-apis/examples/full-claim.yaml
+  $(basename "$0") platform/apis/examples/minimal-claim.yaml
+  $(basename "$0") platform/apis/examples/full-claim.yaml
 
 Exit codes:
   0 - Validation successful
@@ -260,8 +260,8 @@ else
     echo "  ${SCHEMA_FILE}"
     echo ""
     echo "Example valid claims:"
-    echo "  ${PROJECT_ROOT}/platform/04-apis/examples/minimal-claim.yaml"
-    echo "  ${PROJECT_ROOT}/platform/04-apis/examples/full-claim.yaml"
+    echo "  ${PROJECT_ROOT}/platform/apis/examples/minimal-claim.yaml"
+    echo "  ${PROJECT_ROOT}/platform/apis/examples/full-claim.yaml"
     echo ""
     exit 1
 fi

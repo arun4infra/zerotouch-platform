@@ -8,7 +8,7 @@ resources:
 
 patches:
 # 1. Specific Patch: Exclude Cilium from Foundation Config
-# This prevents ArgoCD from deploying platform/01-foundation/cilium.yaml
+# This prevents ArgoCD from deploying platform/foundation/cilium.yaml
 - target:
     kind: Application
     name: foundation-config

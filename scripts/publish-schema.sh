@@ -16,8 +16,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # Paths
-XRD_FILE="${PROJECT_ROOT}/platform/04-apis/definitions/xeventdrivenservices.yaml"
-SCHEMA_DIR="${PROJECT_ROOT}/platform/04-apis/schemas"
+XRD_FILE="${PROJECT_ROOT}/platform/apis/definitions/xeventdrivenservices.yaml"
+SCHEMA_DIR="${PROJECT_ROOT}/platform/apis/schemas"
 SCHEMA_FILE="${SCHEMA_DIR}/eventdrivenservice.schema.json"
 
 echo "=================================================="
