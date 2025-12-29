@@ -299,7 +299,7 @@ trap cleanup EXIT
     
     # Stage 1: Platform Readiness
     log_info "Stage 1: Platform Readiness - Validate platform components service needs"
-    PLATFORM_READINESS_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/check-platform-readiness.sh"
+    PLATFORM_READINESS_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/validation/check-platform-readiness.sh"
     if [[ -f "$PLATFORM_READINESS_SCRIPT" ]]; then
         chmod +x "$PLATFORM_READINESS_SCRIPT"
         "$PLATFORM_READINESS_SCRIPT" --wait --timeout 300
@@ -321,7 +321,7 @@ trap cleanup EXIT
 
     # Pre-deploy diagnostics
     log_info "Pre-deploy diagnostics: Validate external dependencies"
-    PRE_DEPLOY_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/pre-deploy-diagnostics.sh"
+    PRE_DEPLOY_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/validation/pre-deploy-diagnostics.sh"
     if [[ -f "$PRE_DEPLOY_SCRIPT" ]]; then
         chmod +x "$PRE_DEPLOY_SCRIPT"
         "$PRE_DEPLOY_SCRIPT"
@@ -441,7 +441,7 @@ trap cleanup EXIT
 
     # Stage 4: Internal Validation
     log_info "Stage 4: Internal Validation - Test service's own infrastructure and health"
-    POST_DEPLOY_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/post-deploy-diagnostics.sh"
+    POST_DEPLOY_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/validation/post-deploy-diagnostics.sh"
     if [[ -f "$POST_DEPLOY_SCRIPT" ]]; then
         chmod +x "$POST_DEPLOY_SCRIPT"
         "$POST_DEPLOY_SCRIPT"
@@ -570,48 +570,17 @@ setup_ci_infrastructure() {
         exit 1
     fi
     cd - > /dev/null
-}
-
-# Service-specific functions using filesystem contract
-# Legacy function - kept for backward compatibility
-setup_service_dependencies() {
-    log_warn "setup_service_dependencies is deprecated - use platform readiness and external dependencies"
     
-    # Get dependencies from config
-    local dependencies
-    dependencies=$(get_dependencies)
-    
-    if [[ -n "$dependencies" ]]; then
-        echo "$dependencies" | while read -r dep; do
-            if [[ -n "$dep" ]]; then
-                log_info "Setting up dependency: $dep"
-                setup_dependency "$dep"
-            fi
-        done
+    # Step 8: Synchronize required platform components
+    log_info "Synchronize required platform components"
+    SYNC_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/sync-platform-components.sh"
+    if [[ -f "$SYNC_SCRIPT" ]]; then
+        chmod +x "$SYNC_SCRIPT"
+        "$SYNC_SCRIPT"
     else
-        log_info "No dependencies specified in config"
+        log_error "Platform sync script not found: $SYNC_SCRIPT"
+        exit 1
     fi
-}
-
-setup_dependency() {
-    local dep="$1"
-    case "$dep" in
-        "postgres")
-            log_info "PostgreSQL will be provisioned by platform claims"
-            # Platform claims in platform/claims/<namespace>/ will handle this
-            ;;
-        "redis"|"dragonfly")
-            log_info "Cache will be provisioned by platform claims"
-            # Platform claims in platform/claims/<namespace>/ will handle this
-            ;;
-        "deepagents-runtime")
-            log_info "Setting up DeepAgents Runtime dependency"
-            setup_deepagents_runtime_service
-            ;;
-        *)
-            log_warn "Unknown dependency: $dep - will be handled by platform claims"
-            ;;
-    esac
 }
 
 # Call main function with all arguments
