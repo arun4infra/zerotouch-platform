@@ -76,21 +76,56 @@ clear_argocd_state() {
 
 # Trigger root sync with pruning (executes patch deletions)
 trigger_root_sync() {
-    log_info "Pruning undeclared services via root sync (executes Patch 02 deletions)..."
+    log_info "Forcing ArgoCD to recognize filesystem changes and prune undeclared services..."
     
+    # 1. Force a HARD REFRESH by annotating the root app
+    # This clears the repo-server cache and forces a re-scan of the patched files
+    log_info "Forcing hard refresh to clear ArgoCD repo-server cache..."
     if kubectl_retry get application platform-bootstrap -n argocd >/dev/null 2>&1; then
-        if kubectl patch application platform-bootstrap -n argocd --type merge \
-            -p '{"operation":{"sync":{"prune":true}}}' 2>/dev/null; then
-            log_success "Root sync with pruning triggered successfully"
-            
-            # Give ArgoCD time to process the pruning operations
-            log_info "Waiting for ArgoCD to process pruning operations..."
-            sleep 15
-        else
-            log_warn "Failed to trigger root sync - ArgoCD may not be ready yet"
-        fi
+        kubectl annotate application platform-bootstrap -n argocd argocd.argoproj.io/refresh=hard --overwrite 2>/dev/null || true
+        log_success "Hard refresh annotation applied"
+    fi
+    
+    # 2. Trigger sync with pruning
+    if kubectl patch application platform-bootstrap -n argocd --type merge \
+        -p '{"operation":{"sync":{"prune":true}}}' 2>/dev/null; then
+        log_success "Root sync with pruning triggered"
     else
-        log_warn "platform-bootstrap application not found - skipping root sync"
+        log_warn "Failed to trigger root sync - ArgoCD may not be ready yet"
+        return
+    fi
+    
+    # 3. CRITICAL: Wait until the unwanted apps are actually DELETED
+    # This ensures CPU is actually freed up
+    log_info "Waiting for pruning to complete (freeing up CPU resources)..."
+    local timeout=120  # 2 minutes for heavy apps to be deleted
+    local elapsed=0
+    local check_interval=10
+    
+    while [ $elapsed -lt $timeout ]; do
+        # Check if any CPU-heavy app NOT in our required list still exists
+        local remaining=$(kubectl get applications -n argocd -o name 2>/dev/null | grep -E "nats|kagent|keda|intelligence" || echo "")
+        
+        if [[ -z "$remaining" ]]; then
+            log_success "✓ Pruning complete. CPU-heavy services removed and resources freed"
+            return
+        fi
+        
+        # Show what's still being pruned
+        local remaining_names=$(echo "$remaining" | sed 's|application.argoproj.io/||g' | tr '\n' ' ')
+        log_info "  Still pruning CPU-heavy services: $remaining_names"
+        
+        sleep $check_interval
+        elapsed=$((elapsed + check_interval))
+    done
+    
+    # If we get here, pruning took too long
+    log_warn "Pruning timeout after $((timeout/60)) minutes - some services may still be running"
+    local final_remaining=$(kubectl get applications -n argocd -o name 2>/dev/null | grep -E "nats|kagent|keda|intelligence" || echo "")
+    if [[ -n "$final_remaining" ]]; then
+        local final_names=$(echo "$final_remaining" | sed 's|application.argoproj.io/||g' | tr '\n' ' ')
+        log_warn "Services still present: $final_names"
+        log_warn "These may consume CPU resources and affect service deployment"
     fi
 }
 

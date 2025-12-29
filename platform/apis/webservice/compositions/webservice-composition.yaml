@@ -126,7 +126,7 @@ spec:
                   app.kubernetes.io/component: web-service
                   app.kubernetes.io/managed-by: crossplane
               spec:
-                replicas: 2
+                replicas: 1
                 selector:
                   matchLabels:
                     app.kubernetes.io/name: placeholder

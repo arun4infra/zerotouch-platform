@@ -211,4 +211,4 @@ spec:
                   description: "Number of replicas to run"
                   minimum: 1
                   maximum: 10
-                  default: 2
+                  default: 1
