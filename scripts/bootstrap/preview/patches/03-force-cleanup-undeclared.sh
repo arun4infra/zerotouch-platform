@@ -104,33 +104,41 @@ force_delete_service() {
     if [[ "$is_system" == "false" ]] && kubectl get namespace "$service" &>/dev/null; then
         log_info "Deleting undeclared namespace: $service"
         
-        # Step 1: Remove finalizers to prevent hangs
-        log_info "Cleaning finalizers for $service..."
-        if kubectl get namespace "$service" -o json > "/tmp/${service}-ns.json" 2>/dev/null; then
-            # Create finalize payload with empty finalizers
-            jq '.spec.finalizers = []' "/tmp/${service}-ns.json" > "/tmp/${service}-finalize.json" 2>/dev/null || {
-                log_warn "jq not available, using manual finalizer removal"
-                kubectl patch namespace "$service" -p '{"spec":{"finalizers":[]}}' --type=merge || true
-            }
-            
-            # Apply finalizer removal via finalize endpoint
-            if [[ -f "/tmp/${service}-finalize.json" ]]; then
-                kubectl replace --raw "/api/v1/namespaces/${service}/finalize" -f "/tmp/${service}-finalize.json" 2>/dev/null || {
-                    log_warn "Finalize endpoint failed, trying patch method"
-                    kubectl patch namespace "$service" -p '{"spec":{"finalizers":[]}}' --type=merge || true
-                }
+        # Step 1: Delete all Custom Resources first to avoid finalizer deadlocks
+        log_info "Cleaning Custom Resources in namespace $service..."
+        
+        # Get all CRDs and delete their instances in this namespace
+        kubectl get crd -o name 2>/dev/null | while read -r crd; do
+            crd_name=$(echo "$crd" | cut -d'/' -f2)
+            if kubectl get "$crd_name" -n "$service" --no-headers 2>/dev/null | grep -q .; then
+                log_info "Deleting $crd_name resources in $service..."
+                kubectl delete "$crd_name" --all -n "$service" --force --grace-period=0 --timeout=10s &>/dev/null || true
             fi
+        done
+        
+        # Step 2: Use the one-liner to remove finalizers instantly
+        log_info "Cleaning finalizers for $service to prevent hang..."
+        kubectl get namespace "$service" -o json 2>/dev/null | jq '.spec.finalizers = []' | kubectl replace --raw "/api/v1/namespaces/$service/finalize" -f - 2>/dev/null || {
+            log_warn "Finalize endpoint failed, using patch method"
+            kubectl patch namespace "$service" -p '{"spec":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+        }
+        
+        # Step 3: Force delete the namespace (should be instant now)
+        kubectl delete namespace "$service" --force --grace-period=0 --timeout=30s || true
+        
+        # Step 4: Verify deletion with timeout
+        local timeout=15
+        local count=0
+        while kubectl get namespace "$service" &>/dev/null && [ $count -lt $timeout ]; do
+            sleep 1
+            count=$((count + 1))
+        done
+        
+        if kubectl get namespace "$service" &>/dev/null; then
+            log_warn "Namespace $service still exists after $timeout seconds - may need manual cleanup"
         else
-            log_warn "Could not get namespace JSON, trying direct patch"
-            kubectl patch namespace "$service" -p '{"spec":{"finalizers":[]}}' --type=merge || true
+            log_success "✓ Deleted namespace: $service"
         fi
-        
-        # Step 2: Force delete the namespace (should be instant now)
-        kubectl delete namespace "$service" --force --grace-period=0 || true
-        log_success "✓ Deleted namespace: $service"
-        
-        # Clean up temp files
-        rm -f "/tmp/${service}-ns.json" "/tmp/${service}-finalize.json"
     fi
 }
 
