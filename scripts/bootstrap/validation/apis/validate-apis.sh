@@ -80,7 +80,8 @@ for script in "$SCRIPT_DIR"/[0-9][0-9]-*.sh; do
                 echo ""
                 
                 # Show specific diagnostics based on the validation type
-                case "${api_name,,}" in
+                api_name_lower=$(echo "$api_name" | tr '[:upper:]' '[:lower:]')
+                case "$api_name_lower" in
                     *"eventdrivenservice"*)
                         echo -e "  ${BLUE}EventDrivenService XRD Status:${NC}"
                         kubectl get crd xeventdrivenservices.platform.bizmatters.io 2>/dev/null | while read -r line; do

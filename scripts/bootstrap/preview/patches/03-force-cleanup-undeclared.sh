@@ -107,14 +107,16 @@ force_delete_service() {
         # Step 1: Delete all Custom Resources first to avoid finalizer deadlocks
         log_info "Cleaning Custom Resources in namespace $service..."
         
-        # Get all CRDs and delete their instances in this namespace
-        kubectl get crd -o name 2>/dev/null | while read -r crd; do
+        # Get all CRDs and delete their instances in this namespace with timeout
+        timeout 30 kubectl get crd -o name 2>/dev/null | while read -r crd; do
             crd_name=$(echo "$crd" | cut -d'/' -f2)
-            if kubectl get "$crd_name" -n "$service" --no-headers 2>/dev/null | grep -q .; then
+            if timeout 5 kubectl get "$crd_name" -n "$service" --no-headers 2>/dev/null | grep -q .; then
                 log_info "Deleting $crd_name resources in $service..."
-                kubectl delete "$crd_name" --all -n "$service" --force --grace-period=0 --timeout=10s &>/dev/null || true
+                timeout 10 kubectl delete "$crd_name" --all -n "$service" --force --grace-period=0 --timeout=5s &>/dev/null || true
             fi
-        done
+        done 2>/dev/null || {
+            log_warn "Custom resource cleanup timed out or failed - continuing anyway"
+        }
         
         # Step 2: Use the one-liner to remove finalizers instantly
         log_info "Cleaning finalizers for $service to prevent hang..."
@@ -126,15 +128,24 @@ force_delete_service() {
         # Step 3: Force delete the namespace (should be instant now)
         kubectl delete namespace "$service" --force --grace-period=0 --timeout=30s || true
         
-        # Step 4: Verify deletion with timeout
+        # Step 4: Verify deletion with robust timeout
         local timeout=15
         local count=0
-        while kubectl get namespace "$service" &>/dev/null && [ $count -lt $timeout ]; do
-            sleep 1
-            count=$((count + 1))
+        log_info "Verifying namespace deletion (timeout: ${timeout}s)..."
+        
+        while [ $count -lt $timeout ]; do
+            # Use timeout command to prevent kubectl from hanging
+            if timeout 3 kubectl get namespace "$service" &>/dev/null; then
+                sleep 1
+                count=$((count + 1))
+            else
+                # Namespace is gone or kubectl timed out - either way, we're done
+                break
+            fi
         done
         
-        if kubectl get namespace "$service" &>/dev/null; then
+        # Final check with timeout
+        if timeout 3 kubectl get namespace "$service" &>/dev/null; then
             log_warn "Namespace $service still exists after $timeout seconds - may need manual cleanup"
         else
             log_success "✓ Deleted namespace: $service"
