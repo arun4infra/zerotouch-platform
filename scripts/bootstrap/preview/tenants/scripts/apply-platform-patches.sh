@@ -33,26 +33,26 @@ main() {
     fi
     
     # Step 1: Disable ArgoCD auto-sync to prevent conflicts during patching
-    # log_info "Step 1: Disabling ArgoCD auto-sync for stable patching..."
+    log_info "Step 1: Disabling ArgoCD auto-sync for stable patching..."
     
     # Call the ArgoCD auto-sync disable patch script
-    # PATCHES_DIR="$(dirname "$0")/../../patches"
-    # ARGOCD_PATCH_SCRIPT="$PATCHES_DIR/01-disable-argocd-autosync.sh"
+    PATCHES_DIR="$(dirname "$0")/../../patches"
+    ARGOCD_PATCH_SCRIPT="$PATCHES_DIR/01-disable-argocd-autosync.sh"
     
-    # if [[ -f "$ARGOCD_PATCH_SCRIPT" ]]; then
-    #     log_info "Running ArgoCD auto-sync disable patch: $ARGOCD_PATCH_SCRIPT"
-    #     bash "$ARGOCD_PATCH_SCRIPT"
+    if [[ -f "$ARGOCD_PATCH_SCRIPT" ]]; then
+        log_info "Running ArgoCD auto-sync disable patch: $ARGOCD_PATCH_SCRIPT"
+        bash "$ARGOCD_PATCH_SCRIPT"
         
-    #     if [[ $? -eq 0 ]]; then
-    #         log_success "✓ ArgoCD auto-sync disable patch completed successfully"
-    #     else
-    #         log_error "✗ ArgoCD auto-sync disable patch failed"
-    #         exit 1
-    #     fi
-    # else
-    #     log_error "ArgoCD auto-sync disable patch script not found: $ARGOCD_PATCH_SCRIPT"
-    #     exit 1
-    # fi
+        if [[ $? -eq 0 ]]; then
+            log_success "✓ ArgoCD auto-sync disable patch completed successfully"
+        else
+            log_error "✗ ArgoCD auto-sync disable patch failed"
+            exit 1
+        fi
+    else
+        log_error "ArgoCD auto-sync disable patch script not found: $ARGOCD_PATCH_SCRIPT"
+        exit 1
+    fi
     
     # Step 2: Apply resource optimization patches
     log_info "Step 2: Applying resource optimization patches..."
