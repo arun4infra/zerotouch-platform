@@ -112,3 +112,8 @@ kubectl run integration-test-all --image=ide-orchestrator:ci-test --rm -i --rest
 ```bash
 kubectl run integration-test-lifecycle --image=ide-orchestrator:ci-test --rm -i --restart=Never -n intelligence-orchestrator --overrides='{"spec":{"containers":[{"name":"integration-test-lifecycle","image":"ide-orchestrator:ci-test","command":["bash","-c","cd /app && python -m pytest tests/integration/test_refinement_lifecycle.py::test_refinement_approved_lifecycle -v"],"env":[{"name":"POSTGRES_HOST","value":"ide-orchestrator-db-rw.intelligence-orchestrator.svc.cluster.local"},{"name":"POSTGRES_PORT","value":"5432"},{"name":"POSTGRES_USER","value":"ide-orchestrator-db"},{"name":"POSTGRES_PASSWORD","value":"0KNzcnnKO1NlJgSrdCX3ORbybFFMrd2TuUGr8kkTsQjrdogAv908QuOgZb7T5Zmy"},{"name":"POSTGRES_DB","value":"ide-orchestrator-db"},{"name":"JWT_SECRET","value":"test-secret-key-for-integration-tests"}]}]}}'
 ```
+
+## After each fix build and load to local cluster for testing
+```bash
+docker build -t ide-orchestrator:ci-test ide-orchestrator/ && kind load docker-image ide-orchestrator:ci-test --name zerotouch-preview
+```
