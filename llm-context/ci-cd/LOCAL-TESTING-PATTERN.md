@@ -55,7 +55,7 @@ AWS_ROLE_ARN=
 export CLEANUP_CLUSTER=false && export $(grep -v '^#' .env | grep -v '^$' | xargs) && ./scripts/ci/in-cluster-test.sh
 ```
 
-## Example - Testing single test locally
+## Example - IN-Cluster Testing single test locally
 
 ```bash
 kubectl run integration-test-manual --image=ide-orchestrator:ci-test --rm -i --restart=Never -n intelligence-orchestrator --overrides='
@@ -82,7 +82,7 @@ kubectl run integration-test-manual --image=ide-orchestrator:ci-test --rm -i --r
 }'
 ```
 
-## Example - Testing all tests locally
+## Example - IN-Cluster Testing all tests locally
 
 ```bash
 kubectl run integration-test-all --image=ide-orchestrator:ci-test --rm -i --restart=Never -n intelligence-orchestrator --overrides='
@@ -107,4 +107,8 @@ kubectl run integration-test-all --image=ide-orchestrator:ci-test --rm -i --rest
     ]
   }
 }'
+```
+
+```bash
+kubectl run integration-test-lifecycle --image=ide-orchestrator:ci-test --rm -i --restart=Never -n intelligence-orchestrator --overrides='{"spec":{"containers":[{"name":"integration-test-lifecycle","image":"ide-orchestrator:ci-test","command":["bash","-c","cd /app && python -m pytest tests/integration/test_refinement_lifecycle.py::test_refinement_approved_lifecycle -v"],"env":[{"name":"POSTGRES_HOST","value":"ide-orchestrator-db-rw.intelligence-orchestrator.svc.cluster.local"},{"name":"POSTGRES_PORT","value":"5432"},{"name":"POSTGRES_USER","value":"ide-orchestrator-db"},{"name":"POSTGRES_PASSWORD","value":"0KNzcnnKO1NlJgSrdCX3ORbybFFMrd2TuUGr8kkTsQjrdogAv908QuOgZb7T5Zmy"},{"name":"POSTGRES_DB","value":"ide-orchestrator-db"},{"name":"JWT_SECRET","value":"test-secret-key-for-integration-tests"}]}]}}'
 ```
