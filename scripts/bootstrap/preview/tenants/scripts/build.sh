@@ -67,30 +67,14 @@ if [[ "$MODE" == "test" ]]; then
     IMAGE_TAG="ci-test"
     CLUSTER_NAME="zerotouch-preview"
     
-    log_info "Building Go binary for testing..."
-    if [[ "$SERVICE_NAME" == "ide-orchestrator" ]]; then
-        CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-            -ldflags="-w -s" \
-            -o bin/ide-orchestrator \
-            ./cmd/api
-        
-        log_info "Building Docker test image for testing..."
-        docker build \
-            -f Dockerfile.test \
-            -t "${SERVICE_NAME}:${IMAGE_TAG}" \
-            --build-arg BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-            --build-arg GIT_COMMIT="${GITHUB_SHA:-$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')}" \
-            .
-    else
-        # For other services (like deepagents-runtime)
-        log_info "Building Docker test image for testing..."
-        docker build \
-            -f Dockerfile \
-            -t "${SERVICE_NAME}:${IMAGE_TAG}" \
-            --build-arg BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-            --build-arg GIT_COMMIT="${GITHUB_SHA:-$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')}" \
-            .
-    fi
+    # Build Docker image for testing (Python services)
+    log_info "Building Docker test image for testing..."
+    docker build \
+        -f Dockerfile \
+        -t "${SERVICE_NAME}:${IMAGE_TAG}" \
+        --build-arg BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+        --build-arg GIT_COMMIT="${GITHUB_SHA:-$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')}" \
+        .
     
     log_success "Docker image built successfully"
     
