@@ -410,6 +410,32 @@ spec:
           toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[5].secretRef.name
           policy:
             fromFieldPath: Optional
+        # Patch init container secret slots (envFrom - bulk mounting) - same secrets as main container
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret1Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].envFrom[1].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret2Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].envFrom[2].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret3Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].envFrom[3].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret4Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].envFrom[4].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret5Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].envFrom[5].secretRef.name
+          policy:
+            fromFieldPath: Optional
         # Patch health check paths
         - type: FromCompositeFieldPath
           fromFieldPath: spec.healthPath

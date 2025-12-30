@@ -17,6 +17,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # The deploy script is called from service-code directory, so PROJECT_ROOT is current dir
 PROJECT_ROOT="$(pwd)"
 
+# Set PLATFORM_ROOT if not already set
+if [[ -z "${PLATFORM_ROOT:-}" ]]; then
+    PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+fi
+
 # Load service configuration from ci/config.yaml
 load_service_config() {
     local config_file="${SERVICE_ROOT:-$(pwd)}/ci/config.yaml"
