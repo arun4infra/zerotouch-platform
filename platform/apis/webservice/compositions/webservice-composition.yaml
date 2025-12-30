@@ -147,40 +147,6 @@ spec:
                       runAsNonRoot: true
                       runAsUser: 1000
                       fsGroup: 1000
-                    initContainers:
-                      - name: init
-                        image: placeholder
-                        imagePullPolicy: IfNotPresent
-                        command: ["/bin/bash", "-c"]
-                        args: ["echo 'No init container configured'"]
-                        envFrom:
-                          - configMapRef:
-                              name: placeholder-backend-config
-                              optional: true
-                          - secretRef:
-                              name: placeholder-secret1
-                              optional: true
-                          - secretRef:
-                              name: placeholder-secret2
-                              optional: true
-                          - secretRef:
-                              name: placeholder-secret3
-                              optional: true
-                          - secretRef:
-                              name: placeholder-secret4
-                              optional: true
-                          - secretRef:
-                              name: placeholder-secret5
-                              optional: true
-                        securityContext:
-                          runAsNonRoot: true
-                          runAsUser: 1000
-                          allowPrivilegeEscalation: false
-                          capabilities:
-                            drop:
-                              - ALL
-                          seccompProfile:
-                            type: RuntimeDefault
                     containers:
                       - name: main
                         image: placeholder
@@ -374,16 +340,6 @@ spec:
                 fmt: "%s-backend-config"
           policy:
             fromFieldPath: Optional
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].envFrom[0].configMapRef.name
-          transforms:
-            - type: string
-              string:
-                type: Format
-                fmt: "%s-backend-config"
-          policy:
-            fromFieldPath: Optional
         # Patch secret slots (envFrom - bulk mounting) - updated indices for ConfigMap at index 0
         - type: FromCompositeFieldPath
           fromFieldPath: spec.secret1Name
@@ -410,32 +366,6 @@ spec:
           toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[5].secretRef.name
           policy:
             fromFieldPath: Optional
-        # Patch init container secret slots (envFrom - bulk mounting) - same secrets as main container
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.secret1Name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].envFrom[1].secretRef.name
-          policy:
-            fromFieldPath: Optional
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.secret2Name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].envFrom[2].secretRef.name
-          policy:
-            fromFieldPath: Optional
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.secret3Name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].envFrom[3].secretRef.name
-          policy:
-            fromFieldPath: Optional
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.secret4Name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].envFrom[4].secretRef.name
-          policy:
-            fromFieldPath: Optional
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.secret5Name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].envFrom[5].secretRef.name
-          policy:
-            fromFieldPath: Optional
         # Patch health check paths
         - type: FromCompositeFieldPath
           fromFieldPath: spec.healthPath
@@ -454,22 +384,6 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.port
           toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].readinessProbe.httpGet.port
-        # Patch init container image (same as main container)
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.image
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].image
-        # Patch init container command
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.initContainer.command
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].command
-          policy:
-            fromFieldPath: Optional
-        # Patch init container args
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.initContainer.args
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].args
-          policy:
-            fromFieldPath: Optional
       readinessChecks:
         - type: MatchCondition
           matchCondition:
