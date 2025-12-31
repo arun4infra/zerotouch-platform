@@ -18,6 +18,25 @@ if [[ -z "${PLATFORM_ROOT:-}" ]]; then
     PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 fi
 
+# PROJECT_ROOT should be set by calling script (deploy.sh)
+# If not set, try to determine from current context
+if [[ -z "${PROJECT_ROOT:-}" ]]; then
+    # Try to find project root by looking for platform/claims directory
+    local current_dir="$(pwd)"
+    while [[ "$current_dir" != "/" ]]; do
+        if [[ -d "$current_dir/platform/claims" ]]; then
+            PROJECT_ROOT="$current_dir"
+            break
+        fi
+        current_dir="$(dirname "$current_dir")"
+    done
+    
+    if [[ -z "${PROJECT_ROOT:-}" ]]; then
+        log_warn "PROJECT_ROOT not set and could not auto-detect. ExternalSecret discovery may fail."
+        PROJECT_ROOT="$(pwd)"
+    fi
+fi
+
 # Color codes
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -71,18 +90,55 @@ wait_for_external_secret() {
     fi
 }
 
+# Function to discover required secrets from ExternalSecret manifests
+discover_required_secrets() {
+    local secrets_dir="${PROJECT_ROOT}/platform/claims/${NAMESPACE}/external-secrets"
+    local required_secrets=()
+    
+    if [[ -d "$secrets_dir" ]]; then
+        log_info "Discovering ExternalSecrets from: $secrets_dir"
+        
+        for es_file in "$secrets_dir"/*.yaml; do
+            if [[ -f "$es_file" ]]; then
+                if command -v yq &> /dev/null; then
+                    local secret_name=$(yq eval '.spec.target.name' "$es_file" 2>/dev/null)
+                    if [[ -n "$secret_name" && "$secret_name" != "null" ]]; then
+                        required_secrets+=("$secret_name")
+                        log_info "Found ExternalSecret: $secret_name"
+                    fi
+                else
+                    log_warn "yq not available, falling back to grep extraction"
+                    local secret_name=$(grep -A 10 "spec:" "$es_file" | grep -A 5 "target:" | grep "name:" | head -1 | sed 's/.*name: *//g' | tr -d '"')
+                    if [[ -n "$secret_name" ]]; then
+                        required_secrets+=("$secret_name")
+                        log_info "Found ExternalSecret: $secret_name"
+                    fi
+                fi
+            fi
+        done
+    else
+        log_warn "ExternalSecrets directory not found: $secrets_dir"
+        log_info "Service may not require ExternalSecrets"
+    fi
+    
+    echo "${required_secrets[@]}"
+}
+
 # Function to wait for all required external secrets
 wait_for_external_secrets() {
     log_info "Waiting for all required ExternalSecrets to sync..."
     
-    # Define required secrets - these must match platform/claims/ namespace
-    local required_secrets=(
-        "ghcr-pull-secret"
-        "${SERVICE_NAME}-app-secrets"
-        "${SERVICE_NAME}-jwt-keys"
-    )
+    # Dynamically discover required secrets from platform/claims/
+    local required_secrets=($(discover_required_secrets))
     
     local failed_secrets=()
+    
+    if [[ ${#required_secrets[@]} -eq 0 ]]; then
+        log_info "No ExternalSecrets found for this service"
+        return 0
+    fi
+    
+    log_info "Waiting for ${#required_secrets[@]} ExternalSecrets: ${required_secrets[*]}"
     
     for secret in "${required_secrets[@]}"; do
         if ! wait_for_external_secret "$secret" 60; then
@@ -125,6 +181,7 @@ wait_for_database_secret() {
 # Main function to wait for all database and secret dependencies
 wait_for_database_and_secrets() {
     log_info "Starting database and secrets dependency checks for ${SERVICE_NAME} in ${NAMESPACE}"
+    log_info "PROJECT_ROOT: ${PROJECT_ROOT}"
     
     local exit_code=0
     

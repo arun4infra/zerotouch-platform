@@ -16,6 +16,7 @@ spec:
     directory:
       recurse: true
       # CRITICAL: Only sync infrastructure files. Ignore config.yaml.
+      include: '**/00-namespace.yaml' 
       exclude: 'config.yaml'
   destination:
     server: https://kubernetes.default.svc
