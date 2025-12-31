@@ -10,15 +10,3 @@ resources:
 - 00-repo-registry-app.yaml
 # ADD: Tenant Infrastructure (Production Only - manages namespaces from zerotouch-tenants)
 - components-tenants/tenant-infrastructure.yaml
-
-# In production, we ensure targetRevision is main for Git-based apps only
-# Helm charts MUST use version numbers, not git refs
-patches:
-- target:
-    kind: Application
-    group: argoproj.io
-    name: (foundation-config|apis|intelligence|databases)
-  patch: |
-    - op: replace
-      path: /spec/source/targetRevision
-      value: main
