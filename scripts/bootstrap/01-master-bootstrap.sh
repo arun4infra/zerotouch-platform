@@ -254,9 +254,13 @@ echo -e "${YELLOW}[8/14] Installing ArgoCD...${NC}"
 echo -e "${YELLOW}[9/14] Waiting for platform-bootstrap...${NC}"
 "$SCRIPT_DIR/wait/10-wait-platform-bootstrap.sh"
 
-# Step 9b: Wait for tenant repository authentication
-echo -e "${YELLOW}[9b/14] Waiting for tenant repository authentication...${NC}"
-"$SCRIPT_DIR/wait/10b-wait-tenant-auth.sh"
+# Step 9b: Wait for tenant repository authentication (production mode only)
+if [ "$MODE" != "preview" ]; then
+    echo -e "${YELLOW}[9b/14] Waiting for tenant repository authentication...${NC}"
+    "$SCRIPT_DIR/wait/10b-wait-tenant-auth.sh"
+else
+    echo -e "${BLUE}[9b/14] Skipping tenant repository authentication (preview mode)${NC}"
+fi
 
 # Step 10: Verify ESO
 echo -e "${YELLOW}[10/14] Verifying ESO...${NC}"
