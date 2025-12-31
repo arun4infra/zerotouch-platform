@@ -6,7 +6,8 @@ resources:
 - cilium/01-cilium.yaml
 - components-tenants/99-tenants.yaml
 - components-tenants/argocd-repo-configs.yaml
-- components-tenants/argocd-repo-registry.yaml
+# ADD: Production-only Application wrapper for repo registry secret (sync-wave ordering)
+- 00-repo-registry-app.yaml
 # ADD: Tenant Infrastructure (Production Only - manages namespaces from zerotouch-tenants)
 - components-tenants/tenant-infrastructure.yaml
 

@@ -126,3 +126,8 @@ docker build -t ide-orchestrator:ci-test ide-orchestrator/ && kind load docker-i
 ```bash
 kubectl rollout restart deployment ide-orchestrator -n intelligence-orchestrator
 ```
+
+## Do NOT run locally like below, it will not work
+```bash
+python -m pytest tests/integration/
+```
