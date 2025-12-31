@@ -57,6 +57,9 @@ jobs:
           /usr/local/bin/yq --version
           # Create symlink to ensure it's found
           sudo ln -sf /usr/local/bin/yq /usr/bin/yq
+          # Install Talos CLI
+          curl -sL https://talos.dev/install | sh
+          sudo mv talosctl /usr/local/bin/
           git config --global user.email "bootstrap@zerotouch.dev"
           git config --global user.name "ZeroTouch Bootstrap"
 
