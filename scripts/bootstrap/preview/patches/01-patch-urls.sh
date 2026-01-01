@@ -68,7 +68,7 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
         echo -e "${BLUE}CI Mode: Keeping GitHub URLs and updating targetRevision to commit SHA${NC}"
         
         # Update targetRevision for Git sources (not Helm charts) to use commit SHA
-        for file in "$REPO_ROOT"/bootstrap/argocd/base/*.yaml "$REPO_ROOT"/bootstrap/argocd/overlays/production/components-tenants/*.yaml; do
+        for file in "$REPO_ROOT"/bootstrap/argocd/base/*.yaml "$REPO_ROOT"/bootstrap/argocd/overlays/main/components-tenants/*.yaml; do
             if [ -f "$file" ]; then
                 # Only update targetRevision if this is a Git source (has GitHub URL)
                 # Skip if it's a Helm chart (has 'chart:' field)
@@ -98,7 +98,7 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
         echo -e "${BLUE}Local Mode: Converting to local filesystem URLs${NC}"
         
         # Update URLs in bootstrap files (base/ and production tenant components)
-        for file in "$REPO_ROOT"/bootstrap/argocd/base/*.yaml "$REPO_ROOT"/bootstrap/argocd/overlays/production/components-tenants/*.yaml; do
+        for file in "$REPO_ROOT"/bootstrap/argocd/base/*.yaml "$REPO_ROOT"/bootstrap/argocd/overlays/main/components-tenants/*.yaml; do
             if [ -f "$file" ]; then
                 if grep -qE "$GITHUB_URL_PATTERN" "$file" 2>/dev/null; then
                     sed -i.bak -E "s|$GITHUB_URL_PATTERN|$LOCAL_URL|g" "$file"
@@ -109,7 +109,7 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
         done
         
         # Update targetRevision for local file sources
-        for file in "$REPO_ROOT"/bootstrap/argocd/base/*.yaml "$REPO_ROOT"/bootstrap/argocd/overlays/production/components-tenants/*.yaml; do
+        for file in "$REPO_ROOT"/bootstrap/argocd/base/*.yaml "$REPO_ROOT"/bootstrap/argocd/overlays/main/components-tenants/*.yaml; do
             if [ -f "$file" ]; then
                 # Only update targetRevision if this is a Git source (has file:///repo)
                 # Skip if it's a Helm chart (has 'chart:' field)
@@ -161,7 +161,7 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
         echo -e "${BLUE}Checking local configuration (file:///repo)...${NC}"
         
         # List all files that still contain GitHub URL
-        REMAINING=$(grep -l "$GITHUB_URL_PATTERN" "$REPO_ROOT"/bootstrap/argocd/base/*.yaml "$REPO_ROOT"/bootstrap/argocd/overlays/production/components-tenants/*.yaml "$REPO_ROOT"/bootstrap/argocd/overlays/*/root.yaml 2>/dev/null || true)
+        REMAINING=$(grep -l "$GITHUB_URL_PATTERN" "$REPO_ROOT"/bootstrap/argocd/base/*.yaml "$REPO_ROOT"/bootstrap/argocd/overlays/main/components-tenants/*.yaml "$REPO_ROOT"/bootstrap/argocd/overlays/*/root.yaml 2>/dev/null || true)
         if [ -n "$REMAINING" ]; then
             echo -e "  ${RED}✗ Files still containing GitHub URL:${NC}"
             echo "$REMAINING" | while read f; do echo "    - $(basename "$f")"; done

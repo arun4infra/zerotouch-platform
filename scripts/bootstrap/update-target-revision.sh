@@ -142,7 +142,7 @@ echo -e "${YELLOW}Next steps:${NC}"
 echo -e "  1. Review changes: ${GREEN}git diff bootstrap/${NC}"
 echo -e "  2. Commit changes: ${GREEN}git add bootstrap/ && git commit -m 'chore: Update target revision to $TARGET_REVISION'${NC}"
 echo -e "  3. Push to remote: ${GREEN}git push${NC}"
-echo -e "  4. Apply to cluster: ${GREEN}kubectl apply -f bootstrap/argocd/overlays/production/root.yaml${NC}"
+echo -e "  4. Apply to cluster: ${GREEN}kubectl apply -f bootstrap/argocd/overlays/main/root.yaml${NC}"
 echo ""
 
 exit 0
