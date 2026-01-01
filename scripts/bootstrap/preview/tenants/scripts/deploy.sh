@@ -139,24 +139,23 @@ else
     exit 1
 fi
 
-# Update image tag if provided (only for non-platform-claims deployments)
-if [[ "${IMAGE_TAG}" != "latest" && "${USING_PLATFORM_CLAIMS}" == "false" ]]; then
-    echo "🏷️  Updating image tag to ${IMAGE_TAG}..."
-    
-    # Determine if this is a full registry image or just a tag
-    if [[ "$IMAGE_TAG" == *"ghcr.io"* || "$IMAGE_TAG" == *"/"* ]]; then
-        # This is a full registry image (e.g., ghcr.io/arun4infra/service:sha-123)
-        FULL_IMAGE_NAME="$IMAGE_TAG"
-    else
-        # This is just a tag (e.g., ci-test)
-        FULL_IMAGE_NAME="${SERVICE_NAME}:${IMAGE_TAG}"
-    fi
-    
+# Always update image tag with what CI provides
+echo "🏷️  Updating all image references to ${IMAGE_TAG}..."
+
+if [[ "${USING_PLATFORM_CLAIMS}" == "true" ]]; then
+    # Force replace ALL image references in platform claims with CI-provided tag
+    echo "🔧 Updating images in platform claims..."
+    find "${PROJECT_ROOT}/platform/claims/${NAMESPACE}/" -name "*.yaml" -type f | while read -r file; do
+        echo "  Processing: $file"
+        # Replace any image reference with the CI-built tag
+        sed -i.bak "s|image: .*|image: ${IMAGE_TAG}|g" "$file"
+        rm -f "${file}.bak"
+    done
+else
+    # Update deployment directly for non-platform-claims
     kubectl set image deployment/${SERVICE_NAME} \
-        ${SERVICE_NAME}="${FULL_IMAGE_NAME}" \
+        ${SERVICE_NAME}="${IMAGE_TAG}" \
         -n "${NAMESPACE}"
-elif [[ "${USING_PLATFORM_CLAIMS}" == "true" ]]; then
-    echo "ℹ️  Using platform claims - image already set via patched manifests"
 fi
 
 # Wait for deployment to be ready (only for non-platform-claims deployments)
