@@ -134,7 +134,8 @@ update_kustomization() {
         yq eval ".images[0].newTag = \"${IMAGE_TAG##*:}\"" -i "$kustomization_file"
     else
         log_info "Updating image tag using sed (yq not available)"
-        sed -i.bak "s/newTag: .*/newTag: ${IMAGE_TAG##*:}/" "$kustomization_file"
+        # Only replace the newTag value, preserving newName and other fields
+        sed -i.bak "s/^\([[:space:]]*\)newTag: .*/\1newTag: ${IMAGE_TAG##*:}/" "$kustomization_file"
         rm -f "${kustomization_file}.bak"
     fi
     
