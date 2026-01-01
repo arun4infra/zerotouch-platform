@@ -40,22 +40,24 @@ graph LR
 - Outputs `image_tag` for downstream jobs
 
 ### ci-test.yml  
-- Accepts `image_tag` input
-- Pulls pre-built image
-- Runs specific test suite in Kind
-- Uses `OVERRIDE_IMAGE_TAG` for artifact-aware testing
+- Accepts `image_tag` input from build stage
+- Pulls pre-built image for testing
+- Runs specific test suite in ephemeral Kind cluster
+- Uses `deploy.sh` to apply platform claims directly (simulates GitOps)
+- Replaces hardcoded image tags with CI-built tag before deployment
 
 ### release-pipeline.yml
-- Deploys validated image through environments
-- **Dev**: Automatic deployment
+- Deploys validated image through environments using GitOps
+- **Dev**: Automatic deployment after all tests pass
 - **Staging/Prod**: GitHub Environment gates (manual approval)
-- Uses `deploy-direct.sh` for GitOps
+- Uses `deploy-direct.sh` to update tenant repository (production GitOps)
+- Different from CI testing which uses `deploy.sh` for direct platform claims
 
 ## GitOps Flow
 
-**deploy-direct.sh** commits image tags to tenant repository:
+**Production Releases** use `deploy-direct.sh` for tenant repository updates:
 ```bash
-# Updates kustomization.yaml
+# Updates kustomization.yaml in tenant repo
 tenants/${SERVICE}/overlays/${ENV}/kustomization.yaml
 newTag: "sha-abc123"
 
@@ -64,6 +66,13 @@ git commit -m "Deploy ${SERVICE} to ${ENV}"
 git push origin main
 
 # ArgoCD auto-syncs changes
+```
+
+**CI Testing** uses `deploy.sh` for direct platform deployment:
+```bash
+# Updates platform claims with CI-built image tag
+sed -i "s|image: .*|image: ${IMAGE_TAG}|g" platform/claims/
+kubectl apply -f platform/claims/ --recursive
 ```
 
 ## GitHub Environment Gates

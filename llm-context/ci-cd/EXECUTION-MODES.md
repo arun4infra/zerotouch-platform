@@ -11,8 +11,31 @@ ZeroTouch supports **Production** (bare-metal Talos) and **Preview** (GitHub Act
 | **Storage** | Rook/local-path | Kind built-in |
 | **Tenants** | Deployed | Excluded |
 | **Config Source** | Tenant repo | Env vars |
+| **Deployment** | GitOps (ArgoCD) | Manual (CI scripts) |
 
 **Why two modes?** Talos needs bare-metal/VMs. GitHub Actions uses Kind for CI/CD testing.
+
+## Deployment Flow Comparison
+
+### Production Mode Deployment
+```
+1. Code → Git Repository
+2. ArgoCD syncs from tenant repository
+3. ArgoCD applies platform claims automatically
+4. Crossplane provisions resources
+5. Applications deployed via GitOps
+```
+**Key:** Fully automated, declarative, no manual intervention
+
+### Preview Mode Deployment  
+```
+1. CI builds image with specific tag (sha-abc123)
+2. CI calls deploy.sh with built image tag
+3. deploy.sh updates platform claims with CI tag
+4. deploy.sh applies platform claims manually
+5. Applications deployed for testing
+```
+**Key:** Manual simulation of GitOps for testing purposes
 
 ## Production Mode
 
@@ -87,7 +110,16 @@ kubernetes:
 
 ## Key Differences
 
-**Production:** Cilium CNI, persistent NATS, tenant apps, full resources  
-**Preview:** kindnet, NATS memory-only, no tenants, reduced resources
+### Production Flow
+- **GitOps-driven:** ArgoCD automatically syncs from tenant repository
+- **Declarative:** All changes via Git commits, no manual kubectl
+- **Image management:** Tenant kustomization overlays handle image tags
+- **Persistent:** Long-running clusters with proper lifecycle management
+
+### Preview/CI Flow  
+- **Script-driven:** Manual kubectl apply simulates ArgoCD behavior
+- **Imperative:** CI scripts directly modify and apply manifests
+- **Image management:** deploy.sh replaces hardcoded tags with CI-built images
+- **Ephemeral:** Temporary Kind clusters destroyed after testing
 
 **References:** [Tenant Repository Setup](TENANT-REPOSITORY.md) | [Bootstrap Scripts](../scripts/bootstrap/README.md)
