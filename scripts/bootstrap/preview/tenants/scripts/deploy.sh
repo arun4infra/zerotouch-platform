@@ -105,7 +105,11 @@ if [[ -d "${PROJECT_ROOT}/platform/claims/${NAMESPACE}" ]]; then
     INFRA_WAIT_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/wait-for-database-and-secrets.sh"
     if [[ -f "$INFRA_WAIT_SCRIPT" ]]; then
         chmod +x "$INFRA_WAIT_SCRIPT"
-        "$INFRA_WAIT_SCRIPT" "${SERVICE_NAME}" "${NAMESPACE}"
+        # Ensure we exit if the wait script fails
+        if ! "$INFRA_WAIT_SCRIPT" "${SERVICE_NAME}" "${NAMESPACE}"; then
+            echo "❌ ERROR: Infrastructure dependencies failed to become ready"
+            exit 1
+        fi
     else
         echo "❌ Database and secrets wait script not found: $INFRA_WAIT_SCRIPT"
         exit 1

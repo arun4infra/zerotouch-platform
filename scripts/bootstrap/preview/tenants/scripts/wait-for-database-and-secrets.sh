@@ -129,7 +129,12 @@ wait_for_external_secrets() {
     log_info "Waiting for all required ExternalSecrets to sync..."
     
     # Dynamically discover required secrets from platform/claims/
-    local required_secrets=($(discover_required_secrets))
+    local required_secrets_output
+    required_secrets_output=$(discover_required_secrets)
+    local required_secrets=($required_secrets_output)
+    
+    log_info "Debug - Raw output: '$required_secrets_output'"
+    log_info "Debug - Parsed secrets: ${required_secrets[*]}"
     
     local failed_secrets=()
     
@@ -141,7 +146,7 @@ wait_for_external_secrets() {
     log_info "Waiting for ${#required_secrets[@]} ExternalSecrets: ${required_secrets[*]}"
     
     for secret in "${required_secrets[@]}"; do
-        if ! wait_for_external_secret "$secret" 60; then
+        if ! wait_for_external_secret "$secret" 300; then
             failed_secrets+=("$secret")
         fi
     done
@@ -170,10 +175,17 @@ wait_for_database_secret() {
     
     log_info "Waiting for database connection secret: $db_secret"
     
-    if timeout 60s bash -c "until kubectl get secret $db_secret -n ${NAMESPACE} &>/dev/null; do sleep 2; done"; then
-        log_success "Database connection secret is ready"
+    if timeout 300s bash -c "until kubectl get secret $db_secret -n ${NAMESPACE} &>/dev/null; do sleep 2; done"; then
+        # Check if secret has actual data
+        log_info "Verifying secret data population..."
+        if timeout 60s bash -c "until [[ \$(kubectl get secret $db_secret -n ${NAMESPACE} -o jsonpath='{.data}' 2>/dev/null | wc -c) -gt 2 ]]; do sleep 2; done"; then
+            log_success "Database connection secret is ready with data"
+        else
+            log_warn "Database connection secret exists but data not populated after 60s"
+            return 1
+        fi
     else
-        log_warn "Database connection secret not ready after 60s"
+        log_warn "Database connection secret not ready after 300s"
         return 1
     fi
 }
