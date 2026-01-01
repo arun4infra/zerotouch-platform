@@ -11,7 +11,7 @@ spec:
         repoURL: https://github.com/arun4infra/zerotouch-tenants.git
         revision: main
         files:
-          - path: tenants/*/config.yaml
+          - path: tenants/*/overlays/CLUSTER_ENVIRONMENT/config.yaml
   template:
     metadata:
       name: '{{tenant}}'
@@ -27,7 +27,7 @@ spec:
       source:
         repoURL: '{{repoURL}}'
         targetRevision: '{{targetRevision}}'
-        path: '{{appPath}}'
+        path: '{{appPath}}/{{environment}}'
         directory:
           recurse: true
       destination:

@@ -46,6 +46,10 @@ jobs:
           token: ${{ secrets.BOT_GITHUB_TOKEN }}
           path: .tenants-cache
 
+      - name: Set cluster environment
+        run: |
+          sed -i "s/CLUSTER_ENVIRONMENT/${{ inputs.environment }}/g" bootstrap/argocd/overlays/main/components-tenants/99-tenants.yaml
+
       - name: Setup environment
         run: |
           sudo apt-get update && sudo apt-get install -y jq

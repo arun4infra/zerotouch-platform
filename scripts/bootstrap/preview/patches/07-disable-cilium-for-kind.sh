@@ -38,7 +38,7 @@ if [ "$IS_KIND_CLUSTER" = true ]; then
     echo -e "${YELLOW}NOTE: This script is now deprecated.${NC}"
     echo -e "${BLUE}Cilium exclusion is now handled by Kustomize overlays:${NC}"
     echo -e "${BLUE}  - bootstrap/argocd/overlays/preview/kustomization.yaml excludes cilium.yaml${NC}"
-    echo -e "${BLUE}  - bootstrap/argocd/overlays/production includes Cilium in overlays/production/cilium/${NC}"
+    echo -e "${BLUE}  - bootstrap/argocd/overlays/production includes Cilium in overlays/main/cilium/${NC}"
     echo -e "${GREEN}✓ No action needed - overlay structure handles Cilium exclusion${NC}"
     echo -e "${BLUE}  Kind clusters use kindnet CNI instead${NC}"
 else
