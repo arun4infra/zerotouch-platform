@@ -22,7 +22,7 @@ fi
 # If not set, try to determine from current context
 if [[ -z "${PROJECT_ROOT:-}" ]]; then
     # Try to find project root by looking for platform/claims directory
-    local current_dir="$(pwd)"
+    current_dir="$(pwd)"
     while [[ "$current_dir" != "/" ]]; do
         if [[ -d "$current_dir/platform/claims" ]]; then
             PROJECT_ROOT="$current_dir"
