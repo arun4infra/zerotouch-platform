@@ -4,14 +4,14 @@ metadata:
   name: tenant-applications
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "100"  # Large gap ensures all repo credentials are ready (wave 2)
+    argocd.argoproj.io/sync-wave: "100"
 spec:
   generators:
     - git:
         repoURL: https://github.com/arun4infra/zerotouch-tenants.git
         revision: main
         files:
-          - path: tenants/*/overlays/CLUSTER_ENVIRONMENT/config.yaml
+          - path: tenants/*/overlays/dev/config.yaml
   template:
     metadata:
       name: '{{tenant}}'
@@ -20,7 +20,6 @@ spec:
         tenant: '{{tenant}}'
         managed-by: applicationset
       annotations:
-        # Ignore Crossplane-generated resources (Composites, Secrets) that aren't in Git
         argocd.argoproj.io/compare-options: IgnoreExtraneous
     spec:
       project: default
@@ -39,8 +38,6 @@ spec:
           selfHeal: true
           allowEmpty: false
         syncOptions:
-          # REMOVED: - CreateNamespace=true  <-- DELETED per namespace policy
-          # This forces the app to wait for tenant-infrastructure to sync first.
           - PrunePropagationPolicy=foreground
           - PruneLast=true
         retry:

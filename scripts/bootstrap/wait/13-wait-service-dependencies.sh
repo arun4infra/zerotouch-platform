@@ -201,7 +201,7 @@ check_external_secrets() {
     fi
     
     local store_ready=$(kubectl_retry get clustersecretstore aws-parameter-store -o jsonpath='{.status.conditions[0].status}' 2>/dev/null)
-    local es_json=$(kubectl_retry get externalsecrets --all-namespaces -o json 2>/dev/null || echo '{"items":[]}')
+    local es_json=$(kubectl_retry get externalsecret.external-secrets.io --all-namespaces -o json 2>/dev/null || echo '{"items":[]}')
     
     local synced=0
     local total=0

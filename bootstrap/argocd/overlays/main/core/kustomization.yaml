@@ -2,9 +2,9 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-- ../../base
-- cilium/01-cilium.yaml
+- ../../../base
+- 01-cilium.yaml
 - 00-local-path-provisioner.yaml
-- components-tenants/argocd-repo-configs.yaml
 - 00-repo-registry-app.yaml
-- components-tenants/tenant-infrastructure.yaml
+- argocd-repo-configs.yaml
+- tenant-infrastructure.yaml

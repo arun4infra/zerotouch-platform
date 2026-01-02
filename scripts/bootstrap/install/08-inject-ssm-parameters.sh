@@ -14,11 +14,12 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
 
 # Default values
 AWS_REGION="${AWS_REGION:-ap-south-1}"
 DRY_RUN=false
-ENV_FILE=".env.ssm"
+ENV_FILE="$REPO_ROOT/.env.ssm"
 
 # Colors for output
 RED='\033[0;31m'
@@ -66,7 +67,7 @@ echo ""
 # Check if .env.ssm file exists, if not generate from environment variables
 if [ ! -f "$ENV_FILE" ]; then
     echo -e "${YELLOW}⚠️  $ENV_FILE not found, generating from environment variables...${NC}"
-    "$SCRIPT_DIR/../helpers/generate-env-ssm.sh"
+    "$SCRIPT_DIR/../helpers/generate-env-ssm.sh" --output "$REPO_ROOT/.env.ssm"
 fi
 
 # Check AWS CLI is installed

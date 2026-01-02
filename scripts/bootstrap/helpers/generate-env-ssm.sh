@@ -51,10 +51,23 @@ echo -e "${BLUE}║   Generate .env.ssm from Environment Variables              
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-# Check if template exists
+# Check if template exists, if not use hardcoded mappings
 if [ ! -f "$TEMPLATE_FILE" ]; then
-    echo -e "${RED}✗ Error: Template file not found: $TEMPLATE_FILE${NC}"
-    exit 1
+    echo -e "${YELLOW}⚠️ Template file not found, using hardcoded mappings${NC}"
+    
+    # Create temporary template from hardcoded mappings
+    cat > /tmp/env-ssm-template << 'EOF'
+/zerotouch/prod/openai_api_key=
+/zerotouch/prod/anthropic_api_key=
+/zerotouch/prod/platform/github/username=
+/zerotouch/prod/platform/github/token=
+/zerotouch/prod/argocd/repos/zerotouch-tenants/url=
+/zerotouch/prod/argocd/repos/zerotouch-tenants/username=
+/zerotouch/prod/argocd/repos/zerotouch-tenants/password=
+/zerotouch/prod/ide-orchestrator/jwt-secret=
+/zerotouch/prod/ide-orchestrator/spec-engine-url=
+EOF
+    TEMPLATE_FILE="/tmp/env-ssm-template"
 fi
 
 echo -e "${GREEN}✓ Template: $TEMPLATE_FILE${NC}"

@@ -21,14 +21,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Find repository root by looking for .git directory
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
 
-# Parse mode parameter
+# Parse mode parameter (first arg) and environment (second arg)
 MODE="${1:-auto}"
+ENVIRONMENT="${2:-dev}"
 
-# Root application path - now using overlays
+# Root application path - now using environment-specific overlays
 if [ "$MODE" = "preview" ]; then
     ROOT_APP_OVERLAY="bootstrap/argocd/overlays/preview"
 else
-    ROOT_APP_OVERLAY="bootstrap/argocd/overlays/main"
+    # Use environment-specific overlay inside main (dev, staging, production)
+    ROOT_APP_OVERLAY="bootstrap/argocd/overlays/main/$ENVIRONMENT"
 fi
 
 # Function to print colored messages

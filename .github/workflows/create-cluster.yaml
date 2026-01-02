@@ -46,9 +46,16 @@ jobs:
           token: ${{ secrets.BOT_GITHUB_TOKEN }}
           path: .tenants-cache
 
-      - name: Set cluster environment
+      - name: Validate environment overlay
         run: |
-          sed -i "s/CLUSTER_ENVIRONMENT/${{ inputs.environment }}/g" bootstrap/argocd/overlays/main/components-tenants/99-tenants.yaml
+          OVERLAY_DIR="bootstrap/argocd/overlays/main/${{ inputs.environment }}"
+          if [ -d "$OVERLAY_DIR" ]; then
+            echo "✓ Environment overlay found: $OVERLAY_DIR"
+          else
+            echo "✗ Environment overlay not found: $OVERLAY_DIR"
+            ls -la bootstrap/argocd/overlays/main/
+            exit 1
+          fi
 
       - name: Setup environment
         run: |
