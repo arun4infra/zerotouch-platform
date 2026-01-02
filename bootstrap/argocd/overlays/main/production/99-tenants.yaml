@@ -27,9 +27,6 @@ spec:
         repoURL: '{{repoURL}}'
         targetRevision: '{{targetRevision}}'
         path: '{{appPath}}/{{environment}}'
-        directory:
-          recurse: true
-          exclude: '{kustomization.yaml,kustomization.yml,Kustomization}'
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{namespace}}'
