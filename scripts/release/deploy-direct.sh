@@ -16,6 +16,9 @@ log_phase() { echo -e "\033[1;35m=== $* ===\033[0m"; }
 init_logging() { :; }  # No-op for compatibility
 log_environment() { :; }  # No-op for compatibility
 
+# Source helper functions
+source "${SCRIPT_DIR}/image-updater.sh"
+
 # Default values
 ENVIRONMENT=""
 SERVICE_NAME="${SERVICE_NAME:-}"
@@ -75,7 +78,7 @@ validate_environment() {
     log_info "Validating deployment environment"
     
     # Check required environment variables
-    local required_vars=("SERVICE_NAME" "IMAGE_TAG" "TENANT_REPO_TOKEN")
+    local required_vars=("SERVICE_NAME" "IMAGE_TAG" "TENANT_REPO_TOKEN" "BOT_GITHUB_USERNAME")
     
     for var in "${required_vars[@]}"; do
         if [[ -z "${!var:-}" ]]; then
@@ -102,7 +105,7 @@ clone_tenant_repo() {
     export TENANT_REPO_DIR="$temp_dir/zerotouch-tenants"
     
     # Clone with authentication
-    local auth_url="${TENANT_REPO_URL/https:\/\//https:\/\/${TENANT_REPO_TOKEN}@}"
+    local auth_url="https://${TENANT_REPO_TOKEN}@github.com/${BOT_GITHUB_USERNAME}/zerotouch-tenants.git"
     
     if git clone "$auth_url" "$TENANT_REPO_DIR"; then
         log_success "Tenant repository cloned to: $TENANT_REPO_DIR"
@@ -114,36 +117,49 @@ clone_tenant_repo() {
     cd "$TENANT_REPO_DIR"
 }
 
-# Update kustomization file with new image tag
-update_kustomization() {
-    log_info "Updating kustomization file for $SERVICE_NAME in $ENVIRONMENT"
+# Update Crossplane CRD image field
+update_image() {
+    log_info "Updating image configuration for $SERVICE_NAME in $ENVIRONMENT"
     
-    local kustomization_file="tenants/${SERVICE_NAME}/overlays/${ENVIRONMENT}/kustomization.yaml"
+    local deployment_file="tenants/${SERVICE_NAME}/overlays/${ENVIRONMENT}/deployment.yaml"
     
-    if [[ ! -f "$kustomization_file" ]]; then
-        log_error "Kustomization file not found: $kustomization_file"
+    if [[ ! -f "$deployment_file" ]]; then
+        log_error "Deployment file not found: $deployment_file"
         exit 1
     fi
     
-    log_info "Current kustomization file:"
-    cat "$kustomization_file"
+    update_crossplane_image "$deployment_file"
+}
+
+# Update Crossplane CRD image field
+update_crossplane_image() {
+    local crd_file="$1"
     
-    # Update image tag using yq (if available) or sed fallback
-    if command -v yq &> /dev/null; then
-        log_info "Updating image tag using yq"
-        yq eval ".images[0].newTag = \"${IMAGE_TAG##*:}\"" -i "$kustomization_file"
-    else
-        log_info "Updating image tag using sed (yq not available)"
-        # Only replace the newTag value, preserving newName and other fields
-        sed -i.bak "s/^\([[:space:]]*\)newTag: .*/\1newTag: ${IMAGE_TAG##*:}/" "$kustomization_file"
-        rm -f "${kustomization_file}.bak"
+    if [[ ! -f "$crd_file" ]]; then
+        log_error "Crossplane deployment file not found: $crd_file"
+        exit 1
     fi
     
-    log_info "Updated kustomization file:"
-    cat "$kustomization_file"
+    log_info "Current Crossplane CRD file:"
+    cat "$crd_file"
     
-    log_success "Kustomization file updated successfully"
+    # Update image field using yq (if available) or sed fallback
+    if command -v yq &> /dev/null; then
+        log_info "Updating Crossplane image using yq"
+        yq eval ".spec.image = \"${IMAGE_TAG}\"" -i "$crd_file"
+    else
+        log_info "Updating Crossplane image using sed (yq not available)"
+        sed -i.bak "s|^\([[:space:]]*\)image: .*|\1image: ${IMAGE_TAG}|" "$crd_file"
+        rm -f "${crd_file}.bak"
+    fi
+    
+    log_info "Updated Crossplane CRD file:"
+    cat "$crd_file"
+    
+    log_success "Crossplane CRD image updated successfully"
 }
+
+
 
 # Commit and push changes
 commit_and_push() {
@@ -227,8 +243,8 @@ main() {
     # Step 2: Clone tenant repository
     clone_tenant_repo
     
-    # Step 3: Update kustomization file
-    update_kustomization
+    # Step 3: Update Crossplane CRD image
+    update_image
     
     # Step 4: Commit and push changes
     commit_and_push
