@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 # Configuration
 DEEPAGENTS_NAMESPACE="intelligence-deepagents"
 IDE_ORCHESTRATOR_NAMESPACE="intelligence-orchestrator"
-DEEPAGENTS_SERVICE="deepagents-runtime"
+DEEPAGENTS_SERVICE="deepagents-runtime-http"
 IDE_ORCHESTRATOR_SERVICE="ide-orchestrator"
 BACKEND_CONFIG_NAME="ide-orchestrator-backend-config"
 
@@ -114,8 +114,8 @@ main() {
     
     # Test HTTP service
     set +e
-    kubectl run test-deepagents-http --rm -i --restart=Never --image=curlimages/curl:latest -n $DEEPAGENTS_NAMESPACE -- \
-       curl -f -s http://$DEEPAGENTS_SERVICE.$DEEPAGENTS_NAMESPACE.svc.cluster.local:8000/health >/dev/null 2>&1
+    kubectl run test-deepagents-http --rm -i --restart=Never --image=curlimages/curl:latest -n $DEEPAGENTS_NAMESPACE \
+       --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-deepagents-http","image":"curlimages/curl:latest","command":["curl","-f","-s","http://deepagents-runtime-http.'$DEEPAGENTS_NAMESPACE'.svc.cluster.local:8000/health"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' >/dev/null 2>&1
     if [[ $? -eq 0 ]]; then
         log_success "DeepAgents HTTP service accessibility test PASSED"
     else
@@ -144,8 +144,7 @@ main() {
     
     set +e
     kubectl run test-env-injection --rm -i --restart=Never --image=alpine:latest -n $IDE_ORCHESTRATOR_NAMESPACE \
-       --env="TEST=1" \
-       --overrides='{"spec":{"containers":[{"name":"test-env-injection","image":"alpine:latest","command":["/bin/sh","-c","echo BACKEND_SERVICE_URL=$BACKEND_SERVICE_URL && test -n \"$BACKEND_SERVICE_URL\""],"envFrom":[{"configMapRef":{"name":"'$BACKEND_CONFIG_NAME'","optional":true}}]}]}}' >/dev/null 2>&1
+       --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-env-injection","image":"alpine:latest","command":["/bin/sh","-c","echo BACKEND_SERVICE_URL=$BACKEND_SERVICE_URL && test -n \"$BACKEND_SERVICE_URL\""],"envFrom":[{"configMapRef":{"name":"'$BACKEND_CONFIG_NAME'","optional":true}}],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' >/dev/null 2>&1
     if [[ $? -eq 0 ]]; then
         log_success "Environment variable injection test PASSED"
     else
@@ -156,7 +155,7 @@ main() {
     log_info "Test 4: Testing HTTP communication from ide-orchestrator to deepagents-runtime..."
     
     kubectl run test-http-comm --rm -i --restart=Never --image=curlimages/curl:latest -n $IDE_ORCHESTRATOR_NAMESPACE \
-       --overrides='{"spec":{"containers":[{"name":"test-http-comm","image":"curlimages/curl:latest","command":["/bin/sh","-c","curl -f -s $BACKEND_SERVICE_URL/health"],"envFrom":[{"configMapRef":{"name":"'$BACKEND_CONFIG_NAME'","optional":true}}]}]}}' >/dev/null 2>&1
+       --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-http-comm","image":"curlimages/curl:latest","command":["/bin/sh","-c","curl -f -s $BACKEND_SERVICE_URL/health"],"envFrom":[{"configMapRef":{"name":"'$BACKEND_CONFIG_NAME'","optional":true}}],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' >/dev/null 2>&1
     if [[ $? -eq 0 ]]; then
         log_success "HTTP communication test PASSED"
     else
@@ -178,7 +177,7 @@ main() {
     # Test 6: Load Balancing
     log_info "Test 6: Testing load balancing setup..."
     
-    current_replicas=$(kubectl get deployment $DEEPAGENTS_SERVICE -n $DEEPAGENTS_NAMESPACE -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
+    current_replicas=$(kubectl get deployment $DEEPAGENTS_SERVICE -n $DEEPAGENTS_NAMESPACE -o jsonpath='{.spec.replicas}' 2>/dev/null || kubectl get deployment deepagents-runtime -n $DEEPAGENTS_NAMESPACE -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
     
     if [[ "$current_replicas" -ge 1 ]]; then
         log_success "Load balancing ready with $current_replicas replica(s)"
