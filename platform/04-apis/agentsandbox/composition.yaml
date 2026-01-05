@@ -87,7 +87,10 @@ spec:
                     securityContext:
                       runAsNonRoot: true
                       runAsUser: 1000
+                      runAsGroup: 1000
                       fsGroup: 1000
+                      seccompProfile:
+                        type: RuntimeDefault
                     initContainers:
                       - name: workspace-hydrator
                         image: amazon/aws-cli:2.15.17
@@ -114,9 +117,8 @@ spec:
                               echo "No existing workspace backup found, starting with empty workspace"
                             fi
                             
-                            # Ensure proper permissions
-                            chown -R 1000:1000 /workspace
-                            chmod -R 755 /workspace
+                            # Permissions are handled by fsGroup at pod level
+                            echo "Workspace setup complete"
                         env:
                           - name: SANDBOX_NAME
                             value: placeholder
@@ -127,8 +129,14 @@ spec:
                           - name: workspace
                             mountPath: /workspace
                         securityContext:
-                          runAsUser: 0  # Need root for chown operations
-                          allowPrivilegeEscalation: true
+                          runAsNonRoot: true
+                          runAsUser: 1000
+                          allowPrivilegeEscalation: false
+                          capabilities:
+                            drop:
+                              - ALL
+                          seccompProfile:
+                            type: RuntimeDefault
                     containers:
                       - name: main
                         image: placeholder
