@@ -148,7 +148,7 @@ echo ""
 echo -e "${BLUE}Testing AgentSandboxService claim provisioning...${NC}"
 
 # Create temporary namespace for testing
-TEST_NAMESPACE="agentsandbox-comp-test-$"
+TEST_NAMESPACE="agentsandbox-comp-test-$$"
 kubectl create namespace "$TEST_NAMESPACE" 2>/dev/null || true
 
 # Create temporary test files
@@ -231,57 +231,71 @@ if [ "$CLEANUP" = false ]; then
             ERRORS=$((ERRORS + 1))
         fi
         
-        # 5. Verify SandboxTemplate creation
+        # 5. Verify SandboxTemplate creation (via Crossplane Object)
         echo -e "${BLUE}Verifying SandboxTemplate creation...${NC}"
-        if kubectl get sandboxtemplate test-sandbox -n "$TEST_NAMESPACE" &>/dev/null; then
-            echo -e "${GREEN}✓ SandboxTemplate 'test-sandbox' created successfully${NC}"
+        TEMPLATE_OBJECTS=$(kubectl get object -A -o jsonpath='{.items[?(@.spec.forProvider.manifest.kind=="SandboxTemplate")].metadata.name}' | grep test-sandbox || echo "")
+        if [ -n "$TEMPLATE_OBJECTS" ]; then
+            echo -e "${GREEN}✓ SandboxTemplate Object created successfully${NC}"
             
-            # Check SandboxTemplate image patching
-            TEMPLATE_IMAGE=$(kubectl get sandboxtemplate test-sandbox -n "$TEST_NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "unknown")
-            if [ "$TEMPLATE_IMAGE" = "ghcr.io/test/agent:v1.0.0" ]; then
-                echo -e "${GREEN}✓ SandboxTemplate has correct image: $TEMPLATE_IMAGE${NC}"
-            else
-                echo -e "${YELLOW}⚠️  SandboxTemplate image: $TEMPLATE_IMAGE (expected: ghcr.io/test/agent:v1.0.0)${NC}"
-                WARNINGS=$((WARNINGS + 1))
-            fi
+            # Get the first template object for validation
+            TEMPLATE_OBJECT_NAME=$(echo "$TEMPLATE_OBJECTS" | awk '{print $1}')
+            TEMPLATE_NAMESPACE=$(kubectl get object "$TEMPLATE_OBJECT_NAME" -A -o jsonpath='{.metadata.namespace}' 2>/dev/null)
             
-            # Check resource sizing (small = 250m CPU request)
-            TEMPLATE_CPU=$(kubectl get sandboxtemplate test-sandbox -n "$TEST_NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].resources.requests.cpu}' 2>/dev/null || echo "unknown")
-            if [ "$TEMPLATE_CPU" = "250m" ]; then
-                echo -e "${GREEN}✓ SandboxTemplate has correct CPU request: $TEMPLATE_CPU${NC}"
-            else
-                echo -e "${YELLOW}⚠️  SandboxTemplate CPU request: $TEMPLATE_CPU (expected: 250m for size=small)${NC}"
-                WARNINGS=$((WARNINGS + 1))
-            fi
-            
-            # Check workspace volume mount
-            VOLUME_MOUNT=$(kubectl get sandboxtemplate test-sandbox -n "$TEST_NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].volumeMounts[0].mountPath}' 2>/dev/null || echo "unknown")
-            if [ "$VOLUME_MOUNT" = "/workspace" ]; then
-                echo -e "${GREEN}✓ SandboxTemplate has workspace volume mount: $VOLUME_MOUNT${NC}"
-            else
-                echo -e "${YELLOW}⚠️  SandboxTemplate workspace mount: $VOLUME_MOUNT (expected: /workspace)${NC}"
-                WARNINGS=$((WARNINGS + 1))
+            if [ -n "$TEMPLATE_OBJECT_NAME" ] && [ -n "$TEMPLATE_NAMESPACE" ]; then
+                # Check SandboxTemplate image patching
+                TEMPLATE_IMAGE=$(kubectl get object "$TEMPLATE_OBJECT_NAME" -n "$TEMPLATE_NAMESPACE" -o jsonpath='{.spec.forProvider.manifest.spec.podTemplate.spec.containers[0].image}' 2>/dev/null || echo "unknown")
+                if [ "$TEMPLATE_IMAGE" = "ghcr.io/test/agent:v1.0.0" ]; then
+                    echo -e "${GREEN}✓ SandboxTemplate has correct image: $TEMPLATE_IMAGE${NC}"
+                else
+                    echo -e "${YELLOW}⚠️  SandboxTemplate image: $TEMPLATE_IMAGE (expected: ghcr.io/test/agent:v1.0.0)${NC}"
+                    WARNINGS=$((WARNINGS + 1))
+                fi
+                
+                # Check resource sizing (small = 250m CPU request)
+                TEMPLATE_CPU=$(kubectl get object "$TEMPLATE_OBJECT_NAME" -n "$TEMPLATE_NAMESPACE" -o jsonpath='{.spec.forProvider.manifest.spec.podTemplate.spec.containers[0].resources.requests.cpu}' 2>/dev/null || echo "unknown")
+                if [ "$TEMPLATE_CPU" = "250m" ]; then
+                    echo -e "${GREEN}✓ SandboxTemplate has correct CPU request: $TEMPLATE_CPU${NC}"
+                else
+                    echo -e "${YELLOW}⚠️  SandboxTemplate CPU request: $TEMPLATE_CPU (expected: 250m for size=small)${NC}"
+                    WARNINGS=$((WARNINGS + 1))
+                fi
+                
+                # Check workspace volume mount
+                VOLUME_MOUNT=$(kubectl get object "$TEMPLATE_OBJECT_NAME" -n "$TEMPLATE_NAMESPACE" -o jsonpath='{.spec.forProvider.manifest.spec.podTemplate.spec.containers[0].volumeMounts[0].mountPath}' 2>/dev/null || echo "unknown")
+                if [ "$VOLUME_MOUNT" = "/workspace" ]; then
+                    echo -e "${GREEN}✓ SandboxTemplate has workspace volume mount: $VOLUME_MOUNT${NC}"
+                else
+                    echo -e "${YELLOW}⚠️  SandboxTemplate workspace mount: $VOLUME_MOUNT (expected: /workspace)${NC}"
+                    WARNINGS=$((WARNINGS + 1))
+                fi
             fi
         else
-            echo -e "${RED}✗ SandboxTemplate 'test-sandbox' not found${NC}"
+            echo -e "${RED}✗ SandboxTemplate Object not found${NC}"
             ERRORS=$((ERRORS + 1))
         fi
         
-        # 6. Verify SandboxWarmPool creation
+        # 6. Verify SandboxWarmPool creation (via Crossplane Object)
         echo -e "${BLUE}Verifying SandboxWarmPool creation...${NC}"
-        if kubectl get sandboxwarmpool test-sandbox -n "$TEST_NAMESPACE" &>/dev/null; then
-            echo -e "${GREEN}✓ SandboxWarmPool 'test-sandbox' created successfully${NC}"
+        POOL_OBJECTS=$(kubectl get object -A -o jsonpath='{.items[?(@.spec.forProvider.manifest.kind=="SandboxWarmPool")].metadata.name}' | grep test-sandbox || echo "")
+        if [ -n "$POOL_OBJECTS" ]; then
+            echo -e "${GREEN}✓ SandboxWarmPool Object created successfully${NC}"
             
-            # Check SandboxWarmPool template reference
-            POOL_TEMPLATE_REF=$(kubectl get sandboxwarmpool test-sandbox -n "$TEST_NAMESPACE" -o jsonpath='{.spec.templateRef.name}' 2>/dev/null || echo "unknown")
-            if [ "$POOL_TEMPLATE_REF" = "test-sandbox" ]; then
-                echo -e "${GREEN}✓ SandboxWarmPool references correct template: $POOL_TEMPLATE_REF${NC}"
-            else
-                echo -e "${YELLOW}⚠️  SandboxWarmPool template reference: $POOL_TEMPLATE_REF (expected: test-sandbox)${NC}"
-                WARNINGS=$((WARNINGS + 1))
+            # Get the first pool object for validation
+            POOL_OBJECT_NAME=$(echo "$POOL_OBJECTS" | awk '{print $1}')
+            POOL_NAMESPACE=$(kubectl get object "$POOL_OBJECT_NAME" -A -o jsonpath='{.metadata.namespace}' 2>/dev/null)
+            
+            if [ -n "$POOL_OBJECT_NAME" ] && [ -n "$POOL_NAMESPACE" ]; then
+                # Check SandboxWarmPool template reference
+                POOL_TEMPLATE_REF=$(kubectl get object "$POOL_OBJECT_NAME" -n "$POOL_NAMESPACE" -o jsonpath='{.spec.forProvider.manifest.spec.sandboxTemplateRef.name}' 2>/dev/null || echo "unknown")
+                if [ "$POOL_TEMPLATE_REF" = "test-sandbox" ]; then
+                    echo -e "${GREEN}✓ SandboxWarmPool references correct template: $POOL_TEMPLATE_REF${NC}"
+                else
+                    echo -e "${YELLOW}⚠️  SandboxWarmPool template reference: $POOL_TEMPLATE_REF (expected: test-sandbox)${NC}"
+                    WARNINGS=$((WARNINGS + 1))
+                fi
             fi
         else
-            echo -e "${RED}✗ SandboxWarmPool 'test-sandbox' not found${NC}"
+            echo -e "${RED}✗ SandboxWarmPool Object not found${NC}"
             ERRORS=$((ERRORS + 1))
         fi
         
@@ -336,25 +350,31 @@ if [ "$CLEANUP" = false ]; then
         if kubectl apply -f "$TEMP_DIR/test-claim-large.yaml" &>/dev/null; then
             echo -e "${GREEN}✓ Large configuration claim created successfully${NC}"
             
-            # Wait briefly and check one resource
+            # Wait briefly and check one resource (via Crossplane Object)
             sleep 5
-            if kubectl get sandboxtemplate test-sandbox-large -n "$TEST_NAMESPACE" &>/dev/null; then
-                # Check large size CPU limit (4000m)
-                LARGE_CPU_LIMIT=$(kubectl get sandboxtemplate test-sandbox-large -n "$TEST_NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].resources.limits.cpu}' 2>/dev/null || echo "unknown")
-                if [ "$LARGE_CPU_LIMIT" = "4000m" ]; then
-                    echo -e "${GREEN}✓ Large size resource patching works correctly: $LARGE_CPU_LIMIT${NC}"
-                else
-                    echo -e "${YELLOW}⚠️  Large size CPU limit: $LARGE_CPU_LIMIT (expected: 4000m)${NC}"
-                    WARNINGS=$((WARNINGS + 1))
-                fi
+            LARGE_TEMPLATE_OBJECTS=$(kubectl get object -A -o jsonpath='{.items[?(@.spec.forProvider.manifest.kind=="SandboxTemplate")].metadata.name}' | grep test-sandbox-large || echo "")
+            if [ -n "$LARGE_TEMPLATE_OBJECTS" ]; then
+                LARGE_TEMPLATE_OBJECT_NAME=$(echo "$LARGE_TEMPLATE_OBJECTS" | awk '{print $1}')
+                LARGE_TEMPLATE_NAMESPACE=$(kubectl get object "$LARGE_TEMPLATE_OBJECT_NAME" -A -o jsonpath='{.metadata.namespace}' 2>/dev/null)
                 
-                # Check httpPort patching
-                HTTP_PORT=$(kubectl get sandboxtemplate test-sandbox-large -n "$TEST_NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].ports[0].containerPort}' 2>/dev/null || echo "unknown")
-                if [ "$HTTP_PORT" = "9000" ]; then
-                    echo -e "${GREEN}✓ HTTP port patching works correctly: $HTTP_PORT${NC}"
-                else
-                    echo -e "${YELLOW}⚠️  HTTP port: $HTTP_PORT (expected: 9000)${NC}"
-                    WARNINGS=$((WARNINGS + 1))
+                if [ -n "$LARGE_TEMPLATE_OBJECT_NAME" ] && [ -n "$LARGE_TEMPLATE_NAMESPACE" ]; then
+                    # Check large size CPU limit (4000m)
+                    LARGE_CPU_LIMIT=$(kubectl get object "$LARGE_TEMPLATE_OBJECT_NAME" -n "$LARGE_TEMPLATE_NAMESPACE" -o jsonpath='{.spec.forProvider.manifest.spec.podTemplate.spec.containers[0].resources.limits.cpu}' 2>/dev/null || echo "unknown")
+                    if [ "$LARGE_CPU_LIMIT" = "4000m" ]; then
+                        echo -e "${GREEN}✓ Large size resource patching works correctly: $LARGE_CPU_LIMIT${NC}"
+                    else
+                        echo -e "${YELLOW}⚠️  Large size CPU limit: $LARGE_CPU_LIMIT (expected: 4000m)${NC}"
+                        WARNINGS=$((WARNINGS + 1))
+                    fi
+                    
+                    # Check httpPort patching
+                    HTTP_PORT=$(kubectl get object "$LARGE_TEMPLATE_OBJECT_NAME" -n "$LARGE_TEMPLATE_NAMESPACE" -o jsonpath='{.spec.forProvider.manifest.spec.podTemplate.spec.containers[0].ports[0].containerPort}' 2>/dev/null || echo "unknown")
+                    if [ "$HTTP_PORT" = "9000" ]; then
+                        echo -e "${GREEN}✓ HTTP port patching works correctly: $HTTP_PORT${NC}"
+                    else
+                        echo -e "${YELLOW}⚠️  HTTP port: $HTTP_PORT (expected: 9000)${NC}"
+                        WARNINGS=$((WARNINGS + 1))
+                    fi
                 fi
             fi
             
