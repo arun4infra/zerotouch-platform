@@ -257,7 +257,8 @@ validate_sandbox_instances() {
     log_substep "Waiting for sandbox instances to be ready..."
     while [[ $count -lt $timeout ]]; do
         local ready_pods
-        ready_pods=$(kubectl get pods -n "${NAMESPACE}" -l "app.kubernetes.io/name=${TEST_CLAIM_NAME}" --field-selector=status.phase=Running 2>/dev/null | grep -c Running || echo "0")
+        ready_pods=$(kubectl get pods -n "${NAMESPACE}" -l "app.kubernetes.io/name=${TEST_CLAIM_NAME}" --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
+        ready_pods=$(echo "${ready_pods}" | tr -d ' ')  # Remove any whitespace
         
         if [[ "${ready_pods}" -gt 0 ]]; then
             log_substep "Found ${ready_pods} ready sandbox instance(s)"

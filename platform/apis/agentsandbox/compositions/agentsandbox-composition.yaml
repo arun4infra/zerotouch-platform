@@ -124,7 +124,7 @@ spec:
                             value: placeholder
                         envFrom:
                           - secretRef:
-                              name: placeholder-s3-conn
+                              name: aws-access-token
                         volumeMounts:
                           - name: workspace
                             mountPath: /workspace
@@ -258,7 +258,7 @@ spec:
                             value: placeholder
                         envFrom:
                           - secretRef:
-                              name: placeholder-s3-conn
+                              name: aws-access-token
                         resources:
                           requests:
                             cpu: "50m"
@@ -466,24 +466,8 @@ spec:
           policy:
             fromFieldPath: Optional
         - type: FromCompositeFieldPath
-          fromFieldPath: spec.s3SecretName
-          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[4].secretRef.name
-          policy:
-            fromFieldPath: Optional
-        - type: FromCompositeFieldPath
           fromFieldPath: spec.secret5Name
-          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[5].secretRef.name
-          policy:
-            fromFieldPath: Optional
-        # Patch S3 connection secret in all containers
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.s3SecretName
-          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.initContainers[0].envFrom[0].secretRef.name
-          policy:
-            fromFieldPath: Optional
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.s3SecretName
-          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[1].envFrom[0].secretRef.name
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[4].secretRef.name
           policy:
             fromFieldPath: Optional
         # Patch PVC name for workspace volume
