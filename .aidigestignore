@@ -7,7 +7,6 @@ environments/*/*.secret.yaml
 .sops.yaml
 .claude
 bootstrap/talos
-scripts
 services
 platform/intelligence
 bootstrap/argocd/overlays/preview

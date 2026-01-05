@@ -59,6 +59,9 @@ if [ ! -f "$TEMPLATE_FILE" ]; then
     cat > /tmp/env-ssm-template << 'EOF'
 /zerotouch/prod/openai_api_key=
 /zerotouch/prod/anthropic_api_key=
+/zerotouch/prod/aws-access-key-id=
+/zerotouch/prod/aws-secret-access-key=
+/zerotouch/prod/aws-default-region=
 /zerotouch/prod/platform/github/username=
 /zerotouch/prod/platform/github/token=
 /zerotouch/prod/argocd/repos/zerotouch-tenants/url=
@@ -100,6 +103,10 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
             # Global LLM keys
             /zerotouch/prod/openai_api_key) env_var="OPENAI_API_KEY" ;;
             /zerotouch/prod/anthropic_api_key) env_var="ANTHROPIC_API_KEY" ;;
+            # AWS credentials for AgentSandbox S3 operations
+            /zerotouch/prod/aws-access-key-id) env_var="AWS_ACCESS_KEY_ID" ;;
+            /zerotouch/prod/aws-secret-access-key) env_var="AWS_SECRET_ACCESS_KEY" ;;
+            /zerotouch/prod/aws-default-region) env_var="AWS_REGION" ;;
             # GitHub credentials - use BOT_GITHUB_USERNAME and BOT_GITHUB_TOKEN
             */github/username|*/ghcr/username) env_var="BOT_GITHUB_USERNAME" ;;
             */github/token|*/github/password|*/ghcr/password) env_var="BOT_GITHUB_TOKEN" ;;

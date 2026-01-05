@@ -1,0 +1,45 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xobjectstorages.platform.bizmatters.io
+spec:
+  group: platform.bizmatters.io
+  names:
+    kind: XObjectStorage
+    plural: xobjectstorages
+  claimNames:
+    kind: ObjectStorage
+    plural: objectstorages
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                region:
+                  type: string
+                  description: "AWS region for the bucket"
+                  default: "ap-south-1"
+                deletionPolicy:
+                  type: string
+                  description: "Whether to delete or orphan the AWS bucket on resource deletion"
+                  enum: [Delete, Orphan]
+                  default: Orphan
+                versioning:
+                  type: boolean
+                  description: "Enable versioning on the bucket"
+                  default: true
+            status:
+              type: object
+              properties:
+                bucketName:
+                  type: string
+                  description: "The name of the provisioned bucket"
+                roleArn:
+                  type: string
+                  description: "The ARN of the provisioned IAM Role"

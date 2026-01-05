@@ -1,0 +1,620 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: agent-sandbox-service
+  labels:
+    provider: kubernetes
+    crossplane.io/xrd: xagentsandboxservices.platform.bizmatters.io
+spec:
+  compositeTypeRef:
+    apiVersion: platform.bizmatters.io/v1alpha1
+    kind: XAgentSandboxService
+
+  # Use Resources mode with standard patches
+  mode: Resources
+  publishConnectionDetailsWithStoreConfigRef:
+    name: default
+  resources:
+    # Resource 1: ServiceAccount
+    - name: serviceaccount
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          providerConfigRef:
+            name: kubernetes-provider
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: ServiceAccount
+              metadata:
+                name: placeholder
+                namespace: placeholder
+                labels:
+                  app.kubernetes.io/name: placeholder
+                  app.kubernetes.io/component: agent-sandbox
+                  app.kubernetes.io/managed-by: crossplane
+                annotations:
+                  eks.amazonaws.com/role-arn: placeholder
+              automountServiceAccountToken: true
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        # Pull Role ARN from S3 Connection Secret
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.s3SecretName
+          toFieldPath: spec.references[0].patchesFrom.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.references[0].patchesFrom.namespace
+          policy:
+            fromFieldPath: Optional
+      references:
+        - patchesFrom:
+            apiVersion: v1
+            kind: Secret
+            fieldPath: data.AWS_ROLE_ARN
+          toFieldPath: spec.forProvider.manifest.metadata.annotations[eks.amazonaws.com/role-arn]
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
+
+    # Resource 2: SandboxTemplate
+    - name: sandboxtemplate
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          providerConfigRef:
+            name: kubernetes-provider
+          forProvider:
+            manifest:
+              apiVersion: extensions.agents.x-k8s.io/v1alpha1
+              kind: SandboxTemplate
+              metadata:
+                name: placeholder
+                namespace: placeholder
+                labels:
+                  app.kubernetes.io/name: placeholder
+                  app.kubernetes.io/component: agent-sandbox
+                  app.kubernetes.io/managed-by: crossplane
+              spec:
+                template:
+                  metadata:
+                    labels:
+                      app.kubernetes.io/name: placeholder
+                      app.kubernetes.io/component: agent-sandbox
+                      app.kubernetes.io/managed-by: crossplane
+                      app.kubernetes.io/version: v1alpha1
+                    annotations:
+                      prometheus.io/scrape: "true"
+                      prometheus.io/port: "8080"
+                      prometheus.io/path: "/metrics"
+                  spec:
+                    serviceAccountName: placeholder
+                    securityContext:
+                      runAsNonRoot: true
+                      runAsUser: 1000
+                      fsGroup: 1000
+                    initContainers:
+                      - name: workspace-hydrator
+                        image: amazon/aws-cli:2.15.17
+                        command:
+                          - /bin/sh
+                          - -c
+                          - |
+                            set -e
+                            echo "Starting workspace hydration from S3..."
+                            
+                            # Create workspace directory structure
+                            mkdir -p /workspace
+                            
+                            # Check if workspace backup exists in S3
+                            WORKSPACE_KEY="workspaces/${SANDBOX_NAME}/workspace.tar.gz"
+                            if aws s3 ls "s3://${S3_BUCKET}/${WORKSPACE_KEY}" > /dev/null 2>&1; then
+                              echo "Found existing workspace backup, downloading..."
+                              aws s3 cp "s3://${S3_BUCKET}/${WORKSPACE_KEY}" /tmp/workspace.tar.gz
+                              cd /workspace
+                              tar -xzf /tmp/workspace.tar.gz
+                              rm /tmp/workspace.tar.gz
+                              echo "Workspace hydrated successfully"
+                            else
+                              echo "No existing workspace backup found, starting with empty workspace"
+                            fi
+                            
+                            # Ensure proper permissions
+                            chown -R 1000:1000 /workspace
+                            chmod -R 755 /workspace
+                        env:
+                          - name: SANDBOX_NAME
+                            value: placeholder
+                        envFrom:
+                          - secretRef:
+                              name: placeholder-s3-conn
+                        volumeMounts:
+                          - name: workspace
+                            mountPath: /workspace
+                        securityContext:
+                          runAsUser: 0  # Need root for chown operations
+                          allowPrivilegeEscalation: true
+                    containers:
+                      - name: main
+                        image: placeholder
+                        imagePullPolicy: IfNotPresent
+                        ports:
+                          - name: http
+                            containerPort: 8080
+                            protocol: TCP
+                        env:
+                          - name: NATS_URL
+                            value: placeholder
+                          - name: NATS_STREAM_NAME
+                            value: placeholder
+                          - name: NATS_CONSUMER_GROUP
+                            value: placeholder
+                          - name: PORT
+                            value: "8080"
+                          - name: OTEL_SERVICE_NAME
+                            value: placeholder
+                          - name: OTEL_SERVICE_VERSION
+                            value: "v1alpha1"
+                          - name: OTEL_RESOURCE_ATTRIBUTES
+                            value: "service.name=placeholder,service.version=v1alpha1,deployment.environment=production"
+                          - name: SANDBOX_NAME
+                            value: placeholder
+                        envFrom:
+                          - secretRef:
+                              name: aws-access-token
+                          - secretRef:
+                              name: placeholder-secret1
+                              optional: true
+                          - secretRef:
+                              name: placeholder-secret2
+                              optional: true
+                          - secretRef:
+                              name: placeholder-secret3
+                              optional: true
+                          - secretRef:
+                              name: placeholder-secret4
+                              optional: true
+                          - secretRef:
+                              name: placeholder-secret5
+                              optional: true
+                        resources:
+                          requests:
+                            cpu: "500m"
+                            memory: "1Gi"
+                          limits:
+                            cpu: "2000m"
+                            memory: "4Gi"
+                        securityContext:
+                          runAsNonRoot: true
+                          runAsUser: 1000
+                          allowPrivilegeEscalation: false
+                          capabilities:
+                            drop:
+                              - ALL
+                          seccompProfile:
+                            type: RuntimeDefault
+                        livenessProbe:
+                          httpGet:
+                            path: /health
+                            port: 8080
+                          initialDelaySeconds: 10
+                          periodSeconds: 10
+                          timeoutSeconds: 5
+                          failureThreshold: 3
+                        readinessProbe:
+                          httpGet:
+                            path: /ready
+                            port: 8080
+                          initialDelaySeconds: 5
+                          periodSeconds: 5
+                          timeoutSeconds: 3
+                          failureThreshold: 2
+                        lifecycle:
+                          preStop:
+                            exec:
+                              command:
+                                - /bin/sh
+                                - -c
+                                - |
+                                  echo "Performing final workspace backup to S3..."
+                                  cd /workspace
+                                  tar -czf /tmp/workspace-final.tar.gz . 2>/dev/null || true
+                                  if [ -f /tmp/workspace-final.tar.gz ]; then
+                                    aws s3 cp /tmp/workspace-final.tar.gz "s3://${S3_BUCKET}/workspaces/${SANDBOX_NAME}/workspace.tar.gz"
+                                    echo "Final workspace backup completed"
+                                  fi
+                        volumeMounts:
+                          - name: workspace
+                            mountPath: /workspace
+                      - name: workspace-backup-sidecar
+                        image: amazon/aws-cli:2.15.17
+                        command:
+                          - /bin/sh
+                          - -c
+                          - |
+                            set -e
+                            echo "Starting continuous workspace backup sidecar..."
+                            
+                            while true; do
+                              sleep 30  # Backup every 30 seconds
+                              
+                              # Check if workspace has changes
+                              if [ -d /workspace ] && [ "$(ls -A /workspace 2>/dev/null)" ]; then
+                                echo "Backing up workspace to S3..."
+                                cd /workspace
+                                tar -czf /tmp/workspace-backup.tar.gz . 2>/dev/null || continue
+                                
+                                if [ -f /tmp/workspace-backup.tar.gz ]; then
+                                  aws s3 cp /tmp/workspace-backup.tar.gz "s3://${S3_BUCKET}/workspaces/${SANDBOX_NAME}/workspace.tar.gz" || echo "Backup failed, will retry"
+                                  rm -f /tmp/workspace-backup.tar.gz
+                                fi
+                              fi
+                            done
+                        env:
+                          - name: SANDBOX_NAME
+                            value: placeholder
+                        envFrom:
+                          - secretRef:
+                              name: placeholder-s3-conn
+                        resources:
+                          requests:
+                            cpu: "50m"
+                            memory: "128Mi"
+                          limits:
+                            cpu: "200m"
+                            memory: "512Mi"
+                        securityContext:
+                          runAsNonRoot: true
+                          runAsUser: 1000
+                          allowPrivilegeEscalation: false
+                          capabilities:
+                            drop:
+                              - ALL
+                          seccompProfile:
+                            type: RuntimeDefault
+                        volumeMounts:
+                          - name: workspace
+                            mountPath: /workspace
+                            readOnly: true
+                    volumes:
+                      - name: workspace
+                        persistentVolumeClaim:
+                          claimName: placeholder-workspace
+      patches:
+        # Patch name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        # Patch labels
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.template.metadata.labels[app.kubernetes.io/name]
+        # Patch ServiceAccount reference
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.serviceAccountName
+        # Patch image
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.image
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].image
+        # Patch resource sizing based on size enum
+        # CPU requests
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.requests.cpu
+          transforms:
+            - type: map
+              map:
+                micro: "100m"
+                small: "250m"
+                medium: "500m"
+                large: "1000m"
+          policy:
+            fromFieldPath: Optional
+        # CPU limits
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.limits.cpu
+          transforms:
+            - type: map
+              map:
+                micro: "500m"
+                small: "1000m"
+                medium: "2000m"
+                large: "4000m"
+          policy:
+            fromFieldPath: Optional
+        # Memory requests
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.requests.memory
+          transforms:
+            - type: map
+              map:
+                micro: "256Mi"
+                small: "512Mi"
+                medium: "1Gi"
+                large: "2Gi"
+          policy:
+            fromFieldPath: Optional
+        # Memory limits
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].resources.limits.memory
+          transforms:
+            - type: map
+              map:
+                micro: "1Gi"
+                small: "2Gi"
+                medium: "4Gi"
+                large: "8Gi"
+          policy:
+            fromFieldPath: Optional
+        # Patch NATS environment variables
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.nats.url
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[0].value
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.nats.stream
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[1].value
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.nats.consumer
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[2].value
+        # Patch OpenTelemetry environment variables
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[4].value
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[6].value
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "service.name=%s,service.version=v1alpha1,deployment.environment=production"
+        # Patch HTTP port (optional - defaults to 8080)
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.httpPort
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].ports[0].containerPort
+          policy:
+            fromFieldPath: Optional
+        # Patch PORT environment variable to match httpPort
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.httpPort
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[3].value
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%d"
+          policy:
+            fromFieldPath: Optional
+        # Patch Prometheus port annotation to match httpPort
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.httpPort
+          toFieldPath: spec.forProvider.manifest.spec.template.metadata.annotations[prometheus.io/port]
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%d"
+          policy:
+            fromFieldPath: Optional
+        # Patch health check paths (optional - defaults to /health and /ready)
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.healthPath
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].livenessProbe.httpGet.path
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.readyPath
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].readinessProbe.httpGet.path
+          policy:
+            fromFieldPath: Optional
+        # Patch health check port to match httpPort (optional)
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.httpPort
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].livenessProbe.httpGet.port
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.httpPort
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].readinessProbe.httpGet.port
+          policy:
+            fromFieldPath: Optional
+        # Patch imagePullSecrets
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.imagePullSecrets
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.imagePullSecrets
+          policy:
+            fromFieldPath: Optional
+        # Patch secret slots (envFrom - bulk mounting) - aws-access-token is at index 0
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret1Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[1].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret2Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[2].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret3Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[3].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.s3SecretName
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[4].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret5Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[5].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        # Patch S3 connection secret in all containers
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.s3SecretName
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].envFrom[0].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.s3SecretName
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[1].envFrom[0].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        # Patch PVC name for workspace volume
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.volumes[0].persistentVolumeClaim.claimName
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%s-workspace"
+        # Patch SANDBOX_NAME environment variable in initContainer
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].env[0].value
+        # Patch SANDBOX_NAME environment variable in sidecar
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[1].env[0].value
+        # Patch SANDBOX_NAME environment variable in main container
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[7].value
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
+
+    # Resource 3: PersistentVolumeClaim for workspace storage
+    - name: workspace-pvc
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          providerConfigRef:
+            name: kubernetes-provider
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: PersistentVolumeClaim
+              metadata:
+                name: placeholder-workspace
+                namespace: placeholder
+                labels:
+                  app.kubernetes.io/name: placeholder
+                  app.kubernetes.io/component: agent-sandbox
+                  app.kubernetes.io/managed-by: crossplane
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: "10Gi"
+                storageClassName: "gp2"
+      patches:
+        # Patch name with -workspace suffix
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%s-workspace"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        # Patch labels
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
+        # Patch storage size from storageGB field
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.storageGB
+          toFieldPath: spec.forProvider.manifest.spec.resources.requests.storage
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%dGi"
+          policy:
+            fromFieldPath: Optional
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
+
+    # Resource 4: SandboxWarmPool
+    - name: sandboxwarmpool
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          providerConfigRef:
+            name: kubernetes-provider
+          forProvider:
+            manifest:
+              apiVersion: extensions.agents.x-k8s.io/v1alpha1
+              kind: SandboxWarmPool
+              metadata:
+                name: placeholder
+                namespace: placeholder
+                labels:
+                  app.kubernetes.io/name: placeholder
+                  app.kubernetes.io/component: agent-sandbox
+                  app.kubernetes.io/managed-by: crossplane
+              spec:
+                templateRef:
+                  name: placeholder
+                minReplicas: 1
+                maxReplicas: 10
+                targetUtilization: 80
+      patches:
+        # Patch name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        # Patch labels
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
+        # Patch template reference to SandboxTemplate name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.templateRef.name
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
