@@ -15,7 +15,7 @@ bootstrap/talos/nodes/cp01-main/config.yaml.*
 *.log
 .env.ssm.bkp
 archived
-*.key
+**.key
 
 # Tenant configuration cache
 .tenants-cache/
