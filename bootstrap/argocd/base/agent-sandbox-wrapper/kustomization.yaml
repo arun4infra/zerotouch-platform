@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# 1. Reference upstream manifests directly via raw URLs
+resources:
+# Core Controller & Namespace
+- https://raw.githubusercontent.com/kubernetes-sigs/agent-sandbox/main/k8s/controller.yaml
+- https://raw.githubusercontent.com/kubernetes-sigs/agent-sandbox/main/k8s/rbac.generated.yaml
+# Extensions RBAC
+- https://raw.githubusercontent.com/kubernetes-sigs/agent-sandbox/main/k8s/extensions.yaml
+- https://raw.githubusercontent.com/kubernetes-sigs/agent-sandbox/main/k8s/extensions-rbac.generated.yaml
+# CRDs
+- https://raw.githubusercontent.com/kubernetes-sigs/agent-sandbox/main/k8s/crds/agents.x-k8s.io_sandboxes.yaml
+- https://raw.githubusercontent.com/kubernetes-sigs/agent-sandbox/main/k8s/crds/extensions.agents.x-k8s.io_sandboxclaims.yaml
+- https://raw.githubusercontent.com/kubernetes-sigs/agent-sandbox/main/k8s/crds/extensions.agents.x-k8s.io_sandboxtemplates.yaml
+- https://raw.githubusercontent.com/kubernetes-sigs/agent-sandbox/main/k8s/crds/extensions.agents.x-k8s.io_sandboxwarmpools.yaml
+
+# 2. Apply the Image Patch (Fixes InvalidImageName)
+images:
+- name: ko://sigs.k8s.io/agent-sandbox/cmd/agent-sandbox-controller
+  newName: us-central1-docker.pkg.dev/k8s-staging-images/agent-sandbox/agent-sandbox-controller
+  newTag: latest-main
+
+# 3. Enable Extensions (Fixes Controller Logic)
+# The default controller.yaml does not enable extensions. We patch the args here.
+patches:
+- target:
+    kind: StatefulSet
+    name: agent-sandbox-controller
+    namespace: agent-sandbox-system
+  patch: |
+    - op: add
+      path: /spec/template/spec/containers/0/args
+      value:
+      - "--extensions"

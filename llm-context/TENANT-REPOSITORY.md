@@ -19,6 +19,19 @@ A private Git repository that stores two types of information:
 
 The tenant repository needs three main directories:
 
+```text
+zerotouch-tenants/
+├── environments/         # Server & Infrastructure configs
+│   ├── dev/
+│   ├── staging/
+│   └── production/
+├── repositories/         # Private repo access (ExternalSecrets)
+└── tenants/              # Tenant application definitions
+    ├── deepagents-runtime/
+    ├── ide-orchestrator/
+    └── example/
+```
+
 ### environments/
 
 Contains server configurations for each environment (dev, staging, production).
@@ -88,8 +101,3 @@ To use this pattern:
 5. Run bootstrap scripts to deploy your cluster
 
 The platform will automatically fetch configurations, deploy infrastructure, and manage tenant applications through GitOps.
-
-## References
-
-- [Deployment Modes](DEPLOYMENT-MODES.md) - Production vs Preview modes
-- [Bootstrap Scripts](../scripts/bootstrap/README.md) - How to run bootstrap

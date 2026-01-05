@@ -1,18 +1,21 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: agent-sandbox
+  name: agent-sandbox-controller
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "4"
 spec:
   project: default
   source:
-    # Point to YOUR local platform repository
-    repoURL: https://github.com/arun4infra/zerotouch-platform.git
+    repoURL: https://github.com/kubernetes-sigs/agent-sandbox.git
     targetRevision: main
-    # Point to the wrapper directory we just created
-    path: bootstrap/argocd/base/agent-sandbox-wrapper
+    path: k8s
+    kustomize:
+      images:
+      - name: ko://sigs.k8s.io/agent-sandbox/cmd/agent-sandbox-controller
+        newName: us-central1-docker.pkg.dev/k8s-staging-images/agent-sandbox/agent-sandbox-controller
+        newTag: latest-main
   destination:
     server: https://kubernetes.default.svc
     namespace: agent-sandbox-system
