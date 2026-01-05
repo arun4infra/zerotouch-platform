@@ -526,7 +526,7 @@ spec:
                 resources:
                   requests:
                     storage: "10Gi"
-                storageClassName: "gp2"
+                storageClassName: "local-path"
       patches:
         # Patch name with -workspace suffix
         - type: FromCompositeFieldPath
