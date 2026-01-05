@@ -617,3 +617,75 @@ spec:
           matchCondition:
             type: Ready
             status: "True"
+
+    # Resource 5: KEDA ScaledObject
+    - name: scaledobject
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          providerConfigRef:
+            name: kubernetes-provider
+          forProvider:
+            manifest:
+              apiVersion: keda.sh/v1alpha1
+              kind: ScaledObject
+              metadata:
+                name: placeholder-scaler
+                namespace: placeholder
+                labels:
+                  app.kubernetes.io/name: placeholder
+                  app.kubernetes.io/component: agent-sandbox
+                  app.kubernetes.io/managed-by: crossplane
+              spec:
+                scaleTargetRef:
+                  apiVersion: extensions.agents.x-k8s.io/v1alpha1
+                  kind: SandboxWarmPool
+                  name: placeholder
+                minReplicaCount: 1
+                maxReplicaCount: 10
+                cooldownPeriod: 30
+                pollingInterval: 5
+                triggers:
+                  - type: nats-jetstream
+                    metadata:
+                      natsServerMonitoringEndpoint: "nats-headless.nats.svc.cluster.local:8222"
+                      account: "$G"
+                      stream: placeholder
+                      consumer: placeholder
+                      lagThreshold: "5"
+                      activationLagThreshold: "0"
+      patches:
+        # Patch name (with -scaler suffix)
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%s-scaler"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        # Patch labels
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
+        # Patch scaleTargetRef to SandboxWarmPool name
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.scaleTargetRef.name
+        # Patch NATS stream
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.nats.stream
+          toFieldPath: spec.forProvider.manifest.spec.triggers[0].metadata.stream
+        # Patch NATS consumer
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.nats.consumer
+          toFieldPath: spec.forProvider.manifest.spec.triggers[0].metadata.consumer
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"

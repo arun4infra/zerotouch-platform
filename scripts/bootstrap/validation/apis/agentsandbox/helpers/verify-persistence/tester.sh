@@ -17,7 +17,7 @@ spec:
   image: "ghcr.io/arun4infra/deepagents-runtime:sha-9d6cb0e"
   # Override entrypoint to sleep (bypassing DB checks)
   command: ["/bin/sh", "-c"]
-  args: ["echo 'Sandbox Persistence Test Started'; python3 -m http.server 8080 --directory /workspace &; sleep infinity"]
+  args: ["echo 'Sandbox Persistence Test Started' > /workspace/index.html; python3 -m http.server 8080 --directory /workspace"]
   healthPath: "/"
   readyPath: "/"
   size: "small"
