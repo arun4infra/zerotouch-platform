@@ -164,6 +164,8 @@ spec:
                             value: placeholder
                         envFrom:
                           - secretRef:
+                              name: aws-access-token
+                          - secretRef:
                               name: placeholder-secret1
                               optional: true
                           - secretRef:
@@ -178,8 +180,6 @@ spec:
                           - secretRef:
                               name: placeholder-secret5
                               optional: true
-                          - secretRef:
-                              name: aws-access-token
                         resources:
                           requests:
                             cpu: "500m"
@@ -375,6 +375,13 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.nats.url
           toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].env[0].value
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%s"
+          policy:
+            fromFieldPath: Optional
         - type: FromCompositeFieldPath
           fromFieldPath: spec.nats.stream
           toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].env[1].value
@@ -450,6 +457,7 @@ spec:
           policy:
             fromFieldPath: Optional
         # Patch secret slots (envFrom - bulk mounting) - EventDrivenService parity
+        # Note: Index 0 is reserved for aws-access-token, user secrets start at index 1
         - type: FromCompositeFieldPath
           fromFieldPath: spec.secret1Name
           toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[1].secretRef.name
@@ -463,32 +471,16 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.secret3Name
           toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[3].secretRef.name
-          policy:
-            fromFieldPath: Optional
-        # Patch secret slots (envFrom - bulk mounting) - EventDrivenService parity
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.secret1Name
-          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[0].secretRef.name
-          policy:
-            fromFieldPath: Optional
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.secret2Name
-          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[1].secretRef.name
-          policy:
-            fromFieldPath: Optional
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.secret3Name
-          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[2].secretRef.name
           policy:
             fromFieldPath: Optional
         - type: FromCompositeFieldPath
           fromFieldPath: spec.secret4Name
-          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[3].secretRef.name
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[4].secretRef.name
           policy:
             fromFieldPath: Optional
         - type: FromCompositeFieldPath
           fromFieldPath: spec.secret5Name
-          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[4].secretRef.name
+          toFieldPath: spec.forProvider.manifest.spec.podTemplate.spec.containers[0].envFrom[5].secretRef.name
           policy:
             fromFieldPath: Optional
         # Patch PVC name for workspace volume
@@ -737,7 +729,7 @@ spec:
                 triggers:
                   - type: nats-jetstream
                     metadata:
-                      natsServerMonitoringEndpoint: "nats-headless.nats.svc.cluster.local:8222"
+                      natsServerMonitoringEndpoint: "nats-headless.nats-system.svc.cluster.local:8222"
                       account: "$G"
                       stream: placeholder
                       consumer: placeholder
@@ -772,11 +764,6 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.nats.consumer
           toFieldPath: spec.forProvider.manifest.spec.triggers[0].metadata.consumer
-      readinessChecks:
-        - type: MatchCondition
-          matchCondition:
-            type: Ready
-            status: "True"
       readinessChecks:
         - type: MatchCondition
           matchCondition:
@@ -836,14 +823,16 @@ spec:
                 type: Convert
                 convert: "ToBase64"
         # Patch connection data - HTTP endpoint (base64 encoded)
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.claimRef.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.claimRef.name
+              - fromFieldPath: spec.claimRef.namespace
+            strategy: string
+            string:
+              fmt: "http://%s-http.%s.svc.cluster.local:8080"
           toFieldPath: spec.forProvider.manifest.data.SANDBOX_HTTP_ENDPOINT
           transforms:
-            - type: string
-              string:
-                type: Format
-                fmt: "http://%s-http:8080"
             - type: string
               string:
                 type: Convert

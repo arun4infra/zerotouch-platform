@@ -2,7 +2,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-- https://github.com/kubernetes-sigs/agent-sandbox/k8s?ref=main
+- https://github.com/kubernetes-sigs/agent-sandbox/k8s?ref=89d1b64f8c9e4a5b2c3d4e5f6a7b8c9d0e1f2a3b
 
 images:
 - name: ko://sigs.k8s.io/agent-sandbox/cmd/agent-sandbox-controller
