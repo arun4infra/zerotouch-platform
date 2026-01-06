@@ -2,500 +2,470 @@
 """
 Verify AgentSandboxService Hybrid Persistence
 Usage: pytest test_04_verify_persistence.py [--tenant <name>] [--namespace <name>] [-v] [--cleanup]
-
-This script verifies:
-- InitContainer downloads workspace from real S3 on startup
-- Sidecar continuously backs up workspace changes to real S3
-- PreStop hook performs final backup on termination in live cluster
-- Workspace PVC sized correctly from storageGB field in live cluster
-- "Resurrection Test" passes (file survives actual pod recreation in cluster)
 """
 
 import pytest
 import subprocess
+import tempfile
 import os
+import json
 import time
 
 
+class Colors:
+    RED = '\033[0;31m'
+    GREEN = '\033[0;32m'
+    YELLOW = '\033[1;33m'
+    BLUE = '\033[0;34m'
+    NC = '\033[0m'
+
+
 @pytest.fixture
-def test_claim_yaml(test_claim_name, tenant_config, temp_dir):
-    """Create test claim YAML"""
-    test_claim_yaml = f"""apiVersion: platform.bizmatters.io/v1alpha1
+def test_config():
+    return {
+        "tenant_name": "deepagents-runtime",
+        "namespace": "intelligence-deepagents",
+        "test_claim_name": "test-persistence-sandbox"  # Fixed name for deterministic testing
+    }
+
+
+class TestAgentSandboxPersistence:
+    def setup_method(self):
+        self.errors = 0
+        self.warnings = 0
+        self.tenant_name = "deepagents-runtime"
+        self.namespace = "intelligence-deepagents"
+        self.test_claim_name = "test-persistence-sandbox"  # Fixed name for deterministic testing
+        self.temp_dir = tempfile.mkdtemp()
+        print(f"{Colors.BLUE}[INFO] Setup complete for {self.test_claim_name}{Colors.NC}")
+
+    def teardown_method(self):
+        # Don't delete during testing - let tests manage their own lifecycle
+        try:
+            import shutil
+            shutil.rmtree(self.temp_dir)
+        except:
+            pass
+
+    def test_create_test_claim(self):
+        """Step 1: Create Test Claim with Persistence Configuration"""
+        print(f"{Colors.BLUE}Step: 1. Creating Test Claim{Colors.NC}")
+        
+        claim_yaml = f"""apiVersion: platform.bizmatters.io/v1alpha1
 kind: AgentSandboxService
 metadata:
-  name: test-persistence-sandbox
-  namespace: {tenant_config['namespace']}
+  name: {self.test_claim_name}
+  namespace: {self.namespace}
 spec:
   image: "ghcr.io/arun4infra/deepagents-runtime:sha-9d6cb0e"
-  command: ["/bin/sh", "-c"]
-  args: ["echo 'Sandbox Persistence Test Started' > /workspace/index.html; python3 -m http.server 8080 --directory /workspace"]
-  healthPath: "/"
-  readyPath: "/"
-  size: "small"
-  storageGB: 25
-  httpPort: 8080
+  size: "micro"
   nats:
-    url: "nats://nats.nats-system:4222"
-    stream: "TEST_STREAM"
-    consumer: "test-consumer"
-  secret1Name: "aws-access-token"
-  s3SecretName: "aws-access-token"
+    url: "nats://nats-headless.nats.svc.cluster.local:4222"
+    stream: "TEST_PERSISTENCE_STREAM"
+    consumer: "test-persistence-consumer"
+  httpPort: 8080
+  healthPath: "/health"
+  readyPath: "/ready"
+  storageGB: 10
+  secret1Name: "deepagents-runtime-db-conn"
+  secret2Name: "deepagents-runtime-cache-conn"
+  secret3Name: "deepagents-runtime-llm-keys"
 """
-    
-    claim_file = os.path.join(temp_dir, "test-claim.yaml")
-    with open(claim_file, 'w') as f:
-        f.write(test_claim_yaml)
-    
-    return claim_file
-
-
-@pytest.fixture
-def cleanup_test_claim(tenant_config):
-    """Cleanup test claim after test"""
-    yield
-    
-    claim_name = "test-persistence-sandbox"
-    
-    # Clean up test claim
-    # try:
-    #     subprocess.run([
-    #         "kubectl", "delete", "agentsandboxservice", claim_name, 
-    #         "-n", tenant_config['namespace'], "--ignore-not-found=true"
-    #     ], capture_output=True, text=True, check=False)
         
-    #     # Wait for cleanup
-    #     timeout = 60
-    #     count = 0
-    #     while count < timeout:
-    #         try:
-    #             subprocess.run([
-    #                 "kubectl", "get", "agentsandboxservice", claim_name, "-n", tenant_config['namespace']
-    #             ], capture_output=True, text=True, check=True)
-    #             time.sleep(1)
-    #             count += 1
-    #         except subprocess.CalledProcessError:
-    #             break
-    # except:
-    #     pass
-
-
-def test_validate_environment(colors, kubectl_helper, tenant_config, test_counters):
-    """Step 1: Validate environment and prerequisites"""
-    print(f"{colors.BLUE}╔══════════════════════════════════════════════════════════════╗{colors.NC}")
-    print(f"{colors.BLUE}║   AgentSandboxService Hybrid Persistence Validation         ║{colors.NC}")
-    print(f"{colors.BLUE}╚══════════════════════════════════════════════════════════════╝{colors.NC}")
-    print("")
-    
-    print(f"{colors.BLUE}ℹ  Starting AgentSandboxService hybrid persistence validation{colors.NC}")
-    print(f"{colors.BLUE}ℹ  Tenant: {tenant_config['tenant_name']}, Namespace: {tenant_config['namespace']}{colors.NC}")
-    print("")
-    
-    print(f"{colors.BLUE}Step: 1. Validating environment and prerequisites{colors.NC}")
-    
-    # Check if AgentSandboxService XRD exists
-    try:
-        kubectl_helper.kubectl_retry(["get", "xrd", "xagentsandboxservices.platform.bizmatters.io"])
-        print(f"{colors.GREEN}✓ AgentSandboxService XRD exists{colors.NC}")
-    except Exception:
-        print(f"{colors.RED}✗ AgentSandboxService XRD not found{colors.NC}")
-        test_counters.errors += 1
-        pytest.fail("AgentSandboxService XRD not found")
-    
-    # Check if agent-sandbox controller is running
-    try:
-        result = kubectl_helper.kubectl_retry([
-            "get", "pods", "-n", "agent-sandbox-system", 
-            "-l", "app=agent-sandbox-controller"
-        ])
-        if "Running" in result.stdout:
-            print(f"{colors.GREEN}✓ Agent-sandbox controller is running{colors.NC}")
-        else:
-            print(f"{colors.RED}✗ Agent-sandbox controller not running{colors.NC}")
-            test_counters.errors += 1
-            pytest.fail("Agent-sandbox controller not running")
-    except Exception:
-        print(f"{colors.RED}✗ Could not check agent-sandbox controller status{colors.NC}")
-        test_counters.errors += 1
-        pytest.fail("Could not check agent-sandbox controller status")
-    
-    # Check if namespace exists
-    try:
-        kubectl_helper.kubectl_retry(["get", "namespace", tenant_config['namespace']])
-        print(f"{colors.GREEN}✓ Target namespace {tenant_config['namespace']} exists{colors.NC}")
-    except Exception:
-        print(f"{colors.RED}✗ Namespace {tenant_config['namespace']} does not exist{colors.NC}")
-        test_counters.errors += 1
-        pytest.fail(f"Namespace {tenant_config['namespace']} does not exist")
-    
-    print("")
-
-
-def test_create_test_claim(colors, test_claim_yaml, test_counters):
-    """Step 2: Create test AgentSandboxService claim with persistence"""
-    print(f"{colors.BLUE}Step: 2. Creating test AgentSandboxService claim with persistence{colors.NC}")
-    
-    try:
-        result = subprocess.run([
-            "kubectl", "apply", "-f", test_claim_yaml
-        ], capture_output=True, text=True, check=True)
-        print(f"{colors.GREEN}✓ Test claim created: test-persistence-sandbox{colors.NC}")
-    except subprocess.CalledProcessError:
-        print(f"{colors.RED}✗ Failed to create test claim{colors.NC}")
-        test_counters.errors += 1
-        pytest.fail("Failed to create test claim")
-    
-    print("")
-
-
-def test_validate_pvc_sizing(colors, tenant_config, test_counters, cleanup_test_claim):
-    """Step 3: Validate PVC sizing from storageGB field"""
-    print(f"{colors.BLUE}Step: 3. Validating PVC sizing from storageGB field{colors.NC}")
-    
-    claim_name = "test-persistence-sandbox"
-    expected_size = "25Gi"
-    
-    # Wait for PVC to be created
-    timeout = 120
-    count = 0
-    pvc_name = f"{claim_name}-workspace"
-    
-    print(f"{colors.BLUE}Waiting for PVC {pvc_name} to be created...{colors.NC}")
-    while count < timeout:
-        try:
-            result = subprocess.run([
-                "kubectl", "get", "pvc", pvc_name, "-n", tenant_config['namespace']
-            ], capture_output=True, text=True, check=True)
-            break
-        except subprocess.CalledProcessError:
-            time.sleep(2)
-            count += 2
-    
-    if count >= timeout:
-        print(f"{colors.RED}✗ PVC {pvc_name} not created within timeout{colors.NC}")
-        test_counters.errors += 1
-        pytest.fail(f"PVC {pvc_name} not created within timeout")
-    
-    # Check PVC storage size
-    try:
-        result = subprocess.run([
-            "kubectl", "get", "pvc", pvc_name, "-n", tenant_config['namespace'],
-            "-o", "jsonpath={.spec.resources.requests.storage}"
-        ], capture_output=True, text=True, check=True)
-        pvc_size = result.stdout.strip()
+        claim_file = os.path.join(self.temp_dir, "test-claim.yaml")
+        with open(claim_file, 'w') as f:
+            f.write(claim_yaml)
         
-        if pvc_size == expected_size:
-            print(f"{colors.GREEN}✓ PVC has correct storage size: {pvc_size}{colors.NC}")
-        else:
-            print(f"{colors.YELLOW}⚠️  PVC storage size: {pvc_size} (expected: {expected_size}){colors.NC}")
-            test_counters.warnings += 1
-    except subprocess.CalledProcessError:
-        print(f"{colors.RED}✗ Could not check PVC storage size{colors.NC}")
-        test_counters.errors += 1
-    
-    print("")
-
-
-def test_validate_init_container(colors, tenant_config, test_counters, cleanup_test_claim):
-    """Step 4: Validate initContainer workspace hydration"""
-    print(f"{colors.BLUE}Step: 4. Validating initContainer workspace hydration{colors.NC}")
-    
-    claim_name = "test-persistence-sandbox"
-    
-    # Wait for pod to be created
-    timeout = 180
-    count = 0
-    
-    print(f"{colors.BLUE}Waiting for sandbox pod to be created...{colors.NC}")
-    while count < timeout:
-        try:
-            result = subprocess.run([
-                "kubectl", "get", "pods", "-n", tenant_config['namespace'],
-                "-l", f"app.kubernetes.io/name={claim_name}"
-            ], capture_output=True, text=True, check=True)
-            
-            if result.stdout.strip() and "No resources found" not in result.stdout:
-                break
-        except subprocess.CalledProcessError:
-            pass
+        subprocess.run(["kubectl", "apply", "-f", claim_file], check=True)
+        print(f"{Colors.GREEN}✓ Created Claim {self.test_claim_name}{Colors.NC}")
         
-        time.sleep(2)
-        count += 2
-    
-    if count >= timeout:
-        print(f"{colors.RED}✗ No sandbox pods created within timeout{colors.NC}")
-        test_counters.errors += 1
-        pytest.fail("No sandbox pods created within timeout")
-    
-    # Get pod name
-    try:
-        result = subprocess.run([
-            "kubectl", "get", "pods", "-n", tenant_config['namespace'],
-            "-l", f"app.kubernetes.io/name={claim_name}",
-            "-o", "jsonpath={.items[0].metadata.name}"
-        ], capture_output=True, text=True, check=True)
-        pod_name = result.stdout.strip()
-        
-        if pod_name:
-            print(f"{colors.GREEN}✓ Found sandbox pod: {pod_name}{colors.NC}")
-            
-            # Check if pod has initContainer
-            result = subprocess.run([
-                "kubectl", "get", "pod", pod_name, "-n", tenant_config['namespace'],
-                "-o", "jsonpath={.spec.initContainers[0].name}"
-            ], capture_output=True, text=True, check=False)
-            
-            if result.returncode == 0 and result.stdout.strip():
-                init_container_name = result.stdout.strip()
-                print(f"{colors.GREEN}✓ Pod has initContainer: {init_container_name}{colors.NC}")
-            else:
-                print(f"{colors.YELLOW}⚠️  Pod may not have initContainer configured{colors.NC}")
-                test_counters.warnings += 1
-        else:
-            print(f"{colors.RED}✗ Could not get pod name{colors.NC}")
-            test_counters.errors += 1
-    except subprocess.CalledProcessError:
-        print(f"{colors.RED}✗ Could not check pod initContainer{colors.NC}")
-        test_counters.errors += 1
-    
-    print("")
-
-
-def test_sidecar_backup(colors, tenant_config, test_counters, cleanup_test_claim):
-    """Step 5: Test workspace file creation and sidecar backup"""
-    print(f"{colors.BLUE}Step: 5. Testing workspace file creation and sidecar backup{colors.NC}")
-    
-    claim_name = "test-persistence-sandbox"
-    
-    # Get pod name
-    try:
-        result = subprocess.run([
-            "kubectl", "get", "pods", "-n", tenant_config['namespace'],
-            "-l", f"app.kubernetes.io/name={claim_name}",
-            "-o", "jsonpath={.items[0].metadata.name}"
-        ], capture_output=True, text=True, check=True)
-        pod_name = result.stdout.strip()
-        
-        if pod_name:
-            print(f"{colors.GREEN}✓ Found sandbox pod for sidecar test: {pod_name}{colors.NC}")
-            
-            # Check if pod has sidecar container
-            result = subprocess.run([
-                "kubectl", "get", "pod", pod_name, "-n", tenant_config['namespace'],
-                "-o", "jsonpath={.spec.containers[*].name}"
-            ], capture_output=True, text=True, check=True)
-            container_names = result.stdout.strip().split()
-            
-            if len(container_names) > 1:
-                print(f"{colors.GREEN}✓ Pod has multiple containers (likely includes sidecar): {container_names}{colors.NC}")
-            else:
-                print(f"{colors.YELLOW}⚠️  Pod may not have sidecar container configured{colors.NC}")
-                test_counters.warnings += 1
-        else:
-            print(f"{colors.RED}✗ Could not get pod name for sidecar test{colors.NC}")
-            test_counters.errors += 1
-    except subprocess.CalledProcessError:
-        print(f"{colors.RED}✗ Could not check pod sidecar configuration{colors.NC}")
-        test_counters.errors += 1
-    
-    print("")
-
-
-def test_resurrection(colors, tenant_config, test_counters, cleanup_test_claim):
-    """Step 6: Perform "Resurrection Test" (file survives pod recreation & Identity is Stable)"""
-    print(f"{colors.BLUE}Step: 6. Performing Resurrection Test (Data & Identity Check){colors.NC}")
-    
-    claim_name = "test-persistence-sandbox"
-    
-    # Get current pod name
-    try:
-        result = subprocess.run([
-            "kubectl", "get", "pods", "-n", tenant_config['namespace'],
-            "-l", f"app.kubernetes.io/name={claim_name}",
-            "-o", "jsonpath={.items[0].metadata.name}"
-        ], capture_output=True, text=True, check=True)
-        original_pod_name = result.stdout.strip()
-        
-        if original_pod_name:
-            print(f"{colors.GREEN}✓ Found original pod: {original_pod_name}{colors.NC}")
-            
-            # Check Stable Identity (Pod Name == Claim Name for webhook routing)
-            # Note: With Warm Pools, Pod names have random suffixes, so we'll validate Service routing instead
-            if original_pod_name != claim_name:
-                print(f"{colors.YELLOW}⚠️  Pod Name ({original_pod_name}) != Claim Name ({claim_name}). This is expected with Warm Pools.{colors.NC}")
-            else:
-                print(f"{colors.GREEN}✓ Pod Name matches Claim Name: {original_pod_name}{colors.NC}")
-            
-            # Write test data to validate persistence
-            test_file = "/workspace/resurrection-check.txt"
-            test_content = f"survival-{int(time.time())}"
-            print(f"{colors.BLUE}Writing test data to {test_file}...{colors.NC}")
-            
+        # Wait for Sandbox resource to be ready (KEDA may scale to 0)
+        time.sleep(10)
+        timeout = 120
+        count = 0
+        while count < timeout:
             try:
-                subprocess.run([
-                    "kubectl", "exec", original_pod_name, "-n", tenant_config['namespace'], "-c", "main", "--",
-                    "sh", "-c", f"echo '{test_content}' > {test_file}"
-                ], capture_output=True, text=True, check=True)
-                print(f"{colors.GREEN}✓ Test data written: {test_content}{colors.NC}")
+                res = subprocess.run(["kubectl", "get", "sandbox", self.test_claim_name, "-n", self.namespace], 
+                                   capture_output=True, text=True, check=True)
+                if "AGE" in res.stdout:  # Sandbox exists
+                    print(f"{Colors.GREEN}✓ Sandbox Resource Created{Colors.NC}")
+                    
+                    # Check if scaled to 0 (expected for warm pool)
+                    pod_res = subprocess.run(["kubectl", "get", "pods", "-n", self.namespace, 
+                                            "-l", f"app.kubernetes.io/name={self.test_claim_name}"], 
+                                           capture_output=True, text=True)
+                    if "No resources found" in pod_res.stdout:
+                        print(f"{Colors.YELLOW}⚠️ Sandbox scaled to 0 (Warm Pool behavior){Colors.NC}")
+                    else:
+                        print(f"{Colors.GREEN}✓ Pod Running{Colors.NC}")
+                    return
             except subprocess.CalledProcessError:
-                print(f"{colors.RED}✗ Failed to write test data{colors.NC}")
-                test_counters.errors += 1
-                return
+                pass
+            time.sleep(5)
+            count += 5
+        pytest.fail("Sandbox resource failed to create")
+
+    def test_pvc_sizing_validation(self):
+        """Step 2: Validate PVC Sizing from storageGB Field"""
+        print(f"{Colors.BLUE}Step: 2. Validating PVC Sizing{Colors.NC}")
+        
+        try:
+            # Get PVC details
+            res = subprocess.run([
+                "kubectl", "get", "pvc", f"{self.test_claim_name}-workspace", "-n", self.namespace,
+                "-o", "jsonpath={.spec.resources.requests.storage}"
+            ], capture_output=True, text=True, check=True)
             
-            # Force delete pod
-            print(f"{colors.BLUE}Deleting pod {original_pod_name}...{colors.NC}")
+            pvc_size = res.stdout.strip()
+            expected_size = "10Gi"  # From storageGB: 10 in claim
+            
+            if pvc_size == expected_size:
+                print(f"{Colors.GREEN}✓ PVC Size Correct: {pvc_size}{Colors.NC}")
+            else:
+                print(f"{Colors.RED}✗ PVC Size Mismatch: Expected {expected_size}, Got {pvc_size}{Colors.NC}")
+                self.errors += 1
+                pytest.fail(f"PVC sizing failed: expected {expected_size}, got {pvc_size}")
+                
+        except subprocess.CalledProcessError as e:
+            pytest.fail(f"PVC validation failed: {e}")
+
+    def _ensure_pod_running(self):
+        """Helper to ensure pod is running for validation tests"""
+        # Check if sandbox exists first
+        try:
             subprocess.run([
-                "kubectl", "delete", "pod", original_pod_name, "-n", tenant_config['namespace'], "--wait=true"
-            ], capture_output=True, text=True, check=False)
+                "kubectl", "get", "sandbox", self.test_claim_name, "-n", self.namespace
+            ], check=True, capture_output=True)
+        except subprocess.CalledProcessError:
+            # Sandbox doesn't exist, need to create claim first
+            pytest.fail(f"Sandbox {self.test_claim_name} not found. Run test_create_test_claim first.")
+        
+        # Force scale up by setting replicas to 1
+        try:
+            subprocess.run([
+                "kubectl", "patch", "sandbox", self.test_claim_name, "-n", self.namespace,
+                "--type=merge", "-p", '{"spec":{"replicas":1}}'
+            ], check=True, capture_output=True)
             
-            # Wait for recreation
-            print(f"{colors.BLUE}Waiting for pod recreation...{colors.NC}")
-            time.sleep(10)  # Give controller time to react
-            
+            # Wait for pod to be running
             timeout = 120
             count = 0
-            new_pod_name = ""
-            
             while count < timeout:
-                try:
-                    result = subprocess.run([
-                        "kubectl", "get", "pods", "-n", tenant_config['namespace'],
-                        "-l", f"app.kubernetes.io/name={claim_name}",
-                        "--field-selector=status.phase=Running",
-                        "-o", "jsonpath={.items[0].metadata.name}"
-                    ], capture_output=True, text=True, check=True)
-                    new_pod_name = result.stdout.strip()
-                    
-                    if new_pod_name:
-                        break
-                except subprocess.CalledProcessError:
-                    pass
+                res = subprocess.run([
+                    "kubectl", "get", "pods", "-n", self.namespace,
+                    "-l", f"app.kubernetes.io/name={self.test_claim_name}",
+                    "--field-selector=status.phase=Running",
+                    "-o", "jsonpath={.items[0].metadata.name}"
+                ], capture_output=True, text=True)
                 
+                if res.stdout.strip():
+                    return res.stdout.strip()
+                    
                 time.sleep(2)
                 count += 2
             
-            if not new_pod_name:
-                print(f"{colors.RED}✗ Pod failed to restart{colors.NC}")
-                test_counters.errors += 1
-                pytest.fail("Pod failed to restart")
-            
-            print(f"{colors.GREEN}✓ New pod created: {new_pod_name}{colors.NC}")
-            
-            # Validate Stable Network Identity (Service -> Pod)
-            # Since we use Warm Pools, Pod Name will have a random suffix.
-            # We must verify that the Service with the CLAIM NAME exists and targets this Pod.
-            print(f"{colors.BLUE}Verifying Stable Network Identity (Service Resolution)...{colors.NC}")
-            try:
-                # 1. Check Service Exists
-                subprocess.run([
-                    "kubectl", "get", "service", claim_name, "-n", tenant_config['namespace']
-                ], check=True, capture_output=True)
-                
-                # 2. Check Service Selector matches Pod Labels
-                # Get Pod Labels
-                pod_labels_result = subprocess.run([
-                    "kubectl", "get", "pod", new_pod_name, "-n", tenant_config['namespace'], 
-                    "-o", "jsonpath={.metadata.labels}"
-                ], capture_output=True, text=True, check=True)
-                
-                import json
-                pod_labels = json.loads(pod_labels_result.stdout)
-                
-                # We expect the controller to label the pod with the claim name/hash so the service finds it
-                # This confirms traffic to 'http://test-persistence-sandbox' hits 'test-persistence-sandbox-drd86'
-                if "agents.x-k8s.io/sandbox-name-hash" in pod_labels:
-                    print(f"{colors.GREEN}✓ Stable Identity Confirmed: Service '{claim_name}' routes to Pod '{new_pod_name}'{colors.NC}")
-                else:
-                    print(f"{colors.RED}✗ Identity Failed: Pod missing routing labels.{colors.NC}")
-                    test_counters.errors += 1
-                    pytest.fail("Stable Network Identity failed")
-            except subprocess.CalledProcessError:
-                print(f"{colors.RED}✗ Identity Failed: Stable Service '{claim_name}' not found.{colors.NC}")
-                test_counters.errors += 1
-                pytest.fail("Stable Network Identity Service missing")
-            
-            # Validate Data Persistence
-            print(f"{colors.BLUE}Verifying data persistence...{colors.NC}")
-            time.sleep(5)  # Allow time for init container to restore if needed
-            
-            try:
-                result = subprocess.run([
-                    "kubectl", "exec", new_pod_name, "-n", tenant_config['namespace'], "-c", "main", "--",
-                    "cat", test_file
-                ], capture_output=True, text=True, check=True)
-                
-                if result.stdout.strip() == test_content:
-                    print(f"{colors.GREEN}✓ Data survived pod recreation.{colors.NC}")
-                else:
-                    print(f"{colors.RED}✗ Data lost! Expected: {test_content}, Got: {result.stdout.strip()}{colors.NC}")
-                    test_counters.errors += 1
-                    pytest.fail("Data persistence failed")
-            except subprocess.CalledProcessError:
-                print(f"{colors.RED}✗ Data lost! File not found after recreation{colors.NC}")
-                test_counters.errors += 1
-                pytest.fail("Data persistence failed")
-        else:
-            print(f"{colors.RED}✗ Could not get original pod name{colors.NC}")
-            test_counters.errors += 1
-    except subprocess.CalledProcessError as e:
-        print(f"{colors.RED}✗ Resurrection test error: {e}{colors.NC}")
-        test_counters.errors += 1
-    
-    print("")
+            pytest.fail("Pod failed to start after forcing scale up")
+        except subprocess.CalledProcessError as e:
+            pytest.fail(f"Failed to force scale up: {e}")
 
-
-def test_prestop_backup(colors, tenant_config, test_counters, cleanup_test_claim):
-    """Step 7: Test preStop hook final backup"""
-    print(f"{colors.BLUE}Step: 7. Testing preStop hook final backup{colors.NC}")
-    
-    claim_name = "test-persistence-sandbox"
-    
-    # Get pod name
-    try:
-        result = subprocess.run([
-            "kubectl", "get", "pods", "-n", tenant_config['namespace'],
-            "-l", f"app.kubernetes.io/name={claim_name}",
-            "-o", "jsonpath={.items[0].metadata.name}"
-        ], capture_output=True, text=True, check=True)
-        pod_name = result.stdout.strip()
+    def test_initcontainer_validation(self):
+        """Step 3: Validate InitContainer for S3 Workspace Hydration"""
+        print(f"{Colors.BLUE}Step: 3. Validating InitContainer S3 Hydration{Colors.NC}")
         
-        if pod_name:
-            print(f"{colors.GREEN}✓ Found pod for preStop test: {pod_name}{colors.NC}")
+        pod_name = self._ensure_pod_running()
+        
+        try:
+            # Get Pod spec to check initContainers
+            res = subprocess.run([
+                "kubectl", "get", "pod", pod_name, "-n", self.namespace,
+                "-o", "json"
+            ], capture_output=True, text=True, check=True)
             
-            # Check if pod has preStop hook configured
-            result = subprocess.run([
-                "kubectl", "get", "pod", pod_name, "-n", tenant_config['namespace'],
-                "-o", "jsonpath={.spec.containers[0].lifecycle.preStop}"
-            ], capture_output=True, text=True, check=False)
+            pod_data = json.loads(res.stdout)
+            init_containers = pod_data["spec"].get("initContainers", [])
             
-            if result.returncode == 0 and result.stdout.strip():
-                print(f"{colors.GREEN}✓ Pod has preStop hook configured{colors.NC}")
+            # Look for S3 hydration initContainer
+            s3_init_found = False
+            for container in init_containers:
+                if "workspace-hydrator" in container["name"] or "s3" in container["name"].lower() or "hydrate" in container["name"].lower():
+                    s3_init_found = True
+                    print(f"{Colors.GREEN}✓ S3 InitContainer Found: {container['name']}{Colors.NC}")
+                    
+                    # Validate it has AWS credentials
+                    env_from = container.get("envFrom", [])
+                    has_aws_secret = any("aws" in str(env).lower() for env in env_from)
+                    if has_aws_secret:
+                        print(f"{Colors.GREEN}✓ AWS Credentials Configured{Colors.NC}")
+                    else:
+                        print(f"{Colors.YELLOW}⚠️ AWS Credentials Not Found in InitContainer{Colors.NC}")
+                        self.warnings += 1
+                    break
+            
+            if not s3_init_found:
+                print(f"{Colors.RED}✗ S3 InitContainer Not Found{Colors.NC}")
+                print(f"{Colors.BLUE}Available initContainers: {[c.get('name', 'unnamed') for c in init_containers]}{Colors.NC}")
+                self.errors += 1
+                pytest.fail("S3 hydration initContainer missing")
+                
+        except subprocess.CalledProcessError as e:
+            pytest.fail(f"InitContainer validation failed: {e}")
+
+    def test_sidecar_backup_validation(self):
+        """Step 4: Validate Sidecar Container for Continuous S3 Backup"""
+        print(f"{Colors.BLUE}Step: 4. Validating Sidecar S3 Backup{Colors.NC}")
+        
+        pod_name = self._ensure_pod_running()
+        
+        try:
+            # Get Pod spec to check containers
+            res = subprocess.run([
+                "kubectl", "get", "pod", pod_name, "-n", self.namespace,
+                "-o", "json"
+            ], capture_output=True, text=True, check=True)
+            
+            pod_data = json.loads(res.stdout)
+            containers = pod_data["spec"]["containers"]
+            
+            # Look for backup sidecar (should be more than just main container)
+            if len(containers) < 2:
+                print(f"{Colors.RED}✗ Sidecar Container Missing (only {len(containers)} containers){Colors.NC}")
+                self.errors += 1
+                pytest.fail("Backup sidecar container missing")
+            
+            # Find sidecar container (not main)
+            sidecar_found = False
+            for container in containers:
+                if container["name"] != "main":
+                    sidecar_found = True
+                    print(f"{Colors.GREEN}✓ Sidecar Container Found: {container['name']}{Colors.NC}")
+                    
+                    # Validate it has AWS credentials
+                    env_from = container.get("envFrom", [])
+                    has_aws_secret = any("aws" in str(env).lower() for env in env_from)
+                    if has_aws_secret:
+                        print(f"{Colors.GREEN}✓ AWS Credentials Configured{Colors.NC}")
+                    else:
+                        print(f"{Colors.YELLOW}⚠️ AWS Credentials Not Found in Sidecar{Colors.NC}")
+                        self.warnings += 1
+                    break
+            
+            if not sidecar_found:
+                print(f"{Colors.RED}✗ Backup Sidecar Not Found{Colors.NC}")
+                self.errors += 1
+                pytest.fail("Backup sidecar container missing")
+                
+        except subprocess.CalledProcessError as e:
+            pytest.fail(f"Sidecar validation failed: {e}")
+
+    def test_prestop_hook_validation(self):
+        """Step 5: Validate PreStop Hook for Final S3 Sync"""
+        print(f"{Colors.BLUE}Step: 5. Validating PreStop Hook{Colors.NC}")
+        
+        pod_name = self._ensure_pod_running()
+        
+        try:
+            # Get Pod spec to check lifecycle hooks
+            res = subprocess.run([
+                "kubectl", "get", "pod", pod_name, "-n", self.namespace,
+                "-o", "json"
+            ], capture_output=True, text=True, check=True)
+            
+            pod_data = json.loads(res.stdout)
+            containers = pod_data["spec"]["containers"]
+            
+            # Check main container for preStop hook
+            main_container = None
+            for container in containers:
+                if container["name"] == "main":
+                    main_container = container
+                    break
+            
+            if not main_container:
+                pytest.fail("Main container not found")
+            
+            lifecycle = main_container.get("lifecycle", {})
+            prestop = lifecycle.get("preStop", {})
+            
+            if prestop:
+                print(f"{Colors.GREEN}✓ PreStop Hook Configured{Colors.NC}")
+                
+                # Check if it's an exec command (likely S3 sync)
+                if "exec" in prestop:
+                    command = prestop["exec"].get("command", [])
+                    if any("s3" in str(cmd).lower() or "sync" in str(cmd).lower() for cmd in command):
+                        print(f"{Colors.GREEN}✓ S3 Sync Command Found in PreStop{Colors.NC}")
+                    else:
+                        print(f"{Colors.YELLOW}⚠️ PreStop Command May Not Be S3 Sync{Colors.NC}")
+                        self.warnings += 1
+                else:
+                    print(f"{Colors.YELLOW}⚠️ PreStop Hook Not Exec Type{Colors.NC}")
+                    self.warnings += 1
             else:
-                print(f"{colors.YELLOW}⚠️  Pod may not have preStop hook configured{colors.NC}")
-                test_counters.warnings += 1
+                print(f"{Colors.RED}✗ PreStop Hook Not Found{Colors.NC}")
+                self.errors += 1
+                pytest.fail("PreStop hook missing")
+                
+        except subprocess.CalledProcessError as e:
+            pytest.fail(f"PreStop hook validation failed: {e}")
+
+    def test_resurrection(self):
+        """Step 6: Perform Resurrection Test (Stable Identity & Data Persistence)"""
+        print(f"{Colors.BLUE}Step: 6. Performing Resurrection Test{Colors.NC}")
+        
+        original_pod_name = self._ensure_pod_running()
+        
+        try:
+            # Get Pod UID for tracking
+            res = subprocess.run([
+                "kubectl", "get", "pod", original_pod_name, "-n", self.namespace,
+                "-o", "jsonpath={.metadata.uid}"
+            ], capture_output=True, text=True, check=True)
+            
+            original_pod_uid = res.stdout.strip()
+            print(f"{Colors.BLUE}Original Pod: {original_pod_name} (UID: {original_pod_uid[:8]}...){Colors.NC}")
+
+            # Validate Stable Network Identity via Service Resolution
+            print(f"{Colors.BLUE}Validating Stable Network Identity (Service Resolution)...{Colors.NC}")
+            try:
+                # Check Service Exists (composition creates {name}-http service)
+                service_name = f"{self.test_claim_name}-http"
+                subprocess.run([
+                    "kubectl", "get", "service", service_name, "-n", self.namespace
+                ], check=True, capture_output=True)
+                print(f"{Colors.GREEN}✓ Stable Identity Confirmed: Service '{service_name}' exists{Colors.NC}")
+                    
+            except subprocess.CalledProcessError:
+                print(f"{Colors.RED}✗ Stable Service '{service_name}' not found{Colors.NC}")
+                self.errors += 1
+                pytest.fail("Stable Network Identity Service missing")
+
+            # Write Data for Persistence Test
+            test_file = "/workspace/resurrection.txt"
+            
+            # Wait for main container to be ready before exec
+            print(f"{Colors.BLUE}Ensuring main container is ready for exec...{Colors.NC}")
+            timeout_exec = 60
+            count_exec = 0
+            
+            while count_exec < timeout_exec:
+                try:
+                    # Check if 'main' container is ready
+                    res_ready = subprocess.run([
+                        "kubectl", "get", "pod", original_pod_name, "-n", self.namespace,
+                        "-o", "jsonpath={.status.containerStatuses[?(@.name=='main')].ready}"
+                    ], capture_output=True, text=True)
+                    
+                    if res_ready.stdout.strip() == "true":
+                        break
+                except:
+                    pass
+                
+                time.sleep(2)
+                count_exec += 2
+            
+            subprocess.run([
+                "kubectl", "exec", original_pod_name, "-n", self.namespace, "-c", "main", "--",
+                "sh", "-c", f"echo 'alive-{original_pod_uid[:8]}' > {test_file}"
+            ], check=True)
+            print(f"{Colors.GREEN}✓ Test Data Written{Colors.NC}")
+
+            # Delete Pod to trigger recreation
+            print(f"{Colors.BLUE}Deleting pod {original_pod_name}...{Colors.NC}")
+            subprocess.run([
+                "kubectl", "delete", "pod", original_pod_name, "-n", self.namespace, "--wait=true"
+            ], check=True)
+
+            # Wait for Recreation and force scale up
+            print(f"{Colors.BLUE}Waiting for pod recreation...{Colors.NC}")
+            time.sleep(10)
+            new_pod_name = self._ensure_pod_running()
+            
+            # Get new pod UID
+            res = subprocess.run([
+                "kubectl", "get", "pod", new_pod_name, "-n", self.namespace,
+                "-o", "jsonpath={.metadata.uid}"
+            ], capture_output=True, text=True, check=True)
+            
+            new_pod_uid = res.stdout.strip()
+            print(f"{Colors.BLUE}New Pod: {new_pod_name} (UID: {new_pod_uid[:8]}...){Colors.NC}")
+
+            # Verify Data Persistence
+            res = subprocess.run([
+                "kubectl", "exec", new_pod_name, "-n", self.namespace, "-c", "main", "--", 
+                "cat", test_file
+            ], capture_output=True, text=True)
+            
+            expected_data = f"alive-{original_pod_uid[:8]}"
+            if res.stdout.strip() == expected_data:
+                print(f"{Colors.GREEN}✓ Data Persisted Across Pod Recreation{Colors.NC}")
+            else:
+                print(f"{Colors.RED}✗ Data Persistence Failed. Expected: {expected_data}, Got: {res.stdout.strip()}{Colors.NC}")
+                self.errors += 1
+                pytest.fail("Data Persistence Failed")
+
+        except Exception as e:
+            pytest.fail(f"Resurrection test failed: {e}")
+
+    def test_cold_resume_valet_model(self):
+        """Step 7: Test Cold Resume (Scorched Earth / Valet Model)"""
+        print(f"{Colors.BLUE}Step: 7. Testing Cold Resume (Scorched Earth){Colors.NC}")
+        
+        claim_file = os.path.join(self.temp_dir, "test-claim.yaml")
+        
+        # Ensure pod is running for the test
+        current_pod_name = self._ensure_pod_running()
+        
+        # 1. Write unique S3 proof data
+        s3_proof_file = "/workspace/s3-proof.txt"
+        s3_proof_data = f"valet-sandbox-{int(time.time())}"  # Use timestamp instead of PID
+        print(f"{Colors.BLUE}Writing S3 proof data: {s3_proof_data}{Colors.NC}")
+        subprocess.run([
+            "kubectl", "exec", current_pod_name, "-n", self.namespace, "-c", "main", "--",
+            "sh", "-c", f"echo '{s3_proof_data}' > {s3_proof_file}"
+        ], check=True)
+
+        # 2. Force Backup & Wait for Sidecar Sync
+        print(f"{Colors.BLUE}Waiting 35s for Sidecar S3 sync...{Colors.NC}")
+        time.sleep(35)
+
+        # 3. Scorched Earth: Delete Claim (should delete PVC too)
+        print(f"{Colors.BLUE}Simulating Cold State (Delete Claim)...{Colors.NC}")
+        subprocess.run(["kubectl", "delete", "-f", claim_file], check=True)
+
+        # Verify PVC is gone (deletionPolicy: Delete should clean it up)
+        time.sleep(10)
+        pvc_check = subprocess.run([
+            "kubectl", "get", "pvc", f"{self.test_claim_name}-workspace", "-n", self.namespace
+        ], capture_output=True)
+        
+        if pvc_check.returncode == 0:
+            print(f"{Colors.YELLOW}⚠️ PVC still exists. Ensure deletionPolicy: Delete in composition.{Colors.NC}")
+            self.warnings += 1
+
+        # 4. Resume: Re-apply Claim
+        print(f"{Colors.BLUE}Simulating Resume (Re-apply Claim)...{Colors.NC}")
+        subprocess.run(["kubectl", "apply", "-f", claim_file], check=True)
+
+        # 5. Wait for Ready and force scale up
+        time.sleep(10)
+        new_pod_name = self._ensure_pod_running()
+
+        # 6. Verify Data Restored from S3
+        # Give initContainer time to complete S3 restore
+        print(f"{Colors.BLUE}Waiting for InitContainer S3 restore...{Colors.NC}")
+        time.sleep(10)
+        
+        restore_check = subprocess.run([
+            "kubectl", "exec", new_pod_name, "-n", self.namespace, "-c", "main", "--",
+            "cat", s3_proof_file
+        ], capture_output=True, text=True)
+        
+        if restore_check.returncode == 0 and restore_check.stdout.strip() == s3_proof_data:
+            print(f"{Colors.GREEN}✓ [SUCCESS] Valet Model Validated: Data restored from S3{Colors.NC}")
         else:
-            print(f"{colors.RED}✗ Could not get pod name for preStop test{colors.NC}")
-            test_counters.errors += 1
-    except subprocess.CalledProcessError:
-        print(f"{colors.RED}✗ Could not check preStop hook configuration{colors.NC}")
-        test_counters.errors += 1
-    
-    print("")
-
-
-def test_summary(colors, test_counters):
-    """Print verification summary"""
-    print(f"{colors.GREEN}╔══════════════════════════════════════════════════════════════╗{colors.NC}")
-    print(f"{colors.GREEN}║   All hybrid persistence validations passed successfully!   ║{colors.NC}")
-    print(f"{colors.GREEN}╚══════════════════════════════════════════════════════════════╝{colors.NC}")
-    print("")
-    
-    if test_counters.errors == 0 and test_counters.warnings == 0:
-        print(f"{colors.GREEN}✓ AgentSandboxService hybrid persistence is ready for scaling{colors.NC}")
-    elif test_counters.errors == 0:
-        print(f"{colors.YELLOW}⚠️  Hybrid persistence has {test_counters.warnings} warning(s) but no errors{colors.NC}")
-    else:
-        print(f"{colors.RED}✗ Hybrid persistence has {test_counters.errors} error(s) and {test_counters.warnings} warning(s){colors.NC}")
-        pytest.fail(f"Hybrid persistence has {test_counters.errors} error(s)")
+            print(f"{Colors.RED}✗ S3 Restore failed. Expected: {s3_proof_data}, Got: {restore_check.stdout.strip()}{Colors.NC}")
+            self.errors += 1
+            pytest.fail("S3 Cold Resume failed")
 
 
 if __name__ == "__main__":

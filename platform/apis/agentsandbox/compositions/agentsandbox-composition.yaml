@@ -572,6 +572,11 @@ spec:
           policy:
             fromFieldPath: Optional
         - type: FromCompositeFieldPath
+          fromFieldPath: spec.httpPort
+          toFieldPath: spec.forProvider.manifest.spec.ports[0].targetPort
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
           toFieldPath: spec.forProvider.manifest.metadata.name
           transforms:
