@@ -181,9 +181,9 @@ spec:
                         securityContext:
                           runAsNonRoot: false
                           runAsUser: 0
-                          allowPrivilegeEscalation: true
+                          allowPrivilegeEscalation: false
                           capabilities:
-                            add: ["NET_ADMIN", "SYS_ADMIN"]
+                            drop: ["ALL"]
                           seccompProfile:
                             type: RuntimeDefault
                         livenessProbe:
