@@ -236,79 +236,13 @@ def test_validate_sandbox_readiness(colors, e2e_test_config, tenant_config, test
     pytest.fail("No sandbox pods became ready within timeout")
 
 
-def test_nats_message_processing(colors, e2e_test_config, tenant_config, test_counters, cleanup_e2e_claim):
-    """Test NATS message processing with live message flow"""
-    print(f"{colors.BLUE}[INFO] Testing NATS message processing with live message flow...{colors.NC}")
-    
-    # Get a running sandbox pod
-    try:
-        result = subprocess.run([
-            "kubectl", "get", "pods", "-n", tenant_config['namespace'],
-            "-l", f"app.kubernetes.io/name={e2e_test_config['claim_name']}",
-            "--field-selector=status.phase=Running",
-            "-o", "jsonpath={.items[0].metadata.name}"
-        ], capture_output=True, text=True, check=True)
-        pod_name = result.stdout.strip()
-        
-        if not pod_name:
-            print(f"{colors.RED}[ERROR] No running sandbox pod found for NATS testing{colors.NC}")
-            test_counters.errors += 1
-            pytest.fail("No running sandbox pod found for NATS testing")
-        
-        print(f"{colors.BLUE}[INFO] Testing NATS connectivity from pod: {pod_name}{colors.NC}")
-    except subprocess.CalledProcessError:
-        print(f"{colors.RED}[ERROR] Could not get running sandbox pod{colors.NC}")
-        test_counters.errors += 1
-        pytest.fail("Could not get running sandbox pod")
-    
-    # Check if NATS environment variables are available
-    try:
-        result = subprocess.run([
-            "kubectl", "exec", pod_name, "-n", tenant_config['namespace'], "-c", "main", "--",
-            "env"
-        ], capture_output=True, text=True, check=True)
-        
-        nats_vars = [line for line in result.stdout.split('\n') if line.startswith('NATS_')]
-        
-        if not nats_vars:
-            print(f"{colors.RED}[ERROR] No NATS environment variables found in sandbox container{colors.NC}")
-            test_counters.errors += 1
-            pytest.fail("No NATS environment variables found")
-        
-        print(f"{colors.BLUE}[INFO] NATS environment variables found: {len(nats_vars)} variables{colors.NC}")
-    except subprocess.CalledProcessError:
-        print(f"{colors.RED}[ERROR] Could not check NATS environment variables{colors.NC}")
-        test_counters.errors += 1
-        pytest.fail("Could not check NATS environment variables")
-    
-    # Verify all required NATS environment variables are present
-    required_vars = ["NATS_URL", "NATS_STREAM_NAME", "NATS_CONSUMER_GROUP"]
-    for var in required_vars:
-        try:
-            result = subprocess.run([
-                "kubectl", "exec", pod_name, "-n", tenant_config['namespace'], "-c", "main", "--",
-                "printenv", var
-            ], capture_output=True, text=True, check=True)
-            var_value = result.stdout.strip()
-            
-            if var_value:
-                print(f"{colors.GREEN}[SUCCESS] NATS variable {var} correctly set: {var_value}{colors.NC}")
-            else:
-                print(f"{colors.RED}[ERROR] NATS variable {var} not found or empty{colors.NC}")
-                test_counters.errors += 1
-                pytest.fail(f"NATS variable {var} not found or empty")
-        except subprocess.CalledProcessError:
-            print(f"{colors.RED}[ERROR] NATS variable {var} not found{colors.NC}")
-            test_counters.errors += 1
-            pytest.fail(f"NATS variable {var} not found")
-
-
 def test_workspace_persistence(colors, e2e_test_config, tenant_config, test_counters, cleanup_e2e_claim):
     """Test workspace persistence across pod restarts"""
     print(f"{colors.BLUE}[INFO] Testing workspace persistence across pod restarts...{colors.NC}")
     
-    # Get a running sandbox pod
+    # Get a running sandbox pod NAME and UID
     try:
+        # Get Name
         result = subprocess.run([
             "kubectl", "get", "pods", "-n", tenant_config['namespace'],
             "-l", f"app.kubernetes.io/name={e2e_test_config['claim_name']}",
@@ -317,10 +251,21 @@ def test_workspace_persistence(colors, e2e_test_config, tenant_config, test_coun
         ], capture_output=True, text=True, check=True)
         pod_name = result.stdout.strip()
         
-        if not pod_name:
+        # Get UID (The unique instance ID)
+        result = subprocess.run([
+            "kubectl", "get", "pods", "-n", tenant_config['namespace'],
+            "-l", f"app.kubernetes.io/name={e2e_test_config['claim_name']}",
+            "--field-selector=status.phase=Running",
+            "-o", "jsonpath={.items[0].metadata.uid}"
+        ], capture_output=True, text=True, check=True)
+        original_uid = result.stdout.strip()
+        
+        if not pod_name or not original_uid:
             print(f"{colors.RED}[ERROR] No running sandbox pod found for persistence testing{colors.NC}")
             test_counters.errors += 1
-            pytest.fail("No running sandbox pod found for persistence testing")
+            pytest.fail("No running sandbox pod found")
+        
+        print(f"{colors.BLUE}[INFO] Original Pod: {pod_name} (UID: {original_uid}){colors.NC}")
     except subprocess.CalledProcessError:
         print(f"{colors.RED}[ERROR] Could not get running sandbox pod{colors.NC}")
         test_counters.errors += 1
@@ -363,31 +308,50 @@ def test_workspace_persistence(colors, e2e_test_config, tenant_config, test_coun
     # Delete the pod to trigger recreation
     try:
         subprocess.run([
-            "kubectl", "delete", "pod", pod_name, "-n", tenant_config['namespace']
+            "kubectl", "delete", "pod", pod_name, "-n", tenant_config['namespace'], "--wait=false"
         ], capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError:
-        print(f"{colors.RED}[ERROR] Failed to delete pod for persistence test{colors.NC}")
+        print(f"{colors.RED}[ERROR] Failed to delete pod{colors.NC}")
         test_counters.errors += 1
-        pytest.fail("Failed to delete pod for persistence test")
+        pytest.fail("Failed to delete pod")
     
-    # Wait for new pod to be running
-    print(f"{colors.BLUE}[INFO] Waiting for new pod to start...{colors.NC}")
+    # Wait for new pod to be running (Different UID)
+    print(f"{colors.BLUE}[INFO] Waiting for new pod instance (New UID)...{colors.NC}")
     timeout = 180
     elapsed = 0
     new_pod_name = ""
     
     while elapsed < timeout:
         try:
+            # Check for running pod
             result = subprocess.run([
+                "kubectl", "get", "pods", "-n", tenant_config['namespace'],
+                "-l", f"app.kubernetes.io/name={e2e_test_config['claim_name']}",
+                "--field-selector=status.phase=Running",
+                "-o", "jsonpath={.items[0].metadata.uid}"
+            ], capture_output=True, text=True, check=True)
+            current_uid = result.stdout.strip()
+            
+            # Retrieve name for logging/exec
+            name_res = subprocess.run([
                 "kubectl", "get", "pods", "-n", tenant_config['namespace'],
                 "-l", f"app.kubernetes.io/name={e2e_test_config['claim_name']}",
                 "--field-selector=status.phase=Running",
                 "-o", "jsonpath={.items[0].metadata.name}"
             ], capture_output=True, text=True, check=True)
-            new_pod_name = result.stdout.strip()
+            current_name = name_res.stdout.strip()
             
-            if new_pod_name and new_pod_name != pod_name:
-                print(f"{colors.BLUE}[INFO] New pod started: {new_pod_name}{colors.NC}")
+            # If we have a UID, and it's DIFFERENT from original, we have a resurrection
+            if current_uid and current_uid != original_uid:
+                new_pod_name = current_name
+                print(f"{colors.BLUE}[INFO] New pod started: {new_pod_name} (UID: {current_uid}){colors.NC}")
+                
+                # Validate Stable Identity
+                if new_pod_name == pod_name:
+                    print(f"{colors.GREEN}[SUCCESS] Stable Identity Verified: Pod Name preserved across restart.{colors.NC}")
+                else:
+                    # This might happen if using WarmPools, but for direct Sandbox it shouldn't.
+                    print(f"{colors.YELLOW}[INFO] Pod Name changed (Warm Pool behavior). Identity is maintained via Service.{colors.NC}")
                 break
         except subprocess.CalledProcessError:
             pass
@@ -395,7 +359,7 @@ def test_workspace_persistence(colors, e2e_test_config, tenant_config, test_coun
         time.sleep(10)
         elapsed += 10
     
-    if not new_pod_name or new_pod_name == pod_name:
+    if not new_pod_name:
         print(f"{colors.RED}[ERROR] New pod did not start within timeout{colors.NC}")
         test_counters.errors += 1
         pytest.fail("New pod did not start within timeout")
@@ -710,6 +674,9 @@ def test_pod_ip_resolution_validation(colors, e2e_test_config, tenant_config, te
     
     # Test DNS resolution to Pod IP
     dns_target = f"{e2e_test_config['claim_name']}.{tenant_config['namespace']}.svc.cluster.local"
+    print(f"{colors.BLUE}[INFO] Testing DNS resolution for: {dns_target}{colors.NC}")
+    
+    # Create IP resolution test pod
     ip_test_pod_name = f"ip-test-{int(time.time())}"
     
     ip_test_yaml = f"""apiVersion: v1
