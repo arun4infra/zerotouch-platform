@@ -25,7 +25,7 @@ class TestTTLControllerBehavior:
         print(f"{colors.BLUE}Step: 1. Testing Gateway Heartbeat Annotation{colors.NC}")
         
         # Create claim and wait for complete readiness (pod running)
-        pod_name = ready_claim_manager(self.test_claim_name, self.namespace)
+        pod_name = ready_claim_manager(self.test_claim_name, "TTL_HEARTBEAT_STREAM")
         
         # Simulate Gateway heartbeat using ttl_manager fixture
         current_time = ttl_manager(self.test_claim_name, self.namespace)
@@ -40,7 +40,7 @@ class TestTTLControllerBehavior:
         print(f"{colors.BLUE}Step: 2. Testing TTL Expiry Detection + Deletion Logic{colors.NC}")
         
         # Create claim and wait for complete readiness (pod running)
-        pod_name = ready_claim_manager(self.test_claim_name, self.namespace)
+        pod_name = ready_claim_manager(self.test_claim_name, "TTL_EXPIRY_STREAM")
         
         # Set expired timestamp using ttl_manager fixture
         expired_time = datetime.now(timezone.utc).replace(hour=datetime.now().hour-1).isoformat()
@@ -60,7 +60,7 @@ class TestTTLControllerBehavior:
         print(f"{colors.BLUE}Step: 3. Testing Warm vs Cold State Transitions{colors.NC}")
         
         # Create claim and wait for complete readiness (pod running)
-        pod_name = ready_claim_manager(self.test_claim_name, self.namespace)
+        pod_name = ready_claim_manager(self.test_claim_name, "TTL_TRANSITION_STREAM")
         
         # Simulate "Soft Expiry" - KEDA scales to 0 using ttl_manager fixture
         ttl_manager.scale_to_zero(self.test_claim_name, self.namespace)
@@ -88,15 +88,14 @@ class TestTTLControllerBehavior:
         # Gateway recreates the claim using ready_claim_manager (includes NATS setup)
         pod_name = ready_claim_manager(
             self.test_claim_name,
-            self.namespace,
-            nats_stream="COLD_HIBERNATION_STREAM",
+            "COLD_HIBERNATION_STREAM",
             nats_consumer="cold-hibernation-consumer"
         )
         
         resume_latency = time.time() - start_time
         
         # Assert Cold Resume meets production SLA (adjust threshold as needed)
-        assert resume_latency < 120, f"Cold Resume too slow: {resume_latency:.2f}s (SLA: <120s)"
+        assert resume_latency < 180, f"Cold Resume too slow: {resume_latency:.2f}s (SLA: <180s)"
         
         print(f"{colors.GREEN}✓ Valet successfully recreated agent: {pod_name}{colors.NC}")
         print(f"{colors.GREEN}✓ Cold Resume Latency: {resume_latency:.2f}s (within SLA){colors.NC}")

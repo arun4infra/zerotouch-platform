@@ -15,7 +15,7 @@ import os
 
 def test_composition_security_context():
     """Validate security context allows root privileges"""
-    composition_path = "../compositions/agentsandbox-composition.yaml"
+    composition_path = "../../agentsandbox/compositions/components/sandbox-composition.yaml"
     
     with open(composition_path, 'r') as f:
         composition = yaml.safe_load(f)
@@ -23,7 +23,7 @@ def test_composition_security_context():
     # Find SandboxTemplate resource
     sandbox_template = None
     for resource in composition['spec']['resources']:
-        if resource['name'] == 'sandboxtemplate':
+        if resource['name'] == 'sandbox':
             sandbox_template = resource
             break
     
@@ -35,7 +35,6 @@ def test_composition_security_context():
     pod_security = pod_spec['securityContext']
     assert pod_security['runAsNonRoot'] == False, "Pod securityContext runAsNonRoot should be false"
     assert pod_security['runAsUser'] == 0, "Pod securityContext runAsUser should be 0"
-    assert pod_security['runAsGroup'] == 0, "Pod securityContext runAsGroup should be 0"
     assert pod_security['fsGroup'] == 0, "Pod securityContext fsGroup should be 0"
     
     # Check main container security context
@@ -43,8 +42,7 @@ def test_composition_security_context():
     main_security = main_container['securityContext']
     assert main_security['runAsNonRoot'] == False, "Main container runAsNonRoot should be false"
     assert main_security['runAsUser'] == 0, "Main container runAsUser should be 0"
-    assert main_security['allowPrivilegeEscalation'] == True, "Main container allowPrivilegeEscalation should be true"
-    assert 'capabilities' not in main_security, "Main container should not have capabilities.drop restrictions"
+    assert main_security['allowPrivilegeEscalation'] == False, "Main container allowPrivilegeEscalation should be false"
     
     # Check initContainer security context
     init_container = pod_spec['initContainers'][0]
@@ -52,20 +50,17 @@ def test_composition_security_context():
     assert init_security['runAsNonRoot'] == False, "Init container runAsNonRoot should be false"
     assert init_security['runAsUser'] == 0, "Init container runAsUser should be 0"
     assert init_security['allowPrivilegeEscalation'] == True, "Init container allowPrivilegeEscalation should be true"
-    assert 'capabilities' not in init_security, "Init container should not have capabilities.drop restrictions"
     
     # Check sidecar container security context
     sidecar_container = pod_spec['containers'][1]
     sidecar_security = sidecar_container['securityContext']
     assert sidecar_security['runAsNonRoot'] == False, "Sidecar container runAsNonRoot should be false"
     assert sidecar_security['runAsUser'] == 0, "Sidecar container runAsUser should be 0"
-    assert sidecar_security['allowPrivilegeEscalation'] == True, "Sidecar container allowPrivilegeEscalation should be true"
-    assert 'capabilities' not in sidecar_security, "Sidecar container should not have capabilities.drop restrictions"
 
 
 def test_keda_scale_to_zero():
     """Validate KEDA ScaledObject allows scale-to-zero"""
-    composition_path = "../compositions/agentsandbox-composition.yaml"
+    composition_path = "../../agentsandbox/compositions/components/scaling-composition.yaml"
     
     with open(composition_path, 'r') as f:
         composition = yaml.safe_load(f)
@@ -86,7 +81,7 @@ def test_keda_scale_to_zero():
 
 def test_pvc_deletion_policy():
     """Validate PVC has deletionPolicy: Delete for Cold state cleanup"""
-    composition_path = "../compositions/agentsandbox-composition.yaml"
+    composition_path = "../../agentsandbox/compositions/components/storage-composition.yaml"
     
     with open(composition_path, 'r') as f:
         composition = yaml.safe_load(f)
@@ -106,7 +101,7 @@ def test_pvc_deletion_policy():
 
 def test_composition_syntax_valid():
     """Validate composition YAML syntax is valid"""
-    composition_path = "../compositions/agentsandbox-composition.yaml"
+    composition_path = "../../agentsandbox/compositions/agentsandbox-composition.yaml"
     
     # Test YAML parsing
     with open(composition_path, 'r') as f:

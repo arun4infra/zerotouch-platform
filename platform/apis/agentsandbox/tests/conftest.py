@@ -617,12 +617,12 @@ def ready_claim_manager(claim_manager, nats_stream, nats_publisher, k8s):
         k8s.wait_for_condition("agentsandboxservice", name, namespace, "Ready")
         print(f"{Colors.GREEN}✓ Claim {name} infrastructure ready{Colors.NC}")
         
-        # Wait for PVC to be bound (critical for cold resume scenarios)
+        # Use existing nats_publisher to trigger KEDA scaling FIRST
+        nats_publisher(stream_name, "trigger", f"test-message-{name}")
+        
+        # Wait for PVC to be bound (now pod will be scheduled due to KEDA)
         k8s.wait_for_pvc_bound(f"{name}-workspace", namespace)
         print(f"{Colors.GREEN}✓ PVC {name}-workspace bound and ready{Colors.NC}")
-        
-        # Use existing nats_publisher to trigger KEDA scaling
-        nats_publisher(stream_name, "trigger", f"test-message-{name}")
         
         # Use existing k8s.wait_for_pod to wait for pod readiness
         pod_name = k8s.wait_for_pod(namespace, f"app.kubernetes.io/name={name}")
