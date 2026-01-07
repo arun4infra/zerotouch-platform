@@ -71,6 +71,181 @@ class KubectlUtility:
                 pass
             time.sleep(3)
         return False
+    
+    @staticmethod
+    def get_pod_uid(pod_name: str, namespace: str = "intelligence-deepagents") -> str:
+        """Get pod UID"""
+        result = KubectlUtility.run([
+            "get", "pod", pod_name, "-n", namespace,
+            "-o", "jsonpath={.metadata.uid}"
+        ])
+        return result.stdout.strip()
+    
+    @staticmethod
+    def service_exists(service_name: str, namespace: str = "intelligence-deepagents") -> bool:
+        """Check if service exists"""
+        try:
+            KubectlUtility.run(["get", "service", service_name, "-n", namespace])
+            return True
+        except subprocess.CalledProcessError:
+            return False
+    
+    @staticmethod
+    def exec_in_pod(pod_name: str, command: str, namespace: str = "intelligence-deepagents", container: str = "main") -> str:
+        """Execute command in pod and return output"""
+        result = KubectlUtility.run([
+            "exec", pod_name, "-n", namespace, "-c", container, "--",
+            "sh", "-c", command
+        ])
+        return result.stdout
+    
+    @staticmethod
+    def delete_pod(pod_name: str, namespace: str = "intelligence-deepagents", wait: bool = False, force: bool = False):
+        """Delete pod"""
+        args = ["delete", "pod", pod_name, "-n", namespace]
+        if force:
+            args.extend(["--force", "--grace-period=0"])
+        if wait:
+            args.append("--wait=true")
+        KubectlUtility.run(args)
+    
+    @staticmethod
+    def delete_pods_by_label(label: str, namespace: str = "intelligence-deepagents", force: bool = False):
+        """Delete pods by label"""
+        args = ["delete", "pod", "-n", namespace, "-l", label]
+        if force:
+            args.extend(["--force", "--grace-period=0"])
+        KubectlUtility.run(args, check=False)
+    
+    @staticmethod
+    def wait_for_pod_termination(claim_name: str, namespace: str = "intelligence-deepagents", timeout: int = 30):
+        """Wait for pod to be fully terminated"""
+        count = 0
+        while count < timeout:
+            try:
+                result = KubectlUtility.run([
+                    "get", "pods", "-n", namespace,
+                    "-l", f"app.kubernetes.io/name={claim_name}"
+                ], check=False)
+                
+                if "No resources found" in result.stdout or result.returncode != 0:
+                    break
+                    
+            except Exception:
+                break
+                
+            time.sleep(2)
+            count += 2
+    
+    @staticmethod
+    def delete_pvc(pvc_name: str, namespace: str = "intelligence-deepagents", force: bool = False, ignore_not_found: bool = False):
+        """Delete PVC"""
+        args = ["delete", "pvc", pvc_name, "-n", namespace]
+        if force:
+            args.extend(["--force", "--grace-period=0"])
+        if ignore_not_found:
+            args.append("--ignore-not-found=true")
+        KubectlUtility.run(args, check=not ignore_not_found)
+    
+    @staticmethod
+    def wait_for_pvc_bound(pvc_name: str, namespace: str = "intelligence-deepagents", timeout: int = 120):
+        """Wait for PVC to be bound"""
+        count = 0
+        while count < timeout:
+            try:
+                result = KubectlUtility.run([
+                    "get", "pvc", pvc_name, "-n", namespace,
+                    "-o", "jsonpath={.status.phase}"
+                ])
+                
+                if result.stdout.strip() == "Bound":
+                    return
+                    
+            except subprocess.CalledProcessError:
+                pass
+                
+            time.sleep(3)
+            count += 3
+        
+        raise TimeoutError(f"PVC {pvc_name} failed to reach Bound state")
+    
+    @staticmethod
+    def get_running_pods(claim_name: str, namespace: str = "intelligence-deepagents") -> List[str]:
+        """Get list of running pod names for claim"""
+        try:
+            result = KubectlUtility.run([
+                "get", "pods", "-n", namespace,
+                "-l", f"app.kubernetes.io/name={claim_name}",
+                "--field-selector=status.phase=Running",
+                "-o", "jsonpath={.items[*].metadata.name}"
+            ])
+            
+            pod_names = result.stdout.strip().split()
+            return [name for name in pod_names if name]
+        except subprocess.CalledProcessError:
+            return []
+    
+    @staticmethod
+    def get_object_ready_status(object_name: str) -> str:
+        """Get Crossplane Object ready status"""
+        result = KubectlUtility.run([
+            "get", "object", object_name, 
+            "-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}"
+        ])
+        return result.stdout.strip()
+    
+    @staticmethod
+    def get_crossplane_objects() -> dict:
+        """Get all Crossplane objects"""
+        return KubectlUtility.get_json(["get", "object"])
+    
+    @staticmethod
+    def delete_sandbox(sandbox_name: str, namespace: str = "intelligence-deepagents"):
+        """Delete Sandbox resource"""
+        KubectlUtility.run(["delete", "sandbox", sandbox_name, "-n", namespace])
+    
+    @staticmethod
+    def sandbox_exists(sandbox_name: str, namespace: str = "intelligence-deepagents") -> bool:
+        """Check if Sandbox exists"""
+        try:
+            KubectlUtility.run(["get", "sandbox", sandbox_name, "-n", namespace])
+            return True
+        except subprocess.CalledProcessError:
+            return False
+    
+    @staticmethod
+    def get_container_logs(pod_name: str, container_name: str, namespace: str = "intelligence-deepagents") -> str:
+        """Get container logs"""
+        result = KubectlUtility.run([
+            "logs", pod_name, "-n", namespace, "-c", container_name
+        ])
+        return result.stdout
+    
+    @staticmethod
+    def get_pvc_size(pvc_name: str, namespace: str = "intelligence-deepagents") -> str:
+        """Get PVC size"""
+        result = KubectlUtility.run([
+            "get", "pvc", pvc_name, "-n", namespace,
+            "-o", "jsonpath={.spec.resources.requests.storage}"
+        ])
+        return result.stdout.strip()
+    
+    @staticmethod
+    def get_pvc_storage_class(pvc_name: str, namespace: str = "intelligence-deepagents") -> str:
+        """Get PVC storage class"""
+        result = KubectlUtility.run([
+            "get", "pvc", pvc_name, "-n", namespace,
+            "-o", "jsonpath={.spec.storageClassName}"
+        ])
+        return result.stdout.strip()
+    
+    @staticmethod
+    def patch_pvc_storage_class(pvc_name: str, storage_class: str, namespace: str = "intelligence-deepagents"):
+        """Patch PVC storage class (may fail due to immutable field)"""
+        KubectlUtility.run([
+            "patch", "pvc", pvc_name, "-n", namespace,
+            "--type=merge", "-p", f'{{"spec":{{"storageClassName":"{storage_class}"}}}}'
+        ], check=False)
 
 
 class KubectlHelper:
@@ -429,18 +604,22 @@ spec:
 @pytest.fixture
 def ready_claim_manager(claim_manager, nats_stream, nats_publisher, k8s):
     """Complete claim setup: create → NATS stream → trigger → pod ready"""
-    def _create_ready_claim(name: str, namespace: str, **kwargs):
+    def _create_ready_claim(name: str, stream_name: str, namespace: str = "intelligence-deepagents", **kwargs):
         """Create claim and ensure pod is ready for testing"""
         # Use existing claim_manager to create claim
+        kwargs['nats_stream'] = stream_name
         claim_manager(name, namespace, **kwargs)
         
         # Use existing nats_stream fixture to ensure stream exists
-        stream_name = kwargs.get('nats_stream', 'TEST_STREAM')
         nats_stream(stream_name)
         
         # Wait for claim infrastructure to be ready
         k8s.wait_for_condition("agentsandboxservice", name, namespace, "Ready")
         print(f"{Colors.GREEN}✓ Claim {name} infrastructure ready{Colors.NC}")
+        
+        # Wait for PVC to be bound (critical for cold resume scenarios)
+        k8s.wait_for_pvc_bound(f"{name}-workspace", namespace)
+        print(f"{Colors.GREEN}✓ PVC {name}-workspace bound and ready{Colors.NC}")
         
         # Use existing nats_publisher to trigger KEDA scaling
         nats_publisher(stream_name, "trigger", f"test-message-{name}")
@@ -484,18 +663,8 @@ def workspace_manager(k8s):
             print(f"{Colors.YELLOW}⚠️  File /workspace/{filename} not found{Colors.NC}")
             return None
     
-    def _verify_pvc_deleted(claim_name: str, namespace: str) -> bool:
-        """Verify PVC is deleted (Cold State validation)"""
-        try:
-            k8s.run(["get", "pvc", f"{claim_name}-workspace", "-n", namespace])
-            return False  # PVC still exists
-        except subprocess.CalledProcessError:
-            print(f"{Colors.GREEN}✓ PVC {claim_name}-workspace deleted - True Cold State{Colors.NC}")
-            return True  # PVC deleted
-    
     # Attach methods
     _write_data.read = _read_data
-    _write_data.verify_pvc_deleted = _verify_pvc_deleted
     
     return _write_data
 
