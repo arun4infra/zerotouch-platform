@@ -40,6 +40,11 @@ spec:
                   requests:
                     storage: "10Gi"
                 storageClassName: "local-path"
+          # Live status probing - forces Crossplane to verify actual K8s state
+          readinessChecks:
+            - type: MatchString
+              fieldPath: "status.atProvider.manifest.status.phase"
+              matchString: "Bound"  # Re-creation triggers if not Bound (missing/corrupted)
       patches:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name

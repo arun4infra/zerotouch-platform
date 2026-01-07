@@ -70,6 +70,8 @@ spec:
 
     # Component 3: Core Sandbox (depends on storage)
     - name: sandbox-component
+      dependsOn:
+        - storage-component  # Forces order - Pod won't start without PVC
       base:
         apiVersion: platform.bizmatters.io/v1alpha1
         kind: XAgentSandboxCore
