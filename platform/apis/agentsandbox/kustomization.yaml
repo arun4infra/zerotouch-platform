@@ -2,9 +2,22 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-- https://github.com/kubernetes-sigs/agent-sandbox/k8s?ref=89d1b64f8c9e4a5b2c3d4e5f6a7b8c9d0e1f2a3b
-
-images:
-- name: ko://sigs.k8s.io/agent-sandbox/cmd/agent-sandbox-controller
-  newName: us-central1-docker.pkg.dev/k8s-staging-images/agent-sandbox/agent-sandbox-controller
-  newTag: latest-main
+  # XRDs - Component definitions
+  - xrds/components/xagentsandboxservices.yaml
+  - xrds/components/xconnection.yaml
+  - xrds/components/xcore.yaml
+  - xrds/components/xnetworking.yaml
+  - xrds/components/xscaling.yaml
+  - xrds/components/xserviceaccount.yaml
+  - xrds/components/xstorage.yaml
+  
+  # Compositions - Component implementations
+  - compositions/components/connection-composition.yaml
+  - compositions/components/networking-composition.yaml
+  - compositions/components/sandbox-composition.yaml
+  - compositions/components/scaling-composition.yaml
+  - compositions/components/serviceaccount-composition.yaml
+  - compositions/components/storage-composition.yaml
+  
+  # Main orchestrator composition
+  - compositions/agentsandbox-composition.yaml
