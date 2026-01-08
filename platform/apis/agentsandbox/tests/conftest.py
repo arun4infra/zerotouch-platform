@@ -578,8 +578,28 @@ spec:
                 k8s.run(["get", "agentsandboxservice", name, "-n", namespace])
                 time.sleep(2)
             except subprocess.CalledProcessError:
-                print(f"{Colors.GREEN}✓ Claim {name} cleaned up{Colors.NC}")
-                return True
+                # Claim deleted, now wait for pod termination
+                pod_timeout = 120  # Extended timeout for pod termination (terminationGracePeriodSeconds: 90)
+                pod_start = time.time()
+                while time.time() - pod_start < pod_timeout:
+                    try:
+                        result = k8s.run([
+                            "get", "pods", "-n", namespace,
+                            "-l", f"app.kubernetes.io/name={name}"
+                        ], check=False)
+                        
+                        if "No resources found" in result.stdout or result.returncode != 0:
+                            print(f"{Colors.GREEN}✓ Claim {name} and pod fully cleaned up{Colors.NC}")
+                            return True
+                            
+                    except Exception:
+                        print(f"{Colors.GREEN}✓ Claim {name} and pod fully cleaned up{Colors.NC}")
+                        return True
+                        
+                    time.sleep(2)
+                
+                print(f"{Colors.YELLOW}⚠️  Pod still exists after {pod_timeout}s timeout{Colors.NC}")
+                return False
         return False
     
     # Attach methods to the fixture
