@@ -107,8 +107,8 @@ class KubectlUtility:
             args.extend(["--force", "--grace-period=0"])
         if wait:
             args.append("--wait=true")
-        # Use longer timeout for pod deletion when waiting
-        timeout = 60 if wait else 15
+        # Use longer timeout for pod deletion when waiting (accommodate terminationGracePeriodSeconds: 90)
+        timeout = 120 if wait else 15
         KubectlUtility.run(args, timeout=timeout)
     
     @staticmethod

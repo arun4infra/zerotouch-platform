@@ -48,6 +48,7 @@ spec:
                       prometheus.io/path: "/metrics"
                   spec:
                     serviceAccountName: placeholder
+                    terminationGracePeriodSeconds: 90  # Allow time for atomic S3 uploads in preStop hook
                     # Relaxed Security for Runtime Privileges (Install Anything)
                     securityContext:
                       runAsNonRoot: false
@@ -184,8 +185,24 @@ spec:
                                   cd /workspace
                                   tar -czf /tmp/workspace-final.tar.gz . 2>/dev/null || true
                                   if [ -f /tmp/workspace-final.tar.gz ]; then
-                                    aws s3 cp /tmp/workspace-final.tar.gz "s3://${S3_BUCKET}/workspaces/${SANDBOX_NAME}/workspace.tar.gz"
-                                    echo "Final workspace backup completed"
+                                    # Atomic upload: upload to temp key then rename to final key
+                                    TEMP_KEY="workspaces/${SANDBOX_NAME}/workspace.tar.gz.final.$(date +%s)"
+                                    FINAL_KEY="workspaces/${SANDBOX_NAME}/workspace.tar.gz"
+                                    
+                                    if aws s3 cp /tmp/workspace-final.tar.gz "s3://${S3_BUCKET}/${TEMP_KEY}"; then
+                                      # High-priority atomic rename: copy temp to final
+                                      if aws s3 cp "s3://${S3_BUCKET}/${TEMP_KEY}" "s3://${S3_BUCKET}/${FINAL_KEY}"; then
+                                        echo "Success: Final Key updated - ${FINAL_KEY}"
+                                        # Background cleanup to save grace-period seconds
+                                        aws s3 rm "s3://${S3_BUCKET}/${TEMP_KEY}" &
+                                        echo "Final atomic backup completed: ${FINAL_KEY}"
+                                      else
+                                        echo "CRITICAL: Final atomic rename failed, cleaning up temp file"
+                                        aws s3 rm "s3://${S3_BUCKET}/${TEMP_KEY}" || true
+                                      fi
+                                    else
+                                      echo "Final backup upload failed"
+                                    fi
                                   fi
                         volumeMounts:
                           - name: workspace
@@ -208,7 +225,23 @@ spec:
                                 cd /workspace
                                 tar -czf /tmp/workspace-backup.tar.gz . 2>/dev/null || continue
                                 if [ -f /tmp/workspace-backup.tar.gz ]; then
-                                  aws s3 cp /tmp/workspace-backup.tar.gz "s3://${S3_BUCKET}/workspaces/${SANDBOX_NAME}/workspace.tar.gz" || echo "Backup failed"
+                                  # Atomic upload: upload to temp key then rename to final key
+                                  TEMP_KEY="workspaces/${SANDBOX_NAME}/workspace.tar.gz.tmp.$(date +%s)"
+                                  FINAL_KEY="workspaces/${SANDBOX_NAME}/workspace.tar.gz"
+                                  
+                                  if aws s3 cp /tmp/workspace-backup.tar.gz "s3://${S3_BUCKET}/${TEMP_KEY}"; then
+                                    # High-priority atomic rename: copy temp to final
+                                    if aws s3 cp "s3://${S3_BUCKET}/${TEMP_KEY}" "s3://${S3_BUCKET}/${FINAL_KEY}"; then
+                                      # Background cleanup to avoid blocking backup cycle
+                                      aws s3 rm "s3://${S3_BUCKET}/${TEMP_KEY}" &
+                                      echo "Atomic backup completed: ${FINAL_KEY}"
+                                    else
+                                      echo "Atomic rename failed, cleaning up temp file"
+                                      aws s3 rm "s3://${S3_BUCKET}/${TEMP_KEY}" || true
+                                    fi
+                                  else
+                                    echo "Backup upload failed"
+                                  fi
                                   rm -f /tmp/workspace-backup.tar.gz
                                 fi
                               fi
