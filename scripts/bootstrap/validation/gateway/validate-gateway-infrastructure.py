@@ -17,7 +17,50 @@ import json
 import sys
 import time
 import requests
+import os
 from typing import Dict, Any, Optional
+
+def run_wait_script() -> bool:
+    """Run the wait-for-gateway.sh script to wait for Gateway provisioning"""
+    print("🔍 Running wait script for Gateway provisioning...")
+    
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.abspath(os.path.join(script_dir, "../../../.."))
+    wait_script = os.path.join(repo_root, "scripts/bootstrap/wait/wait-for-gateway.sh")
+    
+    if not os.path.exists(wait_script):
+        print(f"❌ Wait script not found: {wait_script}")
+        return False
+    
+    try:
+        # Stream output in real-time for debugging
+        process = subprocess.Popen(
+            [wait_script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+        
+        # Stream output line by line
+        for line in process.stdout:
+            print(f"  {line}", end='')
+        
+        process.wait(timeout=300)
+        
+        if process.returncode == 0:
+            print("✅ Gateway wait script completed successfully")
+            return True
+        else:
+            print(f"❌ Gateway wait script failed with exit code: {process.returncode}")
+            return False
+    except subprocess.TimeoutExpired:
+        process.kill()
+        print("❌ Gateway wait script timed out after 5 minutes")
+        return False
+    except Exception as e:
+        print(f"❌ Failed to run wait script: {e}")
+        return False
 
 def run_kubectl(args: list) -> Dict[str, Any]:
     """Run kubectl command and return JSON output"""
@@ -199,6 +242,10 @@ def main():
     print("=" * 50)
     
     all_checks_passed = True
+    
+    # First run the wait script to ensure Gateway is provisioned
+    if not run_wait_script():
+        all_checks_passed = False
     
     # Check Gateway status and get LoadBalancer IP
     gateway_ready, loadbalancer_ip = check_gateway_status()

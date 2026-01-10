@@ -105,32 +105,35 @@ LAST_STATUS=""
 while [ $ELAPSED -lt $TIMEOUT ]; do
     STATUS=$(check_gateway_status)
     
+    # Show continuous status updates every check interval (like other wait scripts)
+    echo -e "${BLUE}=== Checking Gateway status (${ELAPSED}s / ${TIMEOUT}s) ===${NC}"
+    
     case "$STATUS" in
         "not_found")
+            echo -e "${YELLOW}⏳ Waiting for Gateway resource to be created...${NC}"
             if [ "$LAST_STATUS" != "not_found" ]; then
-                echo -e "${YELLOW}⏳ Waiting for Gateway resource to be created...${NC}"
                 LAST_STATUS="not_found"
             fi
             ;;
         "Unknown|Unknown|")
+            echo -e "${YELLOW}⏳ Gateway created, waiting for controller to process...${NC}"
             if [ "$LAST_STATUS" != "waiting_controller" ]; then
-                echo -e "${YELLOW}⏳ Gateway created, waiting for controller to process...${NC}"
                 get_gateway_messages
                 LAST_STATUS="waiting_controller"
             fi
             ;;
         "True|Unknown|"|"True|False|")
+            echo -e "${GREEN}✓ Gateway accepted by controller${NC}"
+            echo -e "${YELLOW}⏳ Waiting for LoadBalancer provisioning...${NC}"
             if [ "$LAST_STATUS" != "accepted" ]; then
-                echo -e "${GREEN}✓ Gateway accepted by controller${NC}"
-                echo -e "${YELLOW}⏳ Waiting for LoadBalancer provisioning...${NC}"
                 get_gateway_messages
                 LAST_STATUS="accepted"
             fi
             ;;
         "True|True|")
+            echo -e "${GREEN}✓ Gateway programmed${NC}"
+            echo -e "${YELLOW}⏳ Waiting for LoadBalancer IP assignment...${NC}"
             if [ "$LAST_STATUS" != "programmed_no_ip" ]; then
-                echo -e "${GREEN}✓ Gateway programmed${NC}"
-                echo -e "${YELLOW}⏳ Waiting for LoadBalancer IP assignment...${NC}"
                 LAST_STATUS="programmed_no_ip"
             fi
             ;;
@@ -157,22 +160,27 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
             ;;
         *)
             IFS='|' read -r accepted programmed ip <<< "$STATUS"
+            echo -e "${RED}⚠️  Gateway in unexpected state:${NC}"
+            echo -e "   Accepted: $accepted"
+            echo -e "   Programmed: $programmed"
+            echo -e "   IP: ${ip:-none}"
             if [ "$LAST_STATUS" != "error_state" ]; then
-                echo -e "${RED}⚠️  Gateway in unexpected state:${NC}"
-                echo -e "   Accepted: $accepted"
-                echo -e "   Programmed: $programmed"
-                echo -e "   IP: ${ip:-none}"
                 get_gateway_messages
                 LAST_STATUS="error_state"
             fi
             ;;
     esac
     
-    # Show progress every 30 seconds
-    if [ $((ELAPSED % 30)) -eq 0 ] && [ $ELAPSED -gt 0 ]; then
-        echo -e "${BLUE}⏳ Still waiting... (${ELAPSED}s / ${TIMEOUT}s)${NC}"
+    # Show current Gateway resource status (like other wait scripts show pod status)
+    echo -e "${BLUE}Gateway resource status:${NC}"
+    if kubectl get gateway "$GATEWAY_NAME" -n "$GATEWAY_NAMESPACE" >/dev/null 2>&1; then
+        kubectl get gateway "$GATEWAY_NAME" -n "$GATEWAY_NAMESPACE" -o custom-columns="NAME:.metadata.name,CLASS:.spec.gatewayClassName,ADDRESS:.status.addresses[0].value,READY:.status.conditions[?(@.type=='Ready')].status" --no-headers 2>/dev/null || \
+        kubectl get gateway "$GATEWAY_NAME" -n "$GATEWAY_NAMESPACE" --no-headers 2>/dev/null
+    else
+        echo -e "   ${YELLOW}Gateway resource not found${NC}"
     fi
     
+    echo ""
     sleep $POLL_INTERVAL
     ELAPSED=$((ELAPSED + POLL_INTERVAL))
 done

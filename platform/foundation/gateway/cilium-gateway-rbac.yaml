@@ -50,12 +50,19 @@ rules:
   - get
   - list
   - watch
+  - create
+  - update
+  - patch
+  - delete
 # Services for LoadBalancer provisioning
 - apiGroups:
   - ""
   resources:
   - services
   verbs:
+  - get
+  - list
+  - watch
   - create
   - update
   - patch
@@ -67,6 +74,47 @@ rules:
   verbs:
   - update
   - patch
+# Endpoints for Gateway backend routing
+- apiGroups:
+  - ""
+  resources:
+  - endpoints
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+# CiliumGatewayClassConfig for Gateway configuration
+- apiGroups:
+  - cilium.io
+  resources:
+  - ciliumgatewayclassconfigs
+  - ciliumgatewayclassconfigs/status
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+# CiliumEnvoyConfig for Gateway proxy configuration
+- apiGroups:
+  - cilium.io
+  resources:
+  - ciliumenvoyconfigs
+  - ciliumclusterwideenvoyconfigs
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -83,4 +131,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: cilium
+  namespace: kube-system
+- kind: ServiceAccount
+  name: cilium-operator
   namespace: kube-system

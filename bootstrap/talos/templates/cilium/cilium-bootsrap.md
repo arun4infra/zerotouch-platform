@@ -1,24 +1,24 @@
-# Cilium ServiceAccounts
-# Part of modular Cilium bootstrap configuration
 ---
+# Source: cilium/templates/cilium-agent/serviceaccount.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: "cilium"
   namespace: kube-system
 ---
+# Source: cilium/templates/cilium-envoy/serviceaccount.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: "cilium-envoy"
   namespace: kube-system
 ---
+# Source: cilium/templates/cilium-operator/serviceaccount.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: "cilium-operator"
   namespace: kube-system
-
 ---
 # Source: cilium/templates/cilium-configmap.yaml
 apiVersion: v1
@@ -252,7 +252,6 @@ data:
 
 # Extra config allows adding arbitrary properties to the cilium config.
 # By putting it at the end of the ConfigMap, it's also possible to override existing properties.
-
 ---
 # Source: cilium/templates/cilium-envoy/configmap.yaml
 apiVersion: v1
@@ -579,7 +578,6 @@ data:
         }
       }
     }
-
 ---
 # Source: cilium/templates/cilium-agent/clusterrole.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -950,7 +948,6 @@ rules:
   - get
   - list
   - watch
-
 ---
 # Source: cilium/templates/cilium-agent/clusterrolebinding.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -1018,7 +1015,6 @@ subjects:
   - kind: ServiceAccount
     name: "cilium"
     namespace: kube-system
-
 ---
 # Source: cilium/templates/cilium-agent/daemonset.yaml
 apiVersion: apps/v1
@@ -1466,7 +1462,6 @@ spec:
         hostPath:
           path: /proc/sys/kernel
           type: Directory
-
 ---
 # Source: cilium/templates/cilium-envoy/daemonset.yaml
 apiVersion: apps/v1
@@ -1641,7 +1636,6 @@ spec:
         hostPath:
           path: /sys/fs/bpf
           type: DirectoryOrCreate
-
 ---
 # Source: cilium/templates/cilium-operator/deployment.yaml
 apiVersion: apps/v1
@@ -1764,7 +1758,6 @@ spec:
       - name: cilium-config-path
         configMap:
           name: cilium-config
-
 ---
 # CiliumEnvoyConfig CRD - Required for Gateway API
 apiVersion: apiextensions.k8s.io/v1

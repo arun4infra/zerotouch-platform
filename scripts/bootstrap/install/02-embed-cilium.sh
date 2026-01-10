@@ -9,7 +9,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Find repository root by looking for .git directory
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
 CP_CONFIG="$REPO_ROOT/bootstrap/talos/nodes/cp01-main/config.yaml"
+CILIUM_DIR="$REPO_ROOT/bootstrap/talos/templates/cilium"
 CILIUM_MANIFEST="$REPO_ROOT/bootstrap/talos/templates/cilium-bootstrap.yaml"
+
+# Build combined manifest from modular files
+echo "Building Cilium manifest from modular files..."
+if [ -d "$CILIUM_DIR" ]; then
+    # Concatenate all YAML files in order (sorted by filename) with newlines between
+    first=true
+    for f in "$CILIUM_DIR"/*.yaml; do
+        if [ "$first" = true ]; then
+            first=false
+        else
+            echo ""  # Add newline between files
+        fi
+        cat "$f"
+    done > "$CILIUM_MANIFEST"
+    echo "✓ Combined $(ls -1 "$CILIUM_DIR"/*.yaml | wc -l | tr -d ' ') files into cilium-bootstrap.yaml"
+fi
 
 # Check if Cilium manifest exists
 if [ ! -f "$CILIUM_MANIFEST" ]; then
