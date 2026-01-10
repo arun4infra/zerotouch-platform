@@ -1,0 +1,18 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: nutgraf-tls-cert
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: nutgraf-tls-cert
+    app.kubernetes.io/component: bootstrap-certificate
+    app.kubernetes.io/part-of: zerotouch-platform
+spec:
+  secretName: nutgraf-tls-cert
+  commonName: nutgraf.in
+  dnsNames:
+    - "nutgraf.in"
+    - "*.nutgraf.in"
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer

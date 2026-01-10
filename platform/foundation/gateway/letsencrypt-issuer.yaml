@@ -1,0 +1,41 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+  labels:
+    app.kubernetes.io/name: letsencrypt-staging
+    app.kubernetes.io/component: certificate-issuer
+    app.kubernetes.io/part-of: zerotouch-platform
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: admin@nutgraf.in
+    privateKeySecretRef:
+      name: letsencrypt-staging-private-key
+    solvers:
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs:
+              - name: public-gateway
+                namespace: kube-system
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-production
+  labels:
+    app.kubernetes.io/name: letsencrypt-production
+    app.kubernetes.io/component: certificate-issuer
+    app.kubernetes.io/part-of: zerotouch-platform
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@nutgraf.in
+    privateKeySecretRef:
+      name: letsencrypt-production-private-key
+    solvers:
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs:
+              - name: public-gateway
+                namespace: kube-system

@@ -1,0 +1,10 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: cilium
+  labels:
+    app.kubernetes.io/name: cilium-gatewayclass
+    app.kubernetes.io/component: gateway-controller
+    app.kubernetes.io/part-of: zerotouch-platform
+spec:
+  controllerName: io.cilium/gateway-controller
