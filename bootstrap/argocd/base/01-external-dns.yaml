@@ -13,27 +13,22 @@ spec:
     targetRevision: "1.15.0"
     helm:
       values: |
-        provider: webhook
-        extraArgs:
-          - --webhook-provider-url=http://localhost:8888
-        sources:
-          - gateway-httproute
-        domainFilters:
-          - nutgraf.in
-        sidecars:
-          - name: hetzner-webhook
-            image: docker.io/hetzner/external-dns-hetzner-webhook:latest
-            ports:
-              - containerPort: 8888
-                name: webhook
+        provider:
+          name: webhook
+          webhook:
+            image:
+              repository: docker.io/hetzner/external-dns-hetzner-webhook
+              tag: v0.3.2
             env:
-              - name: HETZNER_API_TOKEN
+              - name: HETZNER_TOKEN
                 valueFrom:
                   secretKeyRef:
                     name: external-dns-hetzner
                     key: HETZNER_DNS_TOKEN
-              - name: SERVER_PORT
-                value: "8888"
+        sources:
+          - gateway-httproute
+        domainFilters:
+          - nutgraf.in
         resources:
           requests:
             cpu: 10m
