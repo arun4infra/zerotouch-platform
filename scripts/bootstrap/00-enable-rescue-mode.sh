@@ -49,7 +49,8 @@ done
 source "$HELPERS_DIR/fetch-tenant-config.sh" "$ENV"
 VALUES_FILE="$TENANT_CONFIG_FILE"
 
-HETZNER_API_URL="https://api.hetzner.cloud/v1"
+# Source shared Hetzner API helper
+source "$HELPERS_DIR/hetzner-api.sh"
 
 # Function to print colored messages (all output to stderr to not interfere with function returns)
 log_info() {
@@ -118,44 +119,6 @@ if [[ ! -f "$VALUES_FILE" ]]; then
 fi
 
 log_success "Prerequisites checked"
-
-# Function to make Hetzner API call
-hetzner_api() {
-    local method="$1"
-    local endpoint="$2"
-    local data="$3"
-
-    if [[ -n "$data" ]]; then
-        curl -s -X "$method" \
-            -H "Authorization: Bearer $HETZNER_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "$data" \
-            "$HETZNER_API_URL$endpoint"
-    else
-        curl -s -X "$method" \
-            -H "Authorization: Bearer $HETZNER_API_TOKEN" \
-            "$HETZNER_API_URL$endpoint"
-    fi
-}
-
-# Function to get server ID by IP address
-get_server_id_by_ip() {
-    local ip="$1"
-
-    log_info "Looking up server ID for IP: $ip"
-
-    local servers=$(hetzner_api "GET" "/servers")
-    local server_id=$(echo "$servers" | jq -r ".servers[] | select(.public_net.ipv4.ip == \"$ip\") | .id")
-
-    if [[ -z "$server_id" || "$server_id" == "null" ]]; then
-        log_error "Could not find server with IP: $ip"
-        log_info "Available servers:"
-        echo "$servers" | jq -r '.servers[] | "\(.id): \(.name) - \(.public_net.ipv4.ip)"' >&2
-        return 1
-    fi
-
-    echo "$server_id"
-}
 
 # Function to enable rescue mode for a server
 enable_rescue_mode() {

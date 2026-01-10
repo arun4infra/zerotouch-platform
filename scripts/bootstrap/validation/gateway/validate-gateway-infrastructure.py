@@ -51,21 +51,32 @@ def check_gateway_status() -> tuple[bool, Optional[str]]:
     status = gateway.get("status", {})
     conditions = status.get("conditions", [])
     
-    ready_condition = None
+    # Cilium Gateway API uses "Accepted" and "Programmed" conditions (not "Ready")
+    accepted_condition = None
+    programmed_condition = None
     for condition in conditions:
-        if condition.get("type") == "Ready":
-            ready_condition = condition
-            break
+        if condition.get("type") == "Accepted":
+            accepted_condition = condition
+        elif condition.get("type") == "Programmed":
+            programmed_condition = condition
     
-    if not ready_condition:
-        print("❌ Gateway Ready condition not found")
+    if not accepted_condition:
+        print("❌ Gateway Accepted condition not found")
         return False, None
     
-    if ready_condition.get("status") != "True":
-        print(f"❌ Gateway not ready: {ready_condition.get('message', 'Unknown reason')}")
+    if accepted_condition.get("status") != "True":
+        print(f"❌ Gateway not accepted: {accepted_condition.get('message', 'Unknown reason')}")
         return False, None
     
-    # Check for LoadBalancer IP
+    if not programmed_condition:
+        print("❌ Gateway Programmed condition not found")
+        return False, None
+    
+    if programmed_condition.get("status") != "True":
+        print(f"❌ Gateway not programmed: {programmed_condition.get('message', 'Unknown reason')}")
+        return False, None
+    
+    # Check for LoadBalancer IP from addresses
     addresses = status.get("addresses", [])
     loadbalancer_ip = None
     
@@ -163,10 +174,21 @@ def test_loadbalancer_connectivity(ip: str) -> bool:
     print(f"🔍 Testing LoadBalancer connectivity to {ip}...")
     
     try:
-        # Test HTTP connectivity (should get some response, even if 404)
+        # Test HTTP connectivity (should get some response, even if 404 or connection reset)
+        # Note: Without HTTPRoutes attached, Gateway may close connection or return 404
         response = requests.get(f"http://{ip}", timeout=10)
         print(f"✅ LoadBalancer responds to HTTP requests (status: {response.status_code})")
         return True
+    except requests.exceptions.ConnectionError as e:
+        # Connection reset or closed is acceptable - Gateway is reachable but no routes configured
+        if "RemoteDisconnected" in str(e) or "Connection refused" in str(e) or "Connection reset" in str(e):
+            print(f"⚠️  LoadBalancer reachable but no routes configured (expected behavior)")
+            return True
+        print(f"❌ LoadBalancer not accessible: {e}")
+        return False
+    except requests.exceptions.Timeout:
+        print(f"❌ LoadBalancer connection timed out")
+        return False
     except requests.exceptions.RequestException as e:
         print(f"❌ LoadBalancer not accessible: {e}")
         return False

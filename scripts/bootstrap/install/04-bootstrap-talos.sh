@@ -67,20 +67,32 @@ sleep 180
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
 cd "$REPO_ROOT/bootstrap/talos"
 
+# Source the Hetzner API helper for server ID lookup
+source "$REPO_ROOT/scripts/bootstrap/helpers/hetzner-api.sh"
+
+# Get server ID for providerID configuration
+echo -e "${BLUE}Retrieving Hetzner server ID for providerID configuration...${NC}"
+SERVER_ID=$(get_server_id_by_ip "$SERVER_IP")
+if [[ $? -ne 0 ]]; then
+    echo -e "${RED}Failed to retrieve server ID. Cannot configure providerID.${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ Server ID: $SERVER_ID${NC}"
+
 # Apply Talos configuration
-echo -e "${BLUE}Applying Talos configuration (with CNI=none to prevent Flannel)...${NC}"
+echo -e "${BLUE}Applying Talos configuration (with CNI=none and providerID)...${NC}"
 if ! talosctl apply-config --insecure \
   --nodes "$SERVER_IP" \
   --endpoints "$SERVER_IP" \
   --file nodes/cp01-main/config.yaml \
-  --config-patch '[{"op": "add", "path": "/cluster/network/cni", "value": {"name": "none"}}]'; then
+  --config-patch "[{\"op\": \"add\", \"path\": \"/cluster/network/cni\", \"value\": {\"name\": \"none\"}}, {\"op\": \"add\", \"path\": \"/machine/kubelet/extraArgs\", \"value\": {\"provider-id\": \"hcloud://$SERVER_ID\"}}]"; then
     echo -e "${RED}Failed to apply Talos config. Waiting 30s and retrying...${NC}"
     sleep 30
     talosctl apply-config --insecure \
       --nodes "$SERVER_IP" \
       --endpoints "$SERVER_IP" \
       --file nodes/cp01-main/config.yaml \
-      --config-patch '[{"op": "add", "path": "/cluster/network/cni", "value": {"name": "none"}}]'
+      --config-patch "[{\"op\": \"add\", \"path\": \"/cluster/network/cni\", \"value\": {\"name\": \"none\"}}, {\"op\": \"add\", \"path\": \"/machine/kubelet/extraArgs\", \"value\": {\"provider-id\": \"hcloud://$SERVER_ID\"}}]"
 fi
 
 echo -e "${BLUE}Waiting 30 seconds for config to apply...${NC}"
@@ -108,6 +120,11 @@ talosctl kubeconfig \
 echo -e "${BLUE}Verifying cluster (with retries)...${NC}"
 kubectl_retry get nodes
 
+# Verify providerID configuration
+echo -e "${BLUE}Verifying providerID configuration...${NC}"
+kubectl_retry get nodes -o custom-columns=NAME:.metadata.name,ID:.spec.providerID
+
 echo ""
 echo -e "${GREEN}✓ Talos cluster bootstrapped successfully${NC}"
+echo -e "${GREEN}✓ ProviderID configured for Zero-Touch LoadBalancer provisioning${NC}"
 echo ""

@@ -6,6 +6,5 @@ resources:
 - 00-local-path-provisioner.yaml
 - 00-gateway-api-crds.yaml
 - 00-repo-registry-app.yaml
-- 01-cilium.yaml
 - argocd-repo-configs.yaml
 - tenant-infrastructure.yaml
