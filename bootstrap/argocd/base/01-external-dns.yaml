@@ -22,7 +22,7 @@ spec:
           - nutgraf.in
         sidecars:
           - name: hetzner-webhook
-            image: ghcr.io/angelnu/external-dns-hetzner-webhook:latest
+            image: docker.io/hetzner/external-dns-hetzner-webhook:latest
             ports:
               - containerPort: 8888
                 name: webhook
