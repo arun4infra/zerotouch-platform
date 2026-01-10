@@ -172,10 +172,18 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     esac
     
     # Show current Gateway resource status (like other wait scripts show pod status)
-    echo -e "${BLUE}Gateway resource status:${NC}"
+    echo -e "${BLUE}Current Gateway status:${NC}"
     if kubectl get gateway "$GATEWAY_NAME" -n "$GATEWAY_NAMESPACE" >/dev/null 2>&1; then
-        kubectl get gateway "$GATEWAY_NAME" -n "$GATEWAY_NAMESPACE" -o custom-columns="NAME:.metadata.name,CLASS:.spec.gatewayClassName,ADDRESS:.status.addresses[0].value,READY:.status.conditions[?(@.type=='Ready')].status" --no-headers 2>/dev/null || \
+        # Show Gateway with custom columns for better visibility
+        kubectl get gateway "$GATEWAY_NAME" -n "$GATEWAY_NAMESPACE" -o custom-columns="NAME:.metadata.name,CLASS:.spec.gatewayClassName,ADDRESS:.status.addresses[0].value,ACCEPTED:.status.conditions[?(@.type=='Accepted')].status,PROGRAMMED:.status.conditions[?(@.type=='Programmed')].status" --no-headers 2>/dev/null || \
         kubectl get gateway "$GATEWAY_NAME" -n "$GATEWAY_NAMESPACE" --no-headers 2>/dev/null
+        
+        # Show related LoadBalancer service status if it exists
+        LB_SERVICE=$(kubectl get svc -n "$GATEWAY_NAMESPACE" -l "gateway.networking.k8s.io/gateway-name=$GATEWAY_NAME" -o name 2>/dev/null | head -1)
+        if [ -n "$LB_SERVICE" ]; then
+            echo -e "${BLUE}LoadBalancer service:${NC}"
+            kubectl get "$LB_SERVICE" -n "$GATEWAY_NAMESPACE" --no-headers 2>/dev/null || echo "   Service details unavailable"
+        fi
     else
         echo -e "   ${YELLOW}Gateway resource not found${NC}"
     fi
