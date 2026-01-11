@@ -219,6 +219,7 @@ spec:
           transforms:
             - type: string
               string:
+                type: Format
                 fmt: "%s-conn"
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.namespace
@@ -229,3 +230,8 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: status.bucketName
           toFieldPath: spec.forProvider.manifest.stringData.S3_BUCKET
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
