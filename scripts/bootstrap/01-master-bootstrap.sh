@@ -21,6 +21,22 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Step counter for progress display
+TOTAL_STEPS=17
+CURRENT_STEP=0
+
+# Function to display step progress
+step() {
+    CURRENT_STEP=$((CURRENT_STEP + 1))
+    echo -e "${YELLOW}[${CURRENT_STEP}/${TOTAL_STEPS}] $1${NC}"
+}
+
+# Function to display skipped step
+skip_step() {
+    CURRENT_STEP=$((CURRENT_STEP + 1))
+    echo -e "${BLUE}[${CURRENT_STEP}/${TOTAL_STEPS}] $1 (skipped)${NC}"
+}
+
 # Default mode
 MODE="production"
 ENV="dev"
@@ -185,16 +201,16 @@ fi
 # ============================================================================
 
 if [ "$MODE" = "production" ]; then
-    # Step 1: Embed Cilium in Talos config
-    echo -e "${YELLOW}[1/14] Embedding Cilium CNI...${NC}"
-    "$SCRIPT_DIR/install/02-embed-cilium.sh"
+    # Step 1: Embed Gateway API CRDs and Cilium in Talos config
+    step "Embedding Gateway API CRDs and Cilium CNI..."
+    "$SCRIPT_DIR/install/02-embed-network-manifests.sh"
 
     # Step 2: Install Talos OS
-    echo -e "${YELLOW}[2/14] Installing Talos OS...${NC}"
+    step "Installing Talos OS..."
     "$SCRIPT_DIR/install/03-install-talos.sh" --server-ip "$SERVER_IP" --user root --password "$ROOT_PASSWORD" --yes
 
     # Step 3: Bootstrap Talos cluster
-    echo -e "${YELLOW}[3/14] Bootstrapping Talos cluster...${NC}"
+    step "Bootstrapping Talos cluster..."
     "$SCRIPT_DIR/install/04-bootstrap-talos.sh" "$SERVER_IP"
 
     "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "TALOS CREDENTIALS" "Talos Config: bootstrap/talos/talosconfig
@@ -205,25 +221,31 @@ Access Talos:
 
     # Step 4: Add Worker Nodes (if specified)
     if [ -n "$WORKER_NODES" ]; then
-        echo -e "${YELLOW}[4/14] Adding worker nodes...${NC}"
+        step "Adding worker nodes..."
         "$SCRIPT_DIR/install/05-add-worker-nodes.sh" "$WORKER_NODES" "$WORKER_PASSWORD"
     else
-        echo -e "${BLUE}[4/14] No worker nodes specified - single node cluster${NC}"
+        skip_step "No worker nodes specified - single node cluster"
     fi
 
     # Step 5: Wait for Cilium CNI
-    echo -e "${YELLOW}[5/14] Waiting for Cilium CNI...${NC}"
+    step "Waiting for Cilium CNI..."
     "$SCRIPT_DIR/wait/06-wait-cilium.sh"
+
+    # Step 6: Validate Gateway API readiness
+    step "Validating Gateway API readiness..."
+    "$SCRIPT_DIR/wait/06a-wait-gateway-api.sh"
 else
-    echo -e "${BLUE}[1-5/14] Skipping Talos installation (preview mode uses Kind)${NC}"
+    # Skip production-only steps in preview mode
+    CURRENT_STEP=7
+    echo -e "${BLUE}[1-7/${TOTAL_STEPS}] Skipping Talos installation (preview mode uses Kind)${NC}"
 fi
 
-# Step 6: Inject ESO Secrets
-echo -e "${YELLOW}[6/14] Injecting ESO secrets...${NC}"
+# Step 7: Inject ESO Secrets
+step "Injecting ESO secrets..."
 "$SCRIPT_DIR/install/07-inject-eso-secrets.sh"
 
-# Step 7: Inject SSM Parameters (BEFORE ArgoCD)
-echo -e "${YELLOW}[7/14] Injecting SSM parameters...${NC}"
+# Step 8: Inject SSM Parameters (BEFORE ArgoCD)
+step "Injecting SSM parameters..."
 "$SCRIPT_DIR/install/08-inject-ssm-parameters.sh"
 
 if [ "$MODE" = "production" ]; then
@@ -233,9 +255,9 @@ Verify parameters:
   aws ssm get-parameters-by-path --path /zerotouch/prod --region ap-south-1"
 fi
 
-# Step 8: Apply patches for preview mode BEFORE ArgoCD installation
+# Step 9: Apply patches for preview mode BEFORE ArgoCD installation
 if [ "$MODE" = "preview" ]; then
-    echo -e "${YELLOW}[8a/14] Applying patches before ArgoCD installation...${NC}"
+    step "Applying patches before ArgoCD installation..."
     "$SCRIPT_DIR/preview/patches/00-apply-all-patches.sh" --force
     
     # Verify critical patches in the mounted filesystem
@@ -249,48 +271,48 @@ if [ "$MODE" = "preview" ]; then
         echo -e "${BLUE}Cilium status in container:${NC}"
         docker exec "$KIND_CONTAINER" ls -la /repo/platform/foundation/cilium.yaml* || echo "Cilium files not found"
     fi
+else
+    skip_step "Applying patches (production mode)"
 fi
 
-# Step 8: Install ArgoCD (includes NATS pre-creation for preview mode)
-echo -e "${YELLOW}[8/14] Installing ArgoCD...${NC}"
+# Step 10: Install ArgoCD (includes NATS pre-creation for preview mode)
+step "Installing ArgoCD..."
 "$SCRIPT_DIR/install/09-install-argocd.sh" "$MODE" "$ENV"
 
-# Step 9: Wait for platform-bootstrap
-echo -e "${YELLOW}[9/14] Waiting for platform-bootstrap...${NC}"
+# Step 11: Wait for platform-bootstrap
+step "Waiting for platform-bootstrap..."
 "$SCRIPT_DIR/wait/10-wait-platform-bootstrap.sh"
 
-# Step 9b: Wait for tenant repository authentication (production mode only)
+# Step 12: Wait for tenant repository authentication (production mode only)
 if [ "$MODE" != "preview" ]; then
-    echo -e "${YELLOW}[9b/14] Waiting for tenant repository authentication...${NC}"
+    step "Waiting for tenant repository authentication..."
     "$SCRIPT_DIR/wait/10b-wait-tenant-auth.sh"
 else
-    echo -e "${BLUE}[9b/14] Skipping tenant repository authentication (preview mode)${NC}"
+    skip_step "Tenant repository authentication (preview mode)"
 fi
 
-# Step 10: Verify ESO
-echo -e "${YELLOW}[10/14] Verifying ESO...${NC}"
+# Step 13: Verify ESO
+step "Verifying ESO..."
 "$SCRIPT_DIR/validation/11-verify-eso.sh"
 
-# Step 11: Verify child applications
-echo -e "${YELLOW}[11/15] Verifying child applications...${NC}"
+# Step 14: Verify child applications
+step "Verifying child applications..."
 "$SCRIPT_DIR/validation/12-verify-child-apps.sh"
 
-# Step 12: Verify tenant landing zones
-echo -e "${YELLOW}[12/15] Verifying tenant landing zones...${NC}"
+# Step 15: Verify tenant landing zones
+step "Verifying tenant landing zones..."
 "$SCRIPT_DIR/validation/16-verify-landing-zones.sh"
 
-# Step 13: Skipped (no longer needed - storage class auto-detected)
-
-# Step 13: Wait for all apps to be healthy
-echo -e "${YELLOW}[13/16] Waiting for all applications to be healthy...${NC}"
+# Step 16: Wait for all apps to be healthy
+step "Waiting for all applications to be healthy..."
 if [ "$MODE" = "preview" ]; then
     "$SCRIPT_DIR/wait/12a-wait-apps-healthy.sh" --timeout 600 --preview-mode
 else
     "$SCRIPT_DIR/wait/12a-wait-apps-healthy.sh" --timeout 600
 fi
 
-# Step 14: Wait for service dependencies
-echo -e "${YELLOW}[14/16] Waiting for platform services to be ready...${NC}"
+# Wait for service dependencies (not counted as separate step)
+echo -e "${BLUE}Waiting for platform services to be ready...${NC}"
 if [ "$MODE" = "preview" ]; then
     "$SCRIPT_DIR/wait/13-wait-service-dependencies.sh" --timeout 300 --preview-mode
 else
@@ -323,8 +345,8 @@ else
 fi
 
 if [ "$MODE" = "production" ]; then
-    # Step 15: Configure repository credentials
-    echo -e "${YELLOW}[15/16] Configuring repository credentials...${NC}"
+    # Configure repository credentials
+    step "Configuring repository credentials..."
     "$SCRIPT_DIR/install/13-configure-repo-credentials.sh" --auto || {
         echo -e "${YELLOW}⚠️  Repository credentials configuration had issues${NC}"
         echo -e "${BLUE}ℹ  You can configure manually: ./scripts/bootstrap/install/13-configure-repo-credentials.sh --auto${NC}"
@@ -336,10 +358,10 @@ Verify:
   kubectl get secret -n argocd -l argocd.argoproj.io/secret-type=repository
   kubectl get externalsecret -n argocd"
 else
-    echo -e "${BLUE}[15/16] Skipping repository credentials configuration (preview mode)${NC}"
+    skip_step "Repository credentials configuration (preview mode)"
 fi
 
-# Final cluster validation (optional)
+# Final cluster validation
 if [ "$MODE" = "production" ]; then
     echo -e "${YELLOW}Running final cluster validation...${NC}"
 else

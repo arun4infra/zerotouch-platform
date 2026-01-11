@@ -16,6 +16,16 @@ spec:
       exclude: 'kustomization.yaml'
   destination:
     server: https://kubernetes.default.svc
+  # Ignore fields that Cilium Gateway controller mutates with defaults
+  ignoreDifferences:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      jqPathExpressions:
+        # Cilium adds default group/kind to certificateRefs
+        - .spec.listeners[].tls.certificateRefs[].group
+        - .spec.listeners[].tls.certificateRefs[].kind
+      jsonPointers:
+        - /spec/infrastructure/annotations
   syncPolicy:
     automated:
       prune: true
@@ -23,6 +33,7 @@ spec:
     syncOptions:
       - SkipDryRunOnMissingResource=true
       - ServerSideApply=true
+      - RespectIgnoreDifferences=true
     retry:
       limit: 10
       backoff:

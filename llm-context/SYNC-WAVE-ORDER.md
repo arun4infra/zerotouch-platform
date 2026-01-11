@@ -4,6 +4,20 @@
 
 The ZeroTouch Platform uses ArgoCD's sync-wave feature to orchestrate a carefully sequenced deployment of platform components. This document explains the current sync-wave order, the rationale behind each wave, and the dependencies that drive this sequencing.
 
+## Pre-ArgoCD Bootstrap (Talos Inline Manifests)
+
+Before ArgoCD is installed, the following components are deployed as Talos inline manifests during cluster bootstrap via `02-embed-network-manifests.sh`:
+
+1. **Gateway API CRDs** (loaded first)
+   - Embedded in Talos config as inline manifest
+   - Must load BEFORE Cilium so Cilium detects Gateway API support
+   - Version: v1.4.1 (synced with ArgoCD app)
+
+2. **Cilium CNI** (loaded second)
+   - Embedded in Talos config as inline manifest
+   - Starts with Gateway API support enabled (CRDs already present)
+   - ArgoCD later adopts and manages configuration updates
+
 ## Sync-Wave Architecture
 
 ```
@@ -101,6 +115,14 @@ The ZeroTouch Platform uses ArgoCD's sync-wave feature to orchestrate a carefull
 │  │     Definitions │  │  • LLM Services │  │        • Metrics-Based Autoscaling  │  │
 │  │   • Custom APIs │  │  • Worker Nodes │  │        • ScaledObjects & ScaledJobs │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────────────────────────────┘  │
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│  │              Gateway & DNS Config (MAIN ENVIRONMENT ONLY)                   │    │
+│  │              • gateway-config: GatewayClass, Gateway, RBAC                 │    │
+│  │              • dns-config: Hetzner ExternalSecrets for DNS                 │    │
+│  │              • Requires Cilium with Gateway API support                    │    │
+│  │              • Not deployed in preview environments (no Cilium)            │    │
+│  └─────────────────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────────────┘
                                          │
                                          ▼

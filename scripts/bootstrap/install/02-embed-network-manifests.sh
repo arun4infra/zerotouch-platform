@@ -1,59 +1,65 @@
 #!/bin/bash
-# Embed Cilium Bootstrap Manifest into Talos Control Plane Config
-# This adds the static Cilium manifest to cluster.inlineManifests section
+# Embed Gateway API CRDs and Cilium Bootstrap Manifests into Talos Control Plane Config
+# This adds static manifests to cluster.inlineManifests section
+# Gateway API CRDs MUST be loaded BEFORE Cilium so Cilium detects Gateway API support
 # Only applied to control plane - workers inherit CNI automatically
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Find repository root by looking for .git directory
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR" && while [[ ! -d .git && $(pwd) != "/" ]]; do cd ..; done; pwd))"
 CP_CONFIG="$REPO_ROOT/bootstrap/talos/nodes/cp01-main/config.yaml"
 CILIUM_DIR="$REPO_ROOT/bootstrap/talos/templates/cilium"
 CILIUM_MANIFEST="$REPO_ROOT/bootstrap/talos/templates/cilium-bootstrap.yaml"
+GATEWAY_API_MANIFEST="$REPO_ROOT/bootstrap/talos/templates/gateway-api-crds.yaml"
+GATEWAY_API_VERSION="v1.4.1"
 
-# Build combined manifest from modular files
+# Download Gateway API CRDs
+echo "Preparing Gateway API CRDs ${GATEWAY_API_VERSION}..."
+if [ ! -f "$GATEWAY_API_MANIFEST" ]; then
+    echo "Downloading Gateway API CRDs..."
+    curl -sL "https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_VERSION}/standard-install.yaml" -o "$GATEWAY_API_MANIFEST"
+    echo "✓ Gateway API CRDs downloaded"
+else
+    echo "✓ Gateway API CRDs already present"
+fi
+
+# Build combined Cilium manifest from modular files
 echo "Building Cilium manifest from modular files..."
 if [ -d "$CILIUM_DIR" ]; then
-    # Concatenate all YAML files in order (sorted by filename) with newlines between
     first=true
     for f in "$CILIUM_DIR"/*.yaml; do
         if [ "$first" = true ]; then
             first=false
         else
-            echo ""  # Add newline between files
+            echo ""
         fi
         cat "$f"
     done > "$CILIUM_MANIFEST"
     echo "✓ Combined $(ls -1 "$CILIUM_DIR"/*.yaml | wc -l | tr -d ' ') files into cilium-bootstrap.yaml"
 fi
 
-# Check if Cilium manifest exists
+# Validate manifests exist
+if [ ! -f "$GATEWAY_API_MANIFEST" ]; then
+    echo "ERROR: Gateway API CRDs manifest not found at: $GATEWAY_API_MANIFEST"
+    exit 1
+fi
+
 if [ ! -f "$CILIUM_MANIFEST" ]; then
     echo "ERROR: Cilium bootstrap manifest not found at: $CILIUM_MANIFEST"
     exit 1
 fi
 
-# Check if control plane config exists
 if [ ! -f "$CP_CONFIG" ]; then
     echo "ERROR: Control plane config not found at: $CP_CONFIG"
-    echo ""
-    echo "The Talos control plane config must exist before embedding Cilium."
-    echo "This config should be checked into git at: bootstrap/talos/nodes/cp01-main/config.yaml"
-    echo ""
-    echo "If you need to generate a new config, use:"
-    echo "  talosctl gen config <cluster-name> https://<control-plane-ip>:6443"
-    echo ""
     exit 1
 fi
 
-echo "Embedding Cilium manifest into control plane Talos config..."
+echo "Embedding network manifests into control plane Talos config..."
 
-# Check if inlineManifests already exists (uncommented)
+# Remove existing inlineManifests if present
 if grep -q "^[[:space:]]*inlineManifests:" "$CP_CONFIG"; then
     echo "⚠️  inlineManifests section already exists - removing old version"
-    # Remove old inlineManifests section (from inlineManifests: to next top-level key at same indentation)
-    # This AWK script removes the inlineManifests section and all its nested content
     awk '
         /^[[:space:]]*inlineManifests:/ { 
             indent = match($0, /[^ ]/)
@@ -69,45 +75,48 @@ if grep -q "^[[:space:]]*inlineManifests:" "$CP_CONFIG"; then
         !skip { print }
     ' "$CP_CONFIG" > /tmp/cp-config-no-inline.yaml
     mv /tmp/cp-config-no-inline.yaml "$CP_CONFIG"
-    echo "✓ Old inlineManifests removed - will re-embed with latest manifest"
+    echo "✓ Old inlineManifests removed"
 fi
 
-# Find insertion point (after allowSchedulingOnControlPlanes)
+# Find insertion point
 LINE_NUM=$(grep -n "allowSchedulingOnControlPlanes:" "$CP_CONFIG" | cut -d: -f1)
-
 if [ -z "$LINE_NUM" ]; then
     echo "ERROR: Could not find insertion point in control plane config"
     exit 1
 fi
 
-INSERT_LINE=$((LINE_NUM + 1))
-
-# Create inline manifest section
+# Create inline manifests section with Gateway API CRDs FIRST, then Cilium
 cat > /tmp/inline-manifest.yaml <<'EOF'
-    # Cilium CNI for bootstrap - minimal config
-    # ArgoCD will adopt and enable full features (Hubble, Gateway API)
+    # Network manifests for bootstrap
+    # Gateway API CRDs must load BEFORE Cilium for Gateway API support
     inlineManifests:
+        - name: gateway-api-crds
+          contents: |
+EOF
+
+# Add Gateway API CRDs (12 spaces indentation)
+sed 's/^/            /' "$GATEWAY_API_MANIFEST" >> /tmp/inline-manifest.yaml
+
+# Add Cilium manifest
+cat >> /tmp/inline-manifest.yaml <<'EOF'
         - name: cilium-bootstrap
           contents: |
 EOF
 
-# Add Cilium manifest content with proper indentation (12 spaces)
 sed 's/^/            /' "$CILIUM_MANIFEST" >> /tmp/inline-manifest.yaml
 
-# Backup original
+# Backup and insert
 cp "$CP_CONFIG" "$CP_CONFIG.backup-$(date +%Y%m%d-%H%M%S)"
 
-# Insert into config
 {
     head -n "$LINE_NUM" "$CP_CONFIG"
     cat /tmp/inline-manifest.yaml
-    tail -n +$((INSERT_LINE)) "$CP_CONFIG"
+    tail -n +$((LINE_NUM + 1)) "$CP_CONFIG"
 } > /tmp/cp-config-new.yaml
 
-# Replace with new config
 mv /tmp/cp-config-new.yaml "$CP_CONFIG"
 rm /tmp/inline-manifest.yaml
 
-echo "✓ Cilium manifest embedded in control plane config"
-echo "  Backup created: $CP_CONFIG.backup-*"
-echo "  Workers will inherit CNI automatically"
+echo "✓ Gateway API CRDs and Cilium manifests embedded in control plane config"
+echo "  Gateway API CRDs will load first, then Cilium"
+echo "  Cilium will detect Gateway API support on startup"

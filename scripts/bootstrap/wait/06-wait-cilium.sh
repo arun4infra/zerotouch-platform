@@ -65,7 +65,15 @@ else
     echo -e "${YELLOW}⚠️  Cilium status check failed, but continuing (basic connectivity verified)${NC}"
 fi
 
+# Restart Cilium operator to ensure Gateway API CRDs are properly detected
+# This handles the race condition where Cilium starts before CRDs are fully established
+echo -e "${BLUE}⏳ Restarting Cilium operator to ensure Gateway API detection...${NC}"
+kubectl_retry rollout restart deployment/cilium-operator -n kube-system
+kubectl_retry rollout status deployment/cilium-operator -n kube-system --timeout=120s
+echo -e "${GREEN}✓ Cilium operator restarted${NC}"
+
 echo ""
 echo -e "${GREEN}✓ Cilium CNI is ready - networking operational${NC}"
 echo -e "${BLUE}ℹ  Note: Cilium operator running with 2 replicas (HA mode with worker node)${NC}"
+echo -e "${BLUE}ℹ  Gateway API support enabled via inline manifest CRDs${NC}"
 echo ""

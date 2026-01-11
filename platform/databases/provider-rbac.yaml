@@ -40,9 +40,15 @@ rules:
       - postgresinstances
       - dragonflyinstances
     verbs:
-      - get
-      - list
-      - watch
+      - "*"
+  - apiGroups:
+      - gateway.networking.k8s.io
+    resources:
+      - httproutes
+      - gateways
+      - gatewayclasses
+    verbs:
+      - "*"
   - apiGroups:
       - ""
     resources:
