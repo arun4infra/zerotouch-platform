@@ -42,7 +42,8 @@ spec:
     targetRevision: main
     path: bootstrap/argocd/overlays/main/core/dns
     directory:
-      recurse: true
+      recurse: false
+      exclude: 'kustomization.yaml'
   destination:
     server: https://kubernetes.default.svc
   syncPolicy:
