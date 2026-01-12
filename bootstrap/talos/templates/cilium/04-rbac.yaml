@@ -368,3 +368,14 @@ rules:
   - get
   - list
   - watch
+# CiliumGatewayClassConfig for Gateway API
+- apiGroups:
+  - cilium.io
+  resources:
+  - ciliumgatewayclassconfigs
+  - ciliumenvoyconfigs
+  - ciliumclusterwideenvoyconfigs
+  verbs:
+  - get
+  - list
+  - watch
