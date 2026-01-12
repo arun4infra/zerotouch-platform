@@ -8,8 +8,7 @@ metadata:
     app.kubernetes.io/part-of: zerotouch-platform
 spec:
   controllerName: io.cilium/gateway-controller
-  parametersRef:
-    group: cilium.io
-    kind: CiliumGatewayClassConfig
-    name: cilium-gateway-config
-    namespace: default
+  # Note: parametersRef removed due to Cilium v1.18.5 bug where namespace is not used in lookup
+  # See: https://github.com/cilium/cilium/issues/XXXXX
+  # The CiliumGatewayClassConfig is still created but not referenced
+
