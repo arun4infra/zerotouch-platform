@@ -1,57 +1,75 @@
 # Talos Configuration Templates
 
-This directory contains **public templates** for Talos machine configurations and bootstrap manifests.
+This directory contains **modular templates** for Talos machine configurations and bootstrap manifests.
+
+## Architecture
+
+### Modular Cilium Bootstrap
+The `cilium/` directory contains modular Cilium configuration files that are dynamically combined by `scripts/bootstrap/install/02-embed-network-manifests.sh`:
+
+- `01-serviceaccounts.yaml` - Cilium service accounts
+- `02-configmaps.yaml` - Cilium configuration
+- `03-envoy-config.yaml` - Envoy proxy configuration  
+- `04-rbac.yaml` - **RBAC permissions (includes Gateway API)**
+- `05-rolebindings.yaml` - Role bindings
+- `06-agent-daemonset.yaml` - Cilium agent DaemonSet
+- `07-envoy-daemonset.yaml` - Cilium Envoy DaemonSet
+- `08-operator-deployment.yaml` - Cilium operator Deployment
+- `09-crds.yaml` - Cilium CRDs
+
+### Dynamic Generation Process
+
+1. **Script combines modular files** → `cilium-bootstrap.yaml`
+2. **Script embeds into Talos config** → `nodes/cp01-main/config.yaml` 
+3. **Talos applies during cluster bootstrap** → Running cluster
+
+### Gateway API Support
+
+**RBAC Requirements:**
+The `cilium-operator` ClusterRole in `04-rbac.yaml` **must include**:
+```yaml
+# CiliumGatewayClassConfig for Gateway API
+- apiGroups:
+  - cilium.io
+  resources:
+  - ciliumgatewayclassconfigs
+  - ciliumenvoyconfigs
+  - ciliumclusterwideenvoyconfigs
+  verbs:
+  - get
+  - list
+  - watch
+```
+
+**Critical:** Changes to modular files require running the embed script to take effect:
+```bash
+./scripts/bootstrap/install/02-embed-network-manifests.sh
+```
 
 ## Files
 
-### `cilium-bootstrap.yaml`
-Static Cilium CNI manifest (version 1.16.1) with minimal bootstrap configuration.
+### `cilium-bootstrap.yaml` (Generated)
+**DO NOT EDIT DIRECTLY** - This file is generated from `cilium/*.yaml` modules.
 
 **Features enabled:**
-- Core CNI networking
+- Core CNI networking with Gateway API support
 - Kube-proxy replacement
+- External Envoy proxy for Gateway API
+- L7 proxy capabilities
+- Mesh authentication
 - IPAM mode: kubernetes
-- Talos-specific security contexts
-- KubePrism integration (localhost:7445)
 
-**Features disabled (ArgoCD will enable after bootstrap):**
-- Hubble UI
-- Hubble Relay
-- Gateway API
-
-**Regeneration:**
-Only regenerate if upgrading Cilium version or changing core configuration:
-```bash
-helm template cilium cilium/cilium \
-  --version 1.16.1 \
-  --namespace kube-system \
-  --kube-version 1.34.1 \
-  --set ipam.mode=kubernetes \
-  --set kubeProxyReplacement=true \
-  --set k8sServiceHost=localhost \
-  --set k8sServicePort=7445 \
-  --set securityContext.capabilities.ciliumAgent='{CHOWN,KILL,NET_ADMIN,NET_RAW,IPC_LOCK,SYS_ADMIN,SYS_RESOURCE,DAC_OVERRIDE,FOWNER,SETGID,SETUID}' \
-  --set securityContext.capabilities.cleanCiliumState='{NET_ADMIN,SYS_ADMIN,SYS_RESOURCE}' \
-  --set cgroup.autoMount.enabled=false \
-  --set cgroup.hostRoot=/sys/fs/cgroup \
-  --set hubble.enabled=false \
-  --set gatewayAPI.enabled=false \
-  > bootstrap/talos-templates/cilium-bootstrap.yaml
-```
-
-### `controlplane.yaml.tmpl` (coming soon)
-Template for Talos control plane machine configuration.
-
-### `worker.yaml.tmpl` (coming soon)
-Template for Talos worker machine configuration.
+### `gateway-api-crds.yaml`
+Gateway API CRDs (v1.4.1) downloaded and embedded before Cilium for proper Gateway API detection.
 
 ## Usage
 
-Templates are rendered with environment-specific values from `environments/{env}/talos-values.yaml`.
+### Modifying Cilium Configuration
+1. Edit files in `cilium/` directory
+2. Run embed script: `./scripts/bootstrap/install/02-embed-network-manifests.sh`
+3. Apply to cluster or rebuild cluster with new config
 
-Generate configs:
-```bash
-make generate-configs ENV=dev
-```
+### Upgrading Cilium
+Update the modular files in `cilium/` directory, then regenerate.
 
-This creates actual Talos configs in `bootstrap/talos/nodes/` (gitignored).
+**Never edit `cilium-bootstrap.yaml` directly** - changes will be overwritten.
