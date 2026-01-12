@@ -12,7 +12,6 @@ spec:
   commonName: nutgraf.in
   dnsNames:
     - "nutgraf.in"
-    - "*.nutgraf.in"
   issuerRef:
     name: letsencrypt-production
     kind: ClusterIssuer
