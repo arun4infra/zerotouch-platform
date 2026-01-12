@@ -7,8 +7,6 @@ metadata:
     app.kubernetes.io/name: cilium-gateway-config
     app.kubernetes.io/component: gateway-controller
     app.kubernetes.io/part-of: zerotouch-platform
-  annotations:
-    argocd.argoproj.io/sync-wave: "4"
 spec:
   service:
     type: LoadBalancer

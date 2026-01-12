@@ -1,11 +1,5 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
 resources:
-- bootstrap-issuer.yaml
 - cilium-gateway-config.yaml
 - cilium-gateway-rbac.yaml
-- cilium-gatewayclass.yaml
-- gateway-certificate.yaml
-- letsencrypt-issuer.yaml
-- public-gateway.yaml

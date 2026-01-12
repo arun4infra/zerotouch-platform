@@ -1,7 +1,8 @@
+# Wave 4: Gateway Foundation - CiliumGatewayClassConfig + RBAC
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: gateway-config
+  name: gateway-foundation
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "4"
@@ -10,13 +11,65 @@ spec:
   source:
     repoURL: https://github.com/arun4infra/zerotouch-platform.git
     targetRevision: main
-    path: bootstrap/argocd/overlays/main/core/gateway
-    directory:
-      recurse: false
-      exclude: 'kustomization.yaml'
+    path: bootstrap/argocd/overlays/main/core/gateway/gateway-foundation
   destination:
     server: https://kubernetes.default.svc
-  # Ignore fields that Cilium Gateway controller mutates with defaults
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        maxDuration: 5m
+---
+# Wave 5: GatewayClass - References CiliumGatewayClassConfig
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gateway-class
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/arun4infra/zerotouch-platform.git
+    targetRevision: main
+    path: bootstrap/argocd/overlays/main/core/gateway/gateway-class
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        maxDuration: 5m
+---
+# Wave 6: Gateway + Certificates
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gateway-config
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/arun4infra/zerotouch-platform.git
+    targetRevision: main
+    path: bootstrap/argocd/overlays/main/core/gateway/gateway-config
+  destination:
+    server: https://kubernetes.default.svc
   ignoreDifferences:
     - group: gateway.networking.k8s.io
       kind: Gateway
@@ -28,7 +81,6 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      - SkipDryRunOnMissingResource=true
       - ServerSideApply=true
       - RespectIgnoreDifferences=true
     retry:
@@ -37,6 +89,7 @@ spec:
         duration: 30s
         maxDuration: 5m
 ---
+# Wave 4: DNS Config
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -50,9 +103,6 @@ spec:
     repoURL: https://github.com/arun4infra/zerotouch-platform.git
     targetRevision: main
     path: bootstrap/argocd/overlays/main/core/dns
-    directory:
-      recurse: false
-      exclude: 'kustomization.yaml'
   destination:
     server: https://kubernetes.default.svc
   syncPolicy:
@@ -60,7 +110,6 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      - SkipDryRunOnMissingResource=true
       - ServerSideApply=true
     retry:
       limit: 10

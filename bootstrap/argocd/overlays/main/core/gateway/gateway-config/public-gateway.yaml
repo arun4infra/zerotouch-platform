@@ -9,7 +9,6 @@ metadata:
     app.kubernetes.io/part-of: zerotouch-platform
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-production
-    argocd.argoproj.io/sync-wave: "6"
 spec:
   gatewayClassName: cilium
   infrastructure:

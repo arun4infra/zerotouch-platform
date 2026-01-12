@@ -6,8 +6,6 @@ metadata:
     app.kubernetes.io/name: cilium-gatewayclass
     app.kubernetes.io/component: gateway-controller
     app.kubernetes.io/part-of: zerotouch-platform
-  annotations:
-    argocd.argoproj.io/sync-wave: "5"
 spec:
   controllerName: io.cilium/gateway-controller
   parametersRef:
