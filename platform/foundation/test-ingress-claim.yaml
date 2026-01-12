@@ -8,7 +8,7 @@ metadata:
 spec:
   # Using nginx:alpine for testing - it has health endpoints and will stay running
   image: nginx:alpine
-  port: 80
+  port: 8080
   size: micro
   replicas: 1
   # No hostname specified - should auto-generate test-ingress.kube-system.nutgraf.in
