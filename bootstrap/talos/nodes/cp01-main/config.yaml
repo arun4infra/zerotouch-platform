@@ -12613,6 +12613,9 @@ cluster:
               # Enable external Envoy proxy for Gateway API
               external-envoy-proxy: "true"
               
+              # Enable CiliumEnvoyConfig processing (required for Gateway API)
+              enable-envoy-config: "true"
+              
               # Enable service mesh features
               mesh-auth-enabled: "true"
             
