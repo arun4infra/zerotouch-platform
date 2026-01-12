@@ -548,7 +548,7 @@ spec:
             type: Ready
             status: "True"
 
-    # Resource 6: HTTPRoute (conditional - only if hostname is provided)
+    # Resource 6: HTTPRoute (conditional - created when hostname is provided OR auto-generated)
     - name: httproute
       base:
         apiVersion: kubernetes.crossplane.io/v1alpha2
@@ -569,8 +569,8 @@ spec:
                   app.kubernetes.io/managed-by: crossplane
               spec:
                 parentRefs:
-                  - name: cilium-gateway
-                    namespace: default
+                  - name: public-gateway
+                    namespace: kube-system
                 hostnames:
                   - "placeholder.example.com"
                 rules:
@@ -594,12 +594,24 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
           toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
-        # Patch hostname
+        # Priority 1: Use manual hostname if provided
         - type: FromCompositeFieldPath
           fromFieldPath: spec.hostname
           toFieldPath: spec.forProvider.manifest.spec.hostnames[0]
           policy:
-            fromFieldPath: Required
+            fromFieldPath: Optional
+        # Priority 2: Generate hostname if manual not provided
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.claimRef.name
+              - fromFieldPath: spec.claimRef.namespace
+            strategy: string
+            string:
+              fmt: "%s.%s.nutgraf.in"
+          toFieldPath: spec.forProvider.manifest.spec.hostnames[0]
+          policy:
+            fromFieldPath: Optional
         # Patch path prefix
         - type: FromCompositeFieldPath
           fromFieldPath: spec.pathPrefix

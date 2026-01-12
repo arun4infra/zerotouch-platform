@@ -15,7 +15,8 @@ NC='\033[0m' # No Color
 # Configuration
 DEEPAGENTS_NAMESPACE="intelligence-deepagents"
 IDE_ORCHESTRATOR_NAMESPACE="intelligence-orchestrator"
-DEEPAGENTS_SERVICE="deepagents-runtime-http"
+# Auto-discover DeepAgents HTTP service (handles different deployment patterns)
+DEEPAGENTS_SERVICE=$(kubectl get services -n $DEEPAGENTS_NAMESPACE -o name 2>/dev/null | grep -E "(deepagents-runtime-http|deepagents-runtime-sandbox-http)" | head -1 | cut -d'/' -f2 || echo "deepagents-runtime-http")
 IDE_ORCHESTRATOR_SERVICE="ide-orchestrator"
 BACKEND_CONFIG_NAME="ide-orchestrator-backend-config"
 
@@ -94,10 +95,15 @@ main() {
         exit 1
     fi
     
-    if ! kubectl get service $DEEPAGENTS_SERVICE -n $DEEPAGENTS_NAMESPACE >/dev/null 2>&1; then
-        log_error "DeepAgents service $DEEPAGENTS_SERVICE not found in namespace $DEEPAGENTS_NAMESPACE"
+    # Auto-discover and validate DeepAgents service
+    if [[ -z "$DEEPAGENTS_SERVICE" ]] || ! kubectl get service $DEEPAGENTS_SERVICE -n $DEEPAGENTS_NAMESPACE >/dev/null 2>&1; then
+        log_error "DeepAgents HTTP service not found in namespace $DEEPAGENTS_NAMESPACE"
+        log_info "Available services:"
+        kubectl get services -n $DEEPAGENTS_NAMESPACE -o name 2>/dev/null || echo "  None"
         exit 1
     fi
+    
+    log_info "Using DeepAgents service: $DEEPAGENTS_SERVICE"
     
     if ! kubectl get webservice $IDE_ORCHESTRATOR_SERVICE -n $IDE_ORCHESTRATOR_NAMESPACE >/dev/null 2>&1; then
         log_warning "IDE Orchestrator WebService $IDE_ORCHESTRATOR_SERVICE not found (may not be fully deployed)"
@@ -115,7 +121,7 @@ main() {
     # Test HTTP service
     set +e
     kubectl run test-deepagents-http --rm -i --restart=Never --image=curlimages/curl:latest -n $DEEPAGENTS_NAMESPACE \
-       --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-deepagents-http","image":"curlimages/curl:latest","command":["curl","-f","-s","http://deepagents-runtime-http.'$DEEPAGENTS_NAMESPACE'.svc.cluster.local:8000/health"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' >/dev/null 2>&1
+       --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"test-deepagents-http","image":"curlimages/curl:latest","command":["curl","-f","-s","http://'$DEEPAGENTS_SERVICE'.'$DEEPAGENTS_NAMESPACE'.svc.cluster.local:8080/health"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' >/dev/null 2>&1
     if [[ $? -eq 0 ]]; then
         log_success "DeepAgents HTTP service accessibility test PASSED"
     else
@@ -131,7 +137,7 @@ main() {
     if [[ -z "$backend_url" ]]; then
         log_error "Backend service ConfigMap not found or empty"
     else
-        expected_url="http://$DEEPAGENTS_SERVICE.$DEEPAGENTS_NAMESPACE.svc.cluster.local:8000"
+        expected_url="http://$DEEPAGENTS_SERVICE.$DEEPAGENTS_NAMESPACE.svc.cluster.local:8080"
         if [[ "$backend_url" == "$expected_url" ]]; then
             log_success "Backend service URL correctly resolved: $backend_url"
         else
