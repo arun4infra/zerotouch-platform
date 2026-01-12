@@ -7,11 +7,6 @@
 # This script orchestrates the complete cluster bootstrap process by calling
 # numbered scripts in sequence. All logic is in the individual scripts.
 
-# To Test argocd sync options without recreating cluster: 
-# 1 - kubectl delete namespace argocd --wait=false
-# 2 - sleep 5 && kubectl get namespace argocd 2>/dev/null || echo "ArgoCD namespace deleted"
-# 3 - ./scripts/bootstrap/install/09-install-argocd.sh production dev
-
 set -e
 
 # Colors for output
