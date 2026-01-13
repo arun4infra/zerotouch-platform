@@ -4,7 +4,7 @@ metadata:
   name: provider-aws-iam
 spec:
   package: xpkg.upbound.io/upbound/provider-aws-iam:v1.1.0
-  controllerConfigRef:
+  runtimeConfigRef:
     name: aws-provider-config
 ---
 apiVersion: pkg.crossplane.io/v1
@@ -13,21 +13,49 @@ metadata:
   name: provider-aws-s3
 spec:
   package: xpkg.upbound.io/upbound/provider-aws-s3:v1.1.0
-  controllerConfigRef:
+  runtimeConfigRef:
     name: aws-provider-config
 ---
-apiVersion: pkg.crossplane.io/v1alpha1
-kind: ControllerConfig
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
 metadata:
   name: aws-provider-config
 spec:
-  resources:
-    limits:
-      memory: 1Gi
-      cpu: 500m
-    requests:
-      memory: 512Mi
-      cpu: 100m
+  deploymentTemplate:
+    spec:
+      selector: {}
+      template:
+        spec:
+          containers:
+          - name: package-runtime
+            env:
+            - name: AWS_ROLE_ARN
+              value: "arn:aws:iam::337832075585:role/zerotouch-crossplane-role-dev"
+            - name: AWS_WEB_IDENTITY_TOKEN_FILE
+              value: "/var/run/secrets/aws/token"
+            - name: AWS_REGION
+              value: "ap-south-1"
+            - name: AWS_STS_REGIONAL_ENDPOINTS
+              value: "regional"
+            resources:
+              limits:
+                memory: 1Gi
+                cpu: 500m
+              requests:
+                memory: 512Mi
+                cpu: 100m
+            volumeMounts:
+            - name: aws-token
+              mountPath: /var/run/secrets/aws
+              readOnly: true
+          volumes:
+          - name: aws-token
+            projected:
+              sources:
+              - serviceAccountToken:
+                  audience: sts.amazonaws.com
+                  expirationSeconds: 3600
+                  path: token
 ---
 apiVersion: aws.upbound.io/v1beta1
 kind: ProviderConfig
