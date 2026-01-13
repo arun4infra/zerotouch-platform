@@ -198,11 +198,17 @@ main() {
         
         log_info "Publishing test message to NATS stream: $nats_stream"
         
-        # Publish a test message to trigger scaling
+        # Publish a test message to trigger scaling using existing nats-box pod
         set +e
-        kubectl run nats-publisher --rm -i --restart=Never --image=natsio/nats-box:latest -n $DEEPAGENTS_NAMESPACE \
-           --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"nats-publisher","image":"natsio/nats-box:latest","command":["/bin/sh","-c","nats pub --server=nats://nats-headless.nats.svc.cluster.local:4222 agent.execution.test '{\"test\":\"scaling-message\",\"timestamp\":\"'$(date -Iseconds)'\"}'"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' >/dev/null 2>&1
-        publish_result=$?
+        nats_box_pod=$(kubectl get pods -n nats -l app=nats-box -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+        if [[ -n "$nats_box_pod" ]]; then
+            kubectl exec -n nats "$nats_box_pod" -- nats pub --server=nats://nats-headless.nats.svc.cluster.local:4222 agent.execution.test '{"test":"scaling-message","timestamp":"'$(date -Iseconds)'"}' >/dev/null 2>&1
+            publish_result=$?
+        else
+            # Fallback: create temporary pod
+            kubectl run nats-test-publisher --rm -i --restart=Never --image=natsio/nats-box:latest -n $DEEPAGENTS_NAMESPACE -- nats pub --server=nats://nats-headless.nats.svc.cluster.local:4222 agent.execution.test '{"test":"scaling-message"}' >/dev/null 2>&1
+            publish_result=$?
+        fi
         set -e
         
         if [[ $publish_result -eq 0 ]]; then
