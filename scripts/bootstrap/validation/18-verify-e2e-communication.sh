@@ -201,7 +201,7 @@ main() {
         # Publish a test message to trigger scaling
         set +e
         kubectl run nats-publisher --rm -i --restart=Never --image=natsio/nats-box:latest -n $DEEPAGENTS_NAMESPACE \
-           --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"nats-publisher","image":"natsio/nats-box:latest","command":["/bin/sh","-c","nats pub --server=nats://nats-headless.nats.svc.cluster.local:4222 '$nats_stream' '{\"test\":\"scaling-message\",\"timestamp\":\"'$(date -Iseconds)'\"}'"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' >/dev/null 2>&1
+           --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"nats-publisher","image":"natsio/nats-box:latest","command":["/bin/sh","-c","nats pub --server=nats://nats-headless.nats.svc.cluster.local:4222 agent.execution.test '{\"test\":\"scaling-message\",\"timestamp\":\"'$(date -Iseconds)'\"}'"],"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"runAsNonRoot":true,"runAsUser":65534,"seccompProfile":{"type":"RuntimeDefault"}}}]}}' >/dev/null 2>&1
         publish_result=$?
         set -e
         
