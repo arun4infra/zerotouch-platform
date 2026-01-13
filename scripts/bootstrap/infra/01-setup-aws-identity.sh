@@ -84,7 +84,7 @@ cat > .well-known/openid-configuration << EOF
   "response_types_supported": ["id_token"],
   "subject_types_supported": ["public"],
   "id_token_signing_alg_values_supported": ["RS256"],
-  "claims_supported": ["sub", "iss"]
+  "claims_supported": ["sub", "iss", "aud", "exp", "iat"]
 }
 EOF
 
@@ -176,8 +176,14 @@ cat > crossplane-trust-policy.json << EOF
       },
       "Action": "sts:AssumeRoleWithWebIdentity",
       "Condition": {
+        "StringLike": {
+          "${OIDC_BUCKET}.s3.${REGION}.amazonaws.com:sub": [
+            "system:serviceaccount:crossplane-system:provider-aws-s3-*",
+            "system:serviceaccount:crossplane-system:provider-aws-iam-*",
+            "system:serviceaccount:crossplane-system:upbound-provider-family-aws-*"
+          ]
+        },
         "StringEquals": {
-          "${OIDC_BUCKET}.s3.${REGION}.amazonaws.com:sub": "system:serviceaccount:crossplane-system:provider-aws-s3-*",
           "${OIDC_BUCKET}.s3.${REGION}.amazonaws.com:aud": "sts.amazonaws.com"
         }
       }
