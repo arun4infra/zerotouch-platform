@@ -600,7 +600,7 @@ spec:
           toFieldPath: spec.forProvider.manifest.spec.hostnames[0]
           policy:
             fromFieldPath: Optional
-        # Priority 2: Generate hostname if manual not provided
+        # Priority 2: Generate hostname if manual not provided (format: <claim-name>-<namespace>.nutgraf.in)
         - type: CombineFromComposite
           combine:
             variables:
@@ -608,7 +608,7 @@ spec:
               - fromFieldPath: spec.claimRef.namespace
             strategy: string
             string:
-              fmt: "%s.%s.nutgraf.in"
+              fmt: "%s-%s.nutgraf.in"
           toFieldPath: spec.forProvider.manifest.spec.hostnames[0]
           policy:
             fromFieldPath: Optional
