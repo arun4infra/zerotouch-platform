@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
 - hetzner-api-external-secret.yaml
 - hetzner-dns-external-secret.yaml
+- hetzner-cert-manager-secret.yaml
