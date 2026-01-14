@@ -32,6 +32,16 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.deletionPolicy
           toFieldPath: spec.deletionPolicy
+        # Set explicit bucket name from claim name + environment to prevent random generation
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.claimRef.name
+              - fromFieldPath: spec.environment
+            strategy: string
+            string:
+              fmt: "%s-%s"
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
         - type: ToCompositeFieldPath
           fromFieldPath: metadata.annotations[crossplane.io/external-name]
           toFieldPath: status.bucketName

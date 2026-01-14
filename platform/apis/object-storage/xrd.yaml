@@ -21,6 +21,10 @@ spec:
             spec:
               type: object
               properties:
+                environment:
+                  type: string
+                  description: "Environment name (dev, staging, prod)"
+                  default: "prod"
                 region:
                   type: string
                   description: "AWS region for the bucket"
