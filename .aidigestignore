@@ -10,8 +10,18 @@ bootstrap/talos
 services
 platform/intelligence
 bootstrap/argocd/overlays/preview
+CONTRIBUTING.md
+platform/intelligence
+platform/observability
+
+# Scripts
+scripts/bootstrap/helpers
+scripts/bootstrap/preview
+scripts/bootstrap/validation
+scripts/bootstrap/wait
 
 # Temporary files
+.github
 *.log
 .kiro
 .talos-credentials
@@ -21,3 +31,4 @@ zerotouch-platform/scripts/local-ci/logs
 artifacts
 codebase.md
 temp-docs
+sa-signer-dev.key
