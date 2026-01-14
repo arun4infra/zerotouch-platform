@@ -17,7 +17,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Step counter for progress display
-TOTAL_STEPS=17
+TOTAL_STEPS=18
 CURRENT_STEP=0
 
 # Function to display step progress
@@ -289,6 +289,10 @@ fi
 # Step 13: Verify ESO
 step "Verifying ESO..."
 "$SCRIPT_DIR/validation/11-verify-eso.sh"
+
+# Step 13.5: Restore cached TLS certificates
+step "Restoring cached TLS certificates..."
+"$SCRIPT_DIR/helpers/restore-gateway-cert.sh"
 
 # Step 14: Verify child applications
 step "Verifying child applications..."
