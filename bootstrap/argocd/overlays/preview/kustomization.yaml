@@ -157,3 +157,24 @@ patches:
         kind: Composition
         jqPathExpressions:
         - .status
+
+# 5. Disable Gateway API support in cert-manager for preview mode
+- target:
+    kind: Application
+    name: cert-manager
+  patch: |-
+    apiVersion: argoproj.io/v1alpha1
+    kind: Application
+    metadata:
+      name: cert-manager
+    spec:
+      source:
+        helm:
+          values: |
+            installCRDs: true
+            config:
+              apiVersion: controller.config.cert-manager.io/v1alpha1
+              kind: ControllerConfiguration
+              enableGatewayAPI: false
+              featureGates:
+                ExperimentalGatewayAPISupport: false

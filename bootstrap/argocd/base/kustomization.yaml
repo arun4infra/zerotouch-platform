@@ -4,9 +4,7 @@ kind: Kustomization
 resources:
 - 00-eso.yaml
 - 01-crossplane.yaml
-- 01-hcloud-ccm.yaml
 - 01-cert-manager.yaml
-- 01-external-dns.yaml
 - 02-cnpg.yaml
 - 03-foundation-config.yaml
 - 04-kagent-crds.yaml

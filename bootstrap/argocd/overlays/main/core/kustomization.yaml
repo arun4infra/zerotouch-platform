@@ -6,6 +6,8 @@ resources:
 - 00-local-path-provisioner.yaml
 - 00-gateway-api-crds.yaml
 - 00-repo-registry-app.yaml
+- 01-external-dns.yaml
+- 01-hcloud-ccm.yaml
 - argocd-repo-configs.yaml
 - tenant-infrastructure.yaml
 # Gateway and DNS deployed via separate ArgoCD apps (main environment only)
