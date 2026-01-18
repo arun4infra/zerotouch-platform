@@ -22,7 +22,41 @@ This template guides you through creating a new tenant service in the ZeroTouch 
 
 ---
 
-## Step 2: Create Directory Structure
+## Step 2: Create Service Repository Structure
+
+**Core Service Repository:** `<service-name>/` (separate from deployment)
+**Deployment Repository:** `zerotouch-tenants/tenants/<service-name>/`
+
+### 2.1 Core Service Repository Structure
+
+```bash
+# Create core service repository
+mkdir <service-name>
+cd <service-name>
+
+# Initialize service structure
+mkdir -p {src,migrations,scripts/ci,tests}
+```
+
+**Core Service Directory Layout:**
+```
+<service-name>/
+├── src/                          # Source code
+├── migrations/                   # Database migrations
+├── scripts/
+│   └── ci/
+│       ├── run-migrations.sh     # Migration script for ArgoCD
+│       └── in-cluster-test.sh    # Platform CI integration
+├── tests/                        # Unit and integration tests
+├── ci/
+│   └── config.yaml              # Platform CI configuration
+├── package.json                 # Dependencies and scripts
+├── Dockerfile                   # Multi-stage build
+├── tsconfig.json               # TypeScript configuration
+└── README.md                   # Service documentation
+```
+
+### 2.2 Deployment Repository Structure
 
 ```bash
 cd zerotouch-tenants/tenants
@@ -34,7 +68,7 @@ mkdir -p <service-name>/{base/{claims,external-secrets},overlays/{dev,staging,pr
 touch <service-name>/00-namespace.yaml
 ```
 
-**Directory Layout:**
+**Deployment Directory Layout:**
 ```
 zerotouch-tenants/tenants/<service-name>/
 ├── 00-namespace.yaml
@@ -50,7 +84,8 @@ zerotouch-tenants/tenants/<service-name>/
 └── overlays/
     ├── dev/
     │   ├── kustomization.yaml
-    │   └── webservice-claim.yaml
+    │   ├── webservice-claim.yaml
+    │   └── migration-job.yaml (if database migrations needed)
     ├── staging/
     │   ├── kustomization.yaml
     │   └── webservice-claim.yaml
@@ -61,7 +96,154 @@ zerotouch-tenants/tenants/<service-name>/
 
 ---
 
-## Step 3: Create Namespace
+## Step 3: Create Core Service CI Scripts
+
+### 3.1 Migration Script
+
+**File:** `<service-name>/scripts/ci/run-migrations.sh`
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ==============================================================================
+# Database Migrations Script - <service-name>
+# ==============================================================================
+# Runs database migrations for <service-name>
+# Used by ArgoCD PreSync hooks and CI workflows
+# ==============================================================================
+
+# Color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log_info() { echo -e "${BLUE}[INFO]${NC} $*" >&2; }
+log_success() { echo -e "${GREEN}[SUCCESS]${NC} $*" >&2; }
+log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+
+main() {
+    log_info "Starting database migrations for <service-name>..."
+    
+    # Validate required environment variables
+    if [[ -z "${DATABASE_URL:-}" ]]; then
+        log_error "Required environment variable not set: DATABASE_URL"
+        return 1
+    fi
+    
+    log_info "Database connection configured via DATABASE_URL"
+    
+    # Set migration directory
+    MIGRATION_DIR="${MIGRATION_DIR:-/app/migrations}"
+    
+    if [[ ! -d "$MIGRATION_DIR" ]]; then
+        log_error "Migration directory not found: $MIGRATION_DIR"
+        return 1
+    fi
+    
+    log_info "Running migrations from: $MIGRATION_DIR"
+    
+    # Run service-specific migration command
+    npm run migrate
+    
+    log_success "Database migrations completed for <service-name>"
+}
+
+main "$@"
+```
+
+### 3.2 Platform CI Integration Script
+
+**File:** `<service-name>/scripts/ci/in-cluster-test.sh`
+
+```bash
+#!/bin/bash
+set -euo pipefail
+
+# ==============================================================================
+# Service CI Entry Point for <service-name>
+# ==============================================================================
+# Purpose: Standardized entry point for platform-based CI testing
+# Usage: ./scripts/ci/in-cluster-test.sh
+# ==============================================================================
+
+# Get platform branch from service config
+if [[ -f "ci/config.yaml" ]]; then
+    if command -v yq &> /dev/null; then
+        PLATFORM_BRANCH=$(yq eval '.platform.branch // "main"' ci/config.yaml)
+    else
+        PLATFORM_BRANCH="main"
+    fi
+else
+    PLATFORM_BRANCH="main"
+fi
+
+# Always ensure fresh platform checkout
+if [[ -d "zerotouch-platform" ]]; then
+    echo "Removing existing platform checkout for fresh clone..."
+    rm -rf zerotouch-platform
+fi
+
+echo "Cloning fresh zerotouch-platform repository (branch: $PLATFORM_BRANCH)..."
+git clone -b "$PLATFORM_BRANCH" https://github.com/arun4infra/zerotouch-platform.git zerotouch-platform
+
+# Run platform script
+./zerotouch-platform/scripts/bootstrap/preview/tenants/in-cluster-test.sh
+```
+
+### 3.3 Platform CI Configuration
+
+**File:** `<service-name>/ci/config.yaml`
+
+```yaml
+service:
+  name: "<service-name>"
+  namespace: "<namespace>"
+
+build:
+  dockerfile: "Dockerfile"
+  context: "."
+  tag: "ci-test"
+
+test:
+  timeout: 600
+  parallel: true
+
+deployment:
+  wait_timeout: 300
+  health_endpoint: "/health"
+  liveness_endpoint: "/health"
+
+dependencies:
+  platform:
+    - cnpg-operator
+    - external-secrets
+    - crossplane-providers
+  external: []
+  internal:
+    - redis  # or postgres, depending on service needs
+
+env:
+  NODE_ENV: "test"
+  LOG_LEVEL: "debug"
+
+diagnostics:
+  pre_deploy:
+    check_dependencies: true
+    check_platform_apis: true
+  post_deploy:
+    test_health_endpoint: true
+    test_database_connection: false
+    test_service_connectivity: true
+
+platform:
+  branch: "main"
+```
+
+---
+
+## Step 4: Create Namespace
 
 **File:** `00-namespace.yaml`
 
@@ -300,7 +482,83 @@ spec:
 
 ---
 
-## Step 9: Create Overlay Kustomization
+## Step 9: Create Migration Job (If Database Required)
+
+### 9.1 Migration Job Template
+
+**File:** `overlays/dev/migration-job.yaml`
+
+```yaml
+# Database migration job - runs after database is ready, before app deployment
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: <service-name>-migrations
+  namespace: <namespace>
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  template:
+    metadata:
+      name: <service-name>-migrations
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+      - name: ghcr-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: migrations
+        image: ghcr.io/<org>/<service-name>:latest
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        command: ["./scripts/ci/run-migrations.sh"]
+        envFrom:
+        - secretRef:
+            name: <service-name>-db
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+```
+
+### 9.2 Update Overlay Kustomization
+
+**File:** `overlays/dev/kustomization.yaml`
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - webservice-claim.yaml
+  - migration-job.yaml  # Add if database migrations needed
+
+commonLabels:
+  app.kubernetes.io/instance: dev
+
+namespace: <namespace>
+```
+
+---
+
+## Step 10: Create Overlay Kustomization
 
 **File:** `overlays/dev/kustomization.yaml`
 
@@ -512,6 +770,16 @@ kubectl get events -n <namespace> --sort-by='.lastTimestamp'
 
 ## Checklist
 
+### Core Service Repository
+- [ ] Service repository created (`<service-name>/`)
+- [ ] Source code structure created (`src/`, `tests/`, `migrations/`)
+- [ ] CI scripts created (`scripts/ci/run-migrations.sh`, `scripts/ci/in-cluster-test.sh`)
+- [ ] Platform CI config created (`ci/config.yaml`)
+- [ ] Dockerfile created with multi-stage build
+- [ ] Package.json with migration script (`npm run migrate`)
+- [ ] Scripts made executable (`chmod +x scripts/ci/*.sh`)
+
+### Deployment Repository
 - [ ] Tenant name defined (kebab-case)
 - [ ] Namespace defined
 - [ ] Directory structure created
@@ -522,6 +790,7 @@ kubectl get events -n <namespace> --sort-by='.lastTimestamp'
 - [ ] Infrastructure claims created (if needed) with Wave 0 annotation
 - [ ] Base kustomization.yaml created
 - [ ] WebService claim created with Wave 6 annotation
+- [ ] Migration job created (if database required) with Wave 2 annotation
 - [ ] Overlay kustomizations created (dev, staging, production)
 - [ ] Committed and pushed to zerotouch-tenants
 - [ ] ArgoCD detected and deployed tenant
