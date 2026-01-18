@@ -64,14 +64,15 @@ if [[ "$MODE" == "test" ]]; then
     # ========================================================================
     # TEST MODE: Build and load into Kind cluster
     # ========================================================================
-    IMAGE_TAG="${SERVICE_NAME}:ci-test"
+    IMAGE_TAG="ci-test"
+    FULL_IMAGE_TAG="${SERVICE_NAME}:${IMAGE_TAG}"
     CLUSTER_NAME="zerotouch-preview"
     
     # Build Docker image for testing (Python services)
     log_info "Building Docker test image for testing..."
     docker build \
         -f Dockerfile \
-        -t "${SERVICE_NAME}:${IMAGE_TAG}" \
+        -t "${FULL_IMAGE_TAG}" \
         --build-arg BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
         --build-arg GIT_COMMIT="${GITHUB_SHA:-$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')}" \
         .
@@ -81,14 +82,14 @@ if [[ "$MODE" == "test" ]]; then
     # Only load into Kind cluster if BUILD_ONLY is not set
     if [[ "${BUILD_ONLY:-false}" != "true" ]]; then
         log_info "Loading image into Kind cluster..."
-        if ! kind load docker-image "${SERVICE_NAME}:${IMAGE_TAG}" --name "${CLUSTER_NAME}"; then
+        if ! kind load docker-image "${FULL_IMAGE_TAG}" --name "${CLUSTER_NAME}"; then
             log_error "Failed to load image into Kind cluster"
             exit 1
         fi
         log_success "Image loaded successfully into Kind cluster"
-        log_success "Build and load complete: ${SERVICE_NAME}:${IMAGE_TAG}"
+        log_success "Build and load complete: ${FULL_IMAGE_TAG}"
     else
-        log_success "Build complete (skipping load): ${SERVICE_NAME}:${IMAGE_TAG}"
+        log_success "Build complete (skipping load): ${FULL_IMAGE_TAG}"
     fi
 
 elif [[ "$MODE" == "production" || "$MODE" == "local" ]]; then
