@@ -409,7 +409,7 @@ trap cleanup EXIT
             else
                 # Fallback for local execution if not in GHA
                 BUILD_MODE="test"
-                IMAGE_TAG="ci-test"
+                IMAGE_TAG="${SERVICE_NAME}:ci-test"
             fi
             
             log_success "Build completed - Mode: $BUILD_MODE, Tag: $IMAGE_TAG"

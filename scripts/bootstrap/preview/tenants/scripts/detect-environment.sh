@@ -20,13 +20,8 @@ detect_environment() {
             echo "pr"  # Default to PR for other branches in CI
         fi
     else
-        # Local execution - use git branch
-        local branch=$(git branch --show-current 2>/dev/null || echo "main")
-        if [[ "$branch" == "main" ]]; then
-            echo "main"
-        else
-            echo "pr"
-        fi
+        # Local execution - always return PR for testing
+        echo "pr"
     fi
 }
 
