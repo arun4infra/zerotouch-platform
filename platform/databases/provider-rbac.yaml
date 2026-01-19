@@ -10,6 +10,9 @@ rules:
       - services
       - configmaps
       - serviceaccounts
+      - namespaces
+      - pods
+      - events
     verbs:
       - "*"
   - apiGroups:
@@ -68,6 +71,12 @@ rules:
       - sandboxes
     verbs:
       - "*"
+  - apiGroups:
+      - external-secrets.io
+    resources:
+      - externalsecrets
+    verbs:
+      - "*"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -79,5 +88,5 @@ roleRef:
   name: crossplane-kubernetes-provider
 subjects:
   - kind: ServiceAccount
-    name: provider-kubernetes-6ef2ebb6f1db
+    name: provider-kubernetes-controller
     namespace: crossplane-system
