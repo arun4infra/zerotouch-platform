@@ -5,7 +5,6 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 rules:
-  # Allow managing all resources as this is a cluster-admin provider
   - apiGroups: ["*"]
     resources: ["*"]
     verbs: ["*"]
@@ -22,5 +21,6 @@ roleRef:
   name: crossplane-kubernetes-provider
 subjects:
   - kind: ServiceAccount
-    name: provider-kubernetes-controller
+    # CRITICAL: This hash matches v0.12.1 exactly
+    name: provider-kubernetes-6ef2ebb6f1db
     namespace: crossplane-system
