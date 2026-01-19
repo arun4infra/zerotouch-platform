@@ -4,7 +4,7 @@ set -euo pipefail
 # ==============================================================================
 # PR Claims Checkout Script
 # ==============================================================================
-# Purpose: Checkout PR claims and apply them to cluster
+# Purpose: Checkout PR claims from tenants repository
 # Usage: ./checkout-pr-claims.sh <environment> <namespace> <service_name>
 # ==============================================================================
 
@@ -72,25 +72,7 @@ checkout_pr_claims() {
             
             if [[ -d "$claims_path" ]]; then
                 log_info "Found PR claims at: $claims_path"
-                
-                # Apply PR claims directly to cluster using kubectl
-                log_info "Applying PR claims to cluster..."
-                
-                for claim_file in "$claims_path"/*.yaml; do
-                    if [[ -f "$claim_file" ]]; then
-                        local filename=$(basename "$claim_file")
-                        # Skip non-Kubernetes files, kustomization files, job files, and webservice claims
-                        if [[ "$filename" == "config.yaml" ]] || [[ "$filename" == kustomization* ]] || [[ "$filename" == *-job.yaml ]] || [[ "$filename" == webservice-claim.yaml ]]; then
-                            log_info "Skipping: $filename"
-                            continue
-                        fi
-                        
-                        log_info "Applying: $filename"
-                        kubectl apply -f "$claim_file"
-                    fi
-                done
-                
-                log_success "PR claims applied to cluster"
+                log_success "PR claims checked out successfully"
             else
                 log_error "PR claims directory not found: $claims_path"
                 exit 1
