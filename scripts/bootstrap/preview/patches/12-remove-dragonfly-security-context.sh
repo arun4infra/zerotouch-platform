@@ -33,7 +33,7 @@ elif command -v kubectl >/dev/null 2>&1 && kubectl cluster-info >/dev/null 2>&1;
 fi
 
 if [ "$IS_PREVIEW_MODE" = true ]; then
-    DRAGONFLY_COMPOSITION="$REPO_ROOT/platform/databases/dragonfly/compositions/dragonfly-composition.yaml"
+    DRAGONFLY_COMPOSITION="$REPO_ROOT/platform/databases/dragonfly/dragonfly-composition.yaml"
     
     if [ -f "$DRAGONFLY_COMPOSITION" ]; then
         # Remove pod-level securityContext block
