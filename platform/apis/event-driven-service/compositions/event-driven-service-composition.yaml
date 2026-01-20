@@ -133,11 +133,11 @@ spec:
                                     optional: true
                               resources:
                                 requests:
-                                  cpu: "500m"
-                                  memory: "1Gi"
+                                  cpu: "100m"  # Will be overridden by size-based patch
+                                  memory: "256Mi"  # Will be overridden by size-based patch
                                 limits:
-                                  cpu: "2000m"
-                                  memory: "4Gi"
+                                  cpu: "500m"  # Will be overridden by size-based patch
+                                  memory: "1Gi"  # Will be overridden by size-based patch
                               securityContext:
                                 runAsNonRoot: true
                                 runAsUser: 1000

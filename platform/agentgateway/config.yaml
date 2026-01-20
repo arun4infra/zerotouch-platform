@@ -1,0 +1,34 @@
+# AgentGateway Configuration for Platform Authentication
+# HTTP extAuthz configuration for Identity Service integration
+
+policies:
+  - name: api-authentication
+    extAuthz:
+      protocol: http                # HTTP for simplicity (gRPC optional optimization)
+      endpoint: http://identity-service.platform-identity.svc.cluster.local:3000/internal/validate
+      timeout: 2s
+      includeRequestHeaders:
+        - cookie
+        - authorization
+      includeResponseHeaders:
+        - authorization
+        - x-auth-user-id
+        - x-auth-org-id
+      failureModeAllow: false
+
+routes:
+  - path: /api/*
+    policies:
+      - api-authentication
+    backend: http://ide-orchestrator.intelligence-orchestrator.svc.cluster.local:8080
+    headerModifications:
+      stripRequestHeaders:
+        - cookie                    # Strip session cookie from upstream requests
+      injectResponseHeaders:        # Inject headers from extAuthz response
+        - authorization
+        - x-auth-user-id
+        - x-auth-org-id
+  
+  - path: /auth/*
+    backend: http://identity-service.platform-identity.svc.cluster.local:3000
+    # No extAuthz policy - direct routing to Identity Service
