@@ -1,34 +1,41 @@
 # AgentGateway Configuration for Platform Authentication
-# HTTP extAuthz configuration for Identity Service integration
+# Corrected schema structure for agentgateway binary compatibility
 
-policies:
-  - name: api-authentication
-    extAuthz:
-      protocol: http                # HTTP for simplicity (gRPC optional optimization)
-      endpoint: http://identity-service.platform-identity.svc.cluster.local:3000/internal/validate
-      timeout: 2s
-      includeRequestHeaders:
-        - cookie
-        - authorization
-      includeResponseHeaders:
-        - authorization
-        - x-auth-user-id
-        - x-auth-org-id
-      failureModeAllow: false
+binds:
+  - port: 3000
+    listeners:
+      - name: main-listener
+        protocol: HTTP
+        routes:
+          # 1. Login Routes (Passthrough to Identity Service)
+          - name: auth
+            matches:
+              - path: 
+                  pathPrefix: "/auth"
+            backends:
+              - host: "identity-service.platform-identity.svc.cluster.local:3000"
 
-routes:
-  - path: /api/*
-    policies:
-      - api-authentication
-    backend: http://ide-orchestrator.intelligence-orchestrator.svc.cluster.local:8080
-    headerModifications:
-      stripRequestHeaders:
-        - cookie                    # Strip session cookie from upstream requests
-      injectResponseHeaders:        # Inject headers from extAuthz response
-        - authorization
-        - x-auth-user-id
-        - x-auth-org-id
-  
-  - path: /auth/*
-    backend: http://identity-service.platform-identity.svc.cluster.local:3000
-    # No extAuthz policy - direct routing to Identity Service
+          # 2. API Routes (Protected via Sidecar Authorizer)
+          - name: api
+            matches:
+              - path: 
+                  pathPrefix: "/api"
+            policies:
+              # Step A: Delegate to Identity Service via HTTP extAuthz
+              extAuthz:
+                # SCHEMA FIX: 'host' is a direct sibling of 'protocol', not nested in 'backend'
+                host: "identity-service.platform-identity.svc.cluster.local:3000"
+                # [CORRECTION] This must be a sibling of 'protocol', not a child
+                includeRequestHeaders: ["Cookie", "Authorization"]
+                protocol:
+                  http:
+                    path: "/internal/validate"
+                    # [NOTE] This remains inside http protocol
+                    includeResponseHeaders: ["Authorization", "X-Auth-User-Id", "X-Auth-Org-Id"]
+              
+              # Step B: Strip the session cookie to ensure downstream only sees the JWT
+              requestHeaderModifier:
+                remove: ["Cookie"]
+            
+            backends:
+              - host: "ide-orchestrator.intelligence-orchestrator.svc.cluster.local:8080"

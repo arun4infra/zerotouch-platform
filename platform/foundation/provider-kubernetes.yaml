@@ -3,7 +3,7 @@ kind: Provider
 metadata:
   name: provider-kubernetes
   annotations:
-    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   # We rely on the default ServiceAccount hash: 6ef2ebb6f1db
   package: xpkg.upbound.io/crossplane-contrib/provider-kubernetes:v0.12.1
