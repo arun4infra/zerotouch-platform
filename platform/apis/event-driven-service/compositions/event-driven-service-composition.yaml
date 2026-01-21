@@ -459,7 +459,7 @@ spec:
                 fromFieldPath: spec.httpPort
                 toFieldPath: spec.forProvider.manifest.spec.ports[0].port
                 policy:
-                  fromFieldPath: Required
+                  fromFieldPath: Optional
               # Patch name with -http suffix
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.claimRef.name

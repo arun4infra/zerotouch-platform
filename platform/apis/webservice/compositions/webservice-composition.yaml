@@ -90,7 +90,7 @@ spec:
           fromFieldPath: spec.databaseName
           toFieldPath: spec.forProvider.manifest.metadata.annotations[database-name]
           policy:
-            fromFieldPath: Required
+            fromFieldPath: Optional
         - type: FromCompositeFieldPath
           fromFieldPath: spec.databaseSize
           toFieldPath: spec.forProvider.manifest.spec.size
@@ -417,7 +417,7 @@ spec:
           fromFieldPath: spec.backendServiceName
           toFieldPath: spec.forProvider.manifest.metadata.annotations[backend-service-name]
           policy:
-            fromFieldPath: Required
+            fromFieldPath: Optional
         # Patch name and namespace
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
@@ -532,7 +532,7 @@ spec:
           fromFieldPath: spec.sessionAffinity
           toFieldPath: spec.forProvider.manifest.spec.sessionAffinity
           policy:
-            fromFieldPath: Required
+            fromFieldPath: Optional
         # Patch Prometheus port annotation to match service port
         - type: FromCompositeFieldPath
           fromFieldPath: spec.port

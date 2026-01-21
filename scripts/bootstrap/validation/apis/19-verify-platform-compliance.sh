@@ -18,25 +18,41 @@ kubectl_retry() {
     local max_attempts=20
     local attempt=1
     local exitCode=0
+    local retry_on_notfound=true
+
+    # Check for --no-retry-on-notfound flag
+    if [[ "$1" == "--no-retry-on-notfound" ]]; then
+        retry_on_notfound=false
+        shift
+    fi
 
     while [ $attempt -le $max_attempts ]; do
-        # Do NOT silence stderr here, we want to see connection issues in CI logs
-        if kubectl "$@"; then
+        # Capture both stdout and stderr
+        local output
+        output=$(kubectl "$@" 2>&1)
+        exitCode=$?
+
+        if [ $exitCode -eq 0 ]; then
+            echo "$output"
             return 0
         fi
 
-        exitCode=$?
+        # If --no-retry-on-notfound is set and error is NotFound, return immediately
+        if [[ "$retry_on_notfound" == "false" && "$output" == *"NotFound"* ]]; then
+            echo "$output" >&2
+            return $exitCode
+        fi
 
         if [ $attempt -lt $max_attempts ]; then
             local delay=$((attempt * 2))
-            echo -e "${YELLOW}⚠️  kubectl command failed (attempt $attempt/$max_attempts). Retrying in ${delay}s...${NC}" >&2
+            echo -e "${YELLOW}⚠️  kubectl command failed (attempt $attempt/$max_attempts): ${NC}$output" >&2
+            echo -e "${YELLOW}Retrying in ${delay}s...${NC}" >&2
             sleep $delay
         fi
 
         attempt=$((attempt + 1))
     done
 
-    echo -e "${RED}✗ kubectl command failed after $max_attempts attempts${NC}" >&2
     return $exitCode
 }
 
@@ -207,33 +223,38 @@ if kubectl apply -f /tmp/test-eds.yaml &>/dev/null; then
     fi
     sleep 5 # Small buffer for Crossplane provider-kubernetes to finish patching final fields
     
-    # Check if deployment has correct security contexts
-    if kubectl_retry get deployment compliance-test-eds -n platform-compliance-test -o json | jq -e '.spec.template.spec.securityContext.runAsNonRoot == true'; then
-        log_success "EventDrivenService deployment has runAsNonRoot security context"
+    # Check if deployment exists before running field checks to avoid log spam
+    if ! kubectl get deployment compliance-test-eds -n platform-compliance-test &>/dev/null; then
+        log_error "EventDrivenService deployment 'compliance-test-eds' was never created by Crossplane"
     else
-        log_error "EventDrivenService deployment missing runAsNonRoot security context"
-    fi
-    
-    # Check container security context
-    if kubectl_retry get deployment compliance-test-eds -n platform-compliance-test -o json | jq -e '.spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation == false'; then
-        log_success "EventDrivenService container has allowPrivilegeEscalation: false"
-    else
-        log_error "EventDrivenService container missing allowPrivilegeEscalation: false"
-    fi
-    
-    # Check observability annotations
-    if kubectl_retry get deployment compliance-test-eds -n platform-compliance-test -o json | jq -e '.spec.template.metadata.annotations."prometheus.io/scrape" == "true"'; then
-        log_success "EventDrivenService has Prometheus scrape annotation"
-    else
-        log_error "EventDrivenService missing Prometheus scrape annotation"
-    fi
-    
-    # Check resource allocation
-    CPU_REQUEST=$(kubectl_retry get deployment compliance-test-eds -n platform-compliance-test -o json | jq -r '.spec.template.spec.containers[0].resources.requests.cpu // ""')
-    if [ "$CPU_REQUEST" = "100m" ]; then
-        log_success "EventDrivenService micro size has correct CPU request: $CPU_REQUEST"
-    else
-        log_error "EventDrivenService micro size has incorrect CPU request: $CPU_REQUEST (expected: 100m)"
+        # Check if deployment has correct security contexts
+        if kubectl get deployment compliance-test-eds -n platform-compliance-test -o json | jq -e '.spec.template.spec.securityContext.runAsNonRoot == true' &>/dev/null; then
+            log_success "EventDrivenService deployment has runAsNonRoot security context"
+        else
+            log_error "EventDrivenService deployment missing runAsNonRoot security context"
+        fi
+        
+        # Check container security context
+        if kubectl get deployment compliance-test-eds -n platform-compliance-test -o json | jq -e '.spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation == false' &>/dev/null; then
+            log_success "EventDrivenService container has allowPrivilegeEscalation: false"
+        else
+            log_error "EventDrivenService container missing allowPrivilegeEscalation: false"
+        fi
+        
+        # Check observability annotations
+        if kubectl get deployment compliance-test-eds -n platform-compliance-test -o json | jq -e '.spec.template.metadata.annotations."prometheus.io/scrape" == "true"' &>/dev/null; then
+            log_success "EventDrivenService has Prometheus scrape annotation"
+        else
+            log_error "EventDrivenService missing Prometheus scrape annotation"
+        fi
+        
+        # Check resource allocation
+        CPU_REQUEST=$(kubectl get deployment compliance-test-eds -n platform-compliance-test -o json | jq -r '.spec.template.spec.containers[0].resources.requests.cpu // ""' 2>/dev/null)
+        if [ "$CPU_REQUEST" = "100m" ]; then
+            log_success "EventDrivenService micro size has correct CPU request: $CPU_REQUEST"
+        else
+            log_error "EventDrivenService micro size has incorrect CPU request: $CPU_REQUEST (expected: 100m)"
+        fi
     fi
     
     # Clean up
@@ -283,33 +304,38 @@ if kubectl apply -f /tmp/test-ws.yaml &>/dev/null; then
     fi
     sleep 5 # Small buffer for Crossplane provider-kubernetes to finish patching final fields
     
-    # Check if deployment has correct security contexts
-    if kubectl_retry get deployment compliance-test-ws -n platform-compliance-test -o json | jq -e '.spec.template.spec.securityContext.runAsNonRoot == true'; then
-        log_success "WebService deployment has runAsNonRoot security context"
+    # Check if deployment exists before running field checks
+    if ! kubectl get deployment compliance-test-ws -n platform-compliance-test &>/dev/null; then
+        log_error "WebService deployment 'compliance-test-ws' was never created by Crossplane"
     else
-        log_error "WebService deployment missing runAsNonRoot security context"
-    fi
-    
-    # Check resource allocation consistency
-    CPU_REQUEST=$(kubectl_retry get deployment compliance-test-ws -n platform-compliance-test -o json | jq -r '.spec.template.spec.containers[0].resources.requests.cpu // ""')
-    if [ "$CPU_REQUEST" = "100m" ]; then
-        log_success "WebService micro size has correct CPU request: $CPU_REQUEST (consistent with EventDrivenService)"
-    else
-        log_error "WebService micro size has incorrect CPU request: $CPU_REQUEST (expected: 100m for consistency)"
-    fi
-    
-    # Check Service creation
-    if kubectl_retry get service compliance-test-ws -n platform-compliance-test; then
-        log_success "WebService Service resource created"
-        
-        # Check Service has observability annotations
-        if kubectl_retry get service compliance-test-ws -n platform-compliance-test -o json | jq -e '.metadata.annotations."prometheus.io/scrape" == "true"'; then
-            log_success "WebService Service has Prometheus scrape annotation"
+        # Check if deployment has correct security contexts
+        if kubectl get deployment compliance-test-ws -n platform-compliance-test -o json | jq -e '.spec.template.spec.securityContext.runAsNonRoot == true' &>/dev/null; then
+            log_success "WebService deployment has runAsNonRoot security context"
         else
-            log_error "WebService Service missing Prometheus scrape annotation"
+            log_error "WebService deployment missing runAsNonRoot security context"
         fi
-    else
-        log_error "WebService Service resource not created"
+        
+        # Check resource allocation consistency
+        CPU_REQUEST=$(kubectl get deployment compliance-test-ws -n platform-compliance-test -o json | jq -r '.spec.template.spec.containers[0].resources.requests.cpu // ""' 2>/dev/null)
+        if [ "$CPU_REQUEST" = "100m" ]; then
+            log_success "WebService micro size has correct CPU request: $CPU_REQUEST (consistent with EventDrivenService)"
+        else
+            log_error "WebService micro size has incorrect CPU request: $CPU_REQUEST (expected: 100m for consistency)"
+        fi
+        
+        # Check Service creation
+        if kubectl get service compliance-test-ws -n platform-compliance-test &>/dev/null; then
+            log_success "WebService Service resource created"
+            
+            # Check Service has observability annotations
+            if kubectl get service compliance-test-ws -n platform-compliance-test -o json | jq -e '.metadata.annotations["prometheus.io/scrape"] == "true"' &>/dev/null; then
+                log_success "WebService Service has Prometheus scrape annotation"
+            else
+                log_error "WebService Service missing Prometheus scrape annotation"
+            fi
+        else
+            log_error "WebService Service resource not created"
+        fi
     fi
     
     # Clean up
