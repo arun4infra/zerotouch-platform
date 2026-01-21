@@ -94,7 +94,7 @@ echo ""
 echo "🏢 Critical Namespaces:"
 echo "------------------------------------------"
 
-ALL_NAMESPACES=("argocd" "external-secrets" "crossplane-system" "keda" "kagent" "intelligence-platform")
+ALL_NAMESPACES=("argocd" "external-secrets" "crossplane-system" "keda")
 
 for ns in "${ALL_NAMESPACES[@]}"; do
     if kubectl get namespace "$ns" &>/dev/null; then
