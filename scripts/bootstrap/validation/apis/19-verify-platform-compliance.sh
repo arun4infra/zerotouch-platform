@@ -6,6 +6,12 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+HELPERS_DIR="$(cd "$SCRIPT_DIR/../../helpers" && pwd)"
+
+# Source shared diagnostics library
+if [ -f "$HELPERS_DIR/diagnostics.sh" ]; then
+    source "$HELPERS_DIR/diagnostics.sh"
+fi
 
 # Colors
 RED='\033[0;31m'
@@ -184,9 +190,16 @@ if kubectl apply -f /tmp/test-eds.yaml &>/dev/null; then
     
     # Wait for deployment to be ready and patched
     echo -n "Waiting for EventDrivenService to reconcile... "
-    kubectl wait --for=condition=available deployment/compliance-test-eds -n platform-compliance-test --timeout=60s &>/dev/null || true
+    if ! kubectl wait --for=condition=available deployment/compliance-test-eds -n platform-compliance-test --timeout=60s &>/dev/null; then
+        echo -e "${YELLOW}Timeout reached${NC}"
+        echo -e "${BLUE}Running diagnostics for EventDrivenService...${NC}"
+        # Check pod status for memory/scheduling issues
+        show_pod_details "platform-compliance-test" "app.kubernetes.io/name=compliance-test-eds"
+        show_recent_events "platform-compliance-test" "FailedScheduling|Insufficient"
+    else
+        echo "Done."
+    fi
     sleep 5 # Small buffer for Crossplane provider-kubernetes to finish patching final fields
-    echo "Done."
     
     # Check if deployment has correct security contexts
     if kubectl_retry get deployment compliance-test-eds -n platform-compliance-test -o json 2>/dev/null | jq -e '.spec.template.spec.securityContext.runAsNonRoot == true' &>/dev/null; then
@@ -241,9 +254,16 @@ if kubectl apply -f /tmp/test-ws.yaml &>/dev/null; then
     
     # Wait for deployment to be ready and patched
     echo -n "Waiting for WebService to reconcile... "
-    kubectl wait --for=condition=available deployment/compliance-test-ws -n platform-compliance-test --timeout=60s &>/dev/null || true
+    if ! kubectl wait --for=condition=available deployment/compliance-test-ws -n platform-compliance-test --timeout=60s &>/dev/null; then
+        echo -e "${YELLOW}Timeout reached${NC}"
+        echo -e "${BLUE}Running diagnostics for WebService...${NC}"
+        # Check pod status for memory/scheduling issues
+        show_pod_details "platform-compliance-test" "app.kubernetes.io/name=compliance-test-ws"
+        show_recent_events "platform-compliance-test" "FailedScheduling|Insufficient"
+    else
+        echo "Done."
+    fi
     sleep 5 # Small buffer for Crossplane provider-kubernetes to finish patching final fields
-    echo "Done."
     
     # Check if deployment has correct security contexts
     if kubectl_retry get deployment compliance-test-ws -n platform-compliance-test -o json 2>/dev/null | jq -e '.spec.template.spec.securityContext.runAsNonRoot == true' &>/dev/null; then
@@ -341,9 +361,15 @@ else
     echo -e "${RED}✗ Platform compliance validation failed with $ERRORS error(s) and $WARNINGS warning(s)${NC}"
     echo ""
     echo -e "${BLUE}ℹ  Troubleshooting steps:${NC}"
-    echo "  1. Check ArgoCD Application: kubectl describe application apis -n argocd"
-    echo "  2. Check XRD status: kubectl get xrd"
-    echo "  3. Check Compositions: kubectl get compositions"
-    echo "  4. Review platform deployment logs"
+    echo "  1. Check ArgoCD Application: kubectl_retry describe application apis -n argocd"
+    echo "  2. Check XRD status: kubectl_retry get xrd"
+    echo "  3. Check Compositions: kubectl_retry get compositions"
+    echo "  4. Review test namespace pods: kubectl get pods -n platform-compliance-test"
+    echo "  5. Check for resource constraints: kubectl get events -n platform-compliance-test --field-selector type=Warning"
+    
+    if type print_debug_commands &>/dev/null; then
+        echo ""
+        print_debug_commands
+    fi
     exit 1
 fi
