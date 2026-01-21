@@ -23,7 +23,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # All namespaces that must have pods ready
-ALL_NAMESPACES=("argocd" "external-secrets" "crossplane-system" "keda" "kagent" "intelligence-platform")
+ALL_NAMESPACES=("argocd" "external-secrets" "crossplane-system" "keda")
 
 echo "Waiting for all pods to be ready..."
 echo "Timeout: ${TIMEOUT}s"
