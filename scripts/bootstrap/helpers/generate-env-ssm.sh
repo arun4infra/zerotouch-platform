@@ -81,6 +81,9 @@ PARAM_LIST="/zerotouch/prod/openai_api_key=
 /zerotouch/prod/identity-service/jwt_public_key=
 /zerotouch/prod/identity-service/jwt_key_id=
 /zerotouch/prod/identity-service/token_pepper=
+/zerotouch/prod/identity-service/redis_host=
+/zerotouch/prod/identity-service/redis_port=
+/zerotouch/prod/identity-service/redis_username=
 /zerotouch/prod/identity-service/redis_password=
 /zerotouch/prod/identity-service/jwt_previous_private_key=
 /zerotouch/prod/identity-service/jwt_previous_public_key=
@@ -129,6 +132,9 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
             /zerotouch/prod/identity-service/jwt_public_key) env_var="IDENTITY_JWT_PUBLIC_KEY" ;;
             /zerotouch/prod/identity-service/jwt_key_id) env_var="IDENTITY_JWT_KEY_ID" ;;
             /zerotouch/prod/identity-service/token_pepper) env_var="IDENTITY_TOKEN_PEPPER" ;;
+            /zerotouch/prod/identity-service/redis_host) env_var="IDENTITY_REDIS_HOST" ;;
+            /zerotouch/prod/identity-service/redis_port) env_var="IDENTITY_REDIS_PORT" ;;
+            /zerotouch/prod/identity-service/redis_username) env_var="IDENTITY_REDIS_USERNAME" ;;
             /zerotouch/prod/identity-service/redis_password) env_var="IDENTITY_REDIS_PASSWORD" ;;
             /zerotouch/prod/identity-service/jwt_previous_private_key) env_var="IDENTITY_JWT_PREVIOUS_PRIVATE_KEY" ;;
             /zerotouch/prod/identity-service/jwt_previous_public_key) env_var="IDENTITY_JWT_PREVIOUS_PUBLIC_KEY" ;;
