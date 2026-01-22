@@ -11,4 +11,5 @@ resources:
 - 05-nats.yaml
 - 06-apis.yaml
 - 06-databases.yaml
+- 06-agentgateway.yaml
 # - 06-intelligence.yaml

@@ -18,5 +18,5 @@ COPY 03-validate-gateway-config.py /app/
 # Install additional dependencies for gateway config validation
 RUN pip install pyyaml
 
-# Run validation
-CMD ["python", "-m", "pytest", "02-validate-test-endpoint.py", "-v"]
+# Default CMD - can be overridden by shell scripts
+CMD ["python", "--version"]

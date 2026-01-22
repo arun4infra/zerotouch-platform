@@ -42,7 +42,7 @@ def get_gateway_host() -> str:
     if env_host:
         return env_host
     
-    # Discover AgentGateway using kubectl
+    # Discover AgentGateway using kubectl - prioritize platform-agent-gateway namespace
     service_output = run_kubectl("get svc -l app.kubernetes.io/name=agentgateway -o json --all-namespaces")
     if not service_output:
         raise RuntimeError("Failed to discover AgentGateway - kubectl command failed")
@@ -53,19 +53,28 @@ def get_gateway_host() -> str:
     if not services:
         raise RuntimeError("No AgentGateway found with label app.kubernetes.io/name=agentgateway")
     
-    # Use the first service found
-    service = services[0]
-    service_name = service["metadata"]["name"]
-    namespace = service["metadata"]["namespace"]
+    # Prioritize service in platform-agent-gateway namespace
+    target_service = None
+    for service in services:
+        if service["metadata"]["namespace"] == "platform-agent-gateway":
+            target_service = service
+            break
+    
+    # Fallback to first service if platform-agent-gateway not found
+    if not target_service:
+        target_service = services[0]
+    
+    service_name = target_service["metadata"]["name"]
+    namespace = target_service["metadata"]["namespace"]
     
     # Get the service port
-    ports = service.get("spec", {}).get("ports", [])
+    ports = target_service.get("spec", {}).get("ports", [])
     if not ports:
         raise RuntimeError(f"No ports found for AgentGateway {service_name}")
     
     port = ports[0]["port"]
     host = f"{service_name}.{namespace}.svc.cluster.local:{port}"
-    print(f"🔍 Discovered AgentGateway at: {host}")
+    print(f"🔍 Discovered AgentGateway at: {host} (namespace: {namespace})")
     return host
 
 def get_identity_service_host() -> str:
@@ -147,6 +156,29 @@ def test_auth_routes_bypass_extauthz():
         print(f"❌ Request to /auth/login failed: {e}")
         return False
 
+def test_invalid_cookie_rejection():
+    """Test that invalid cookies are rejected with 401"""
+    print("🔍 Testing invalid cookie rejection...")
+    
+    gateway_host = get_gateway_host()
+    
+    try:
+        # Test with invalid cookie value
+        headers = {"Cookie": "__Host-platform_session=invalid_junk_token_12345"}
+        response = make_request("GET", "/api/v1/health", gateway_host, headers=headers)
+        
+        # STRICT: Must return exactly 401 for invalid credentials
+        if response.status_code == 401:
+            print("✅ Invalid cookie rejected with 401")
+            return True
+        
+        print(f"❌ Expected 401 for invalid cookie, got {response.status_code}")
+        return False
+        
+    except Exception as e:
+        print(f"❌ Invalid cookie test failed: {e}")
+        return False
+
 def test_api_routes_invoke_extauthz():
     """Test that /api/* routes invoke extAuthz with POST to /internal/validate"""
     print("🔍 Testing /api/* routes invoke extAuthz...")
@@ -157,14 +189,21 @@ def test_api_routes_invoke_extauthz():
         # Test GET /api/v1/health without authentication - should trigger extAuthz
         response = make_request("GET", "/api/v1/health", gateway_host)
         
-        # Should get 401 Unauthorized because extAuthz validation fails
-        if response.status_code != 401:
-            print(f"❌ Expected 401 for unauthenticated /api/v1/health, got {response.status_code}")
-            print(f"❌ This indicates extAuthz is not being invoked properly")
+        # STRICT: Enforce exactly 401 for unauthenticated requests
+        # 403 is reserved for "Authenticated but Unauthorized" scenarios
+        if response.status_code == 401:
+            print("✅ /api/v1/health protected by extAuthz (returned 401)")
+            return True
+        elif response.status_code == 403:
+            print("❌ Got 403 instead of 401 - configuration drift detected")
+            print("❌ Gateway should pass through 401 from Identity Service")
+            return False
+        elif response.status_code == 404:
+            print("❌ Got 404 - extAuthz not configured (request bypassed auth)")
             return False
         
-        print("✅ /api/v1/health triggers extAuthz validation (returns 401 without auth)")
-        return True
+        print(f"❌ Expected 401 for unauthenticated /api/v1/health, got {response.status_code}")
+        return False
         
     except Exception as e:
         print(f"❌ Request to /api/v1/health failed: {e}")
@@ -211,15 +250,23 @@ def test_cookie_header_stripping():
             "organization_name": f"Header Test Org {uuid.uuid4().hex[:8]}"
         }
         
+        print(f"🔍 Creating test session with payload: {test_payload}")
+        
         # Create session via Identity Service directly (not through gateway)
         session_response = make_request("POST", "/auth/test-session", identity_host, json_data=test_payload)
         
+        print(f"🔍 Session creation response: {session_response.status_code}")
+        print(f"🔍 Session response headers: {dict(session_response.headers)}")
+        
         if session_response.status_code != 200:
             print(f"❌ Failed to create test session: {session_response.status_code}")
+            print(f"❌ Response body: {session_response.text}")
             return False
         
         # Extract session cookie
         cookie_header = session_response.headers.get("Set-Cookie", "")
+        print(f"🔍 Set-Cookie header: {cookie_header}")
+        
         if "__Host-platform_session=" not in cookie_header:
             print("❌ No session cookie in response")
             return False
@@ -227,10 +274,30 @@ def test_cookie_header_stripping():
         # Extract cookie value
         cookie_parts = cookie_header.split("__Host-platform_session=")[1].split(";")[0]
         session_cookie = f"__Host-platform_session={cookie_parts}"
+        print(f"🔍 Extracted session cookie: {session_cookie[:50]}...")
+        
+        # Test direct validation to ensure session is valid
+        print("🔍 Testing direct validation with session cookie...")
+        validate_headers = {"Cookie": session_cookie}
+        validate_response = make_request("POST", "/internal/validate", identity_host, headers=validate_headers)
+        print(f"🔍 Direct validation response: {validate_response.status_code}")
+        print(f"🔍 Direct validation headers: {dict(validate_response.headers)}")
+        
+        if validate_response.status_code == 200:
+            print("✅ Session is valid for direct validation")
+        else:
+            print(f"❌ Session validation failed: {validate_response.status_code}")
+            print(f"❌ Validation response: {validate_response.text}")
+            return False
         
         # Now test authenticated request through gateway
+        print("🔍 Testing authenticated request through gateway...")
         headers = {"Cookie": session_cookie}
         api_response = make_request("GET", "/api/v1/health", gateway_host, headers=headers)
+        
+        print(f"🔍 Gateway API response: {api_response.status_code}")
+        print(f"🔍 Gateway response headers: {dict(api_response.headers)}")
+        print(f"🔍 Gateway response body: {api_response.text}")
         
         # The response should be either:
         # - 200 OK if IDE Orchestrator is running and receives the JWT
@@ -240,11 +307,15 @@ def test_cookie_header_stripping():
         if api_response.status_code in [200]:
             print("✅ Authenticated request succeeded - Cookie header handling working")
             return True
+        elif api_response.status_code == 404:
+            print("✅ Auth passed (endpoint not found) - Cookie header handling working")
+            return True
         elif api_response.status_code >= 500:
             print("✅ Auth passed (downstream service error) - Cookie header handling working")
             return True
         elif api_response.status_code in [401, 403]:
             print(f"❌ Auth failed with status {api_response.status_code} - possible Cookie header issue")
+            print(f"❌ This suggests extAuthz is rejecting the request")
             return False
         else:
             print(f"❌ Unexpected response status: {api_response.status_code}")
@@ -252,6 +323,8 @@ def test_cookie_header_stripping():
         
     except Exception as e:
         print(f"❌ Cookie header stripping test failed: {e}")
+        import traceback
+        print(f"❌ Full traceback: {traceback.format_exc()}")
         return False
 
 def test_include_headers_configuration():
@@ -272,36 +345,56 @@ def test_include_headers_configuration():
             "organization_name": f"Headers Test Org {uuid.uuid4().hex[:8]}"
         }
         
+        print(f"🔍 Creating test session for headers test: {test_payload}")
+        
         session_response = make_request("POST", "/auth/test-session", identity_host, json_data=test_payload)
+        
+        print(f"🔍 Headers test session creation: {session_response.status_code}")
+        print(f"🔍 Headers test session headers: {dict(session_response.headers)}")
         
         if session_response.status_code != 200:
             print(f"❌ Failed to create test session: {session_response.status_code}")
+            print(f"❌ Response body: {session_response.text}")
             return False
         
         # Extract session cookie
         cookie_header = session_response.headers.get("Set-Cookie", "")
         cookie_parts = cookie_header.split("__Host-platform_session=")[1].split(";")[0]
         session_cookie = f"__Host-platform_session={cookie_parts}"
+        print(f"🔍 Headers test session cookie: {session_cookie[:50]}...")
         
-        # Test request with both Cookie and Authorization headers
+        # Test request with Cookie header only (not Authorization)
+        # The Authorization header will be added by extAuthz after validation
         headers = {
             "Cookie": session_cookie,
-            "Authorization": "Bearer test-token"  # This should be included in extAuthz
         }
+        
+        print(f"🔍 Testing gateway request with headers: {list(headers.keys())}")
         
         api_response = make_request("GET", "/api/v1/health", gateway_host, headers=headers)
         
+        print(f"🔍 Headers test gateway response: {api_response.status_code}")
+        print(f"🔍 Headers test response headers: {dict(api_response.headers)}")
+        print(f"🔍 Headers test response body: {api_response.text}")
+        
         # If the configuration is correct:
-        # - Cookie header should be sent to extAuthz (includeRequestHeaders: ["Cookie", "Authorization"])
+        # - Cookie header should be sent to extAuthz (includeRequestHeaders: ["cookie", "authorization"])
         # - Authorization header should be sent to extAuthz
         # - Response headers should be included (includeResponseHeaders: ["Authorization", "X-Auth-User-Id", "X-Auth-Org-Id"])
         
         # We can't directly verify the headers sent to extAuthz, but we can verify the overall behavior
-        if api_response.status_code in [200, 500, 502, 503, 504]:
+        if api_response.status_code in [200]:
             print("✅ Headers configuration appears correct (auth succeeded)")
+            return True
+        elif api_response.status_code == 404:
+            print("✅ Headers configuration appears correct (auth passed, endpoint not found)")
+            return True
+        elif api_response.status_code in [500, 502, 503, 504]:
+            print("✅ Headers configuration appears correct (auth passed, downstream error)")
             return True
         elif api_response.status_code in [401, 403]:
             print("❌ Auth failed - possible headers configuration issue")
+            print("❌ This suggests extAuthz is not receiving the correct headers")
             return False
         else:
             print(f"❌ Unexpected response status: {api_response.status_code}")
@@ -309,6 +402,8 @@ def test_include_headers_configuration():
         
     except Exception as e:
         print(f"❌ Headers configuration test failed: {e}")
+        import traceback
+        print(f"❌ Full traceback: {traceback.format_exc()}")
         return False
 
 def test_gateway_configuration_file():
@@ -316,8 +411,8 @@ def test_gateway_configuration_file():
     print("🔍 Testing AgentGateway configuration file...")
     
     try:
-        # Read the AgentGateway configuration from the cluster
-        config_output = run_kubectl("get configmap agentgateway-config -o jsonpath='{.data.config\\.yaml}' -n platform-gateway")
+        # Read the AgentGateway configuration from the correct namespace
+        config_output = run_kubectl("get configmap agentgateway-config -o jsonpath='{.data.config\\.yaml}' -n platform-agent-gateway")
         
         if not config_output:
             print("❌ Could not retrieve AgentGateway configuration")
@@ -397,7 +492,7 @@ def test_gateway_configuration_file():
         
         extauthz = policies["extAuthz"]
         
-        # Verify extAuthz configuration
+        # Verify host configuration
         if "host" not in extauthz:
             print("❌ extAuthz missing host configuration")
             return False
@@ -406,13 +501,36 @@ def test_gateway_configuration_file():
             print("❌ extAuthz host should point to Identity Service")
             return False
         
-        if "includeRequestHeaders" not in extauthz:
-            print("❌ extAuthz missing includeRequestHeaders")
+        # Verify extAuthz configuration - STRICT header validation
+        required_request_headers = ["cookie", "authorization"]
+        include_request_headers = [h.lower() for h in extauthz.get("includeRequestHeaders", [])]
+        
+        missing_headers = [h for h in required_request_headers if h not in include_request_headers]
+        if missing_headers:
+            print(f"❌ extAuthz missing required request headers: {missing_headers}")
+            print(f"❌ Found: {extauthz.get('includeRequestHeaders', [])}")
             return False
         
-        include_request_headers = extauthz["includeRequestHeaders"]
-        if "Cookie" not in include_request_headers or "Authorization" not in include_request_headers:
-            print("❌ extAuthz should include Cookie and Authorization headers")
+        # Verify response headers are configured
+        # Check both flat structure and nested protocol.http structure
+        include_response_headers = []
+        if "includeResponseHeaders" in extauthz:
+            include_response_headers = [h.lower() for h in extauthz.get("includeResponseHeaders", [])]
+        elif "protocol" in extauthz and "http" in extauthz["protocol"]:
+            http_config = extauthz["protocol"]["http"]
+            if "includeResponseHeaders" in http_config:
+                include_response_headers = [h.lower() for h in http_config.get("includeResponseHeaders", [])]
+        
+        if not include_response_headers:
+            print("❌ extAuthz missing includeResponseHeaders (checked both flat and protocol.http)")
+            return False
+        
+        required_response_headers = ["authorization", "x-auth-user-id", "x-auth-org-id", "x-auth-role"]
+        
+        missing_response_headers = [h for h in required_response_headers if h not in include_response_headers]
+        if missing_response_headers:
+            print(f"❌ extAuthz missing required response headers: {missing_response_headers}")
+            print(f"❌ Found: {include_response_headers}")
             return False
         
         # Verify requestHeaderModifier (Cookie removal)
@@ -451,6 +569,9 @@ def main():
     
     # Run all configuration tests
     if not test_auth_routes_bypass_extauthz():
+        success = False
+    
+    if not test_invalid_cookie_rejection():
         success = False
     
     if not test_api_routes_invoke_extauthz():

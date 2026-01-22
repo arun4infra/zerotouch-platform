@@ -110,6 +110,11 @@ spec:
         spec:
           providerConfigRef:
             name: kubernetes-provider
+          managementPolicies:
+            - Observe
+            - Create
+            - Update
+            - Delete
           forProvider:
             manifest:
               apiVersion: apps/v1

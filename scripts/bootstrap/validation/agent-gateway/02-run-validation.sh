@@ -23,7 +23,7 @@ echo "Cleaning up any existing job..."
 kubectl delete job validate-test-endpoint -n platform-identity --ignore-not-found=true
 
 echo "Applying validation job..."
-kubectl apply -f validation-job.yaml
+kubectl apply -f 02-validation-job.yaml
 
 echo "Waiting for job to complete..."
 if kubectl wait --for=condition=complete job/validate-test-endpoint -n platform-identity --timeout=120s; then

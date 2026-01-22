@@ -30,7 +30,7 @@ FAILED_VALIDATIONS=0
 # CHECKPOINT 1: Test Endpoint Ready (uses run-validation.sh)
 echo -e "${BLUE}Running: CHECKPOINT 1 - Test Endpoint Ready${NC}"
 TOTAL_VALIDATIONS=$((TOTAL_VALIDATIONS + 1))
-if "$SCRIPT_DIR/run-validation.sh"; then
+if "$SCRIPT_DIR/02-run-validation.sh"; then
     echo -e "${GREEN}✓ CHECKPOINT 1 PASSED${NC}"
     PASSED_VALIDATIONS=$((PASSED_VALIDATIONS + 1))
 else

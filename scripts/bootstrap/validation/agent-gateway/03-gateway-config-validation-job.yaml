@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: validate-gateway-config
-  namespace: platform-gateway
+  namespace: platform-agent-gateway
 spec:
   template:
     spec:
@@ -13,7 +13,7 @@ spec:
         imagePullPolicy: IfNotPresent
         env:
         - name: GATEWAY_HOST
-          value: "agentgateway.platform-gateway.svc.cluster.local:3000"
+          value: "agentgateway.platform-agent-gateway.svc.cluster.local:3000"
         - name: IDENTITY_HOST
           value: "identity-service.platform-identity.svc.cluster.local:3000"
         command: ["python", "03-validate-gateway-config.py"]
@@ -24,7 +24,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: gateway-config-validator
-  namespace: platform-gateway
+  namespace: platform-agent-gateway
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -49,4 +49,4 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: gateway-config-validator
-  namespace: platform-gateway
+  namespace: platform-agent-gateway
