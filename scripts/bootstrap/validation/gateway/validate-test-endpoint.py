@@ -239,18 +239,28 @@ def test_hot_cache_session_storage():
     """Test that session is stored in Hot_Cache with correct TTL"""
     print("🔍 Testing Hot_Cache session storage...")
     
-    # Create a test session
+    # Create a test session with unique identifier to avoid conflicts
     test_payload = {
-        "external_id": f"cache-test-{uuid.uuid4().hex[:8]}",
+        "external_id": f"cache-test-{uuid.uuid4().hex[:8]}-{int(time.time())}",
         "email": f"cache-{uuid.uuid4().hex[:8]}@example.com",
-        "organization_name": "Cache Test Org"
+        "organization_name": f"Cache Test Org {uuid.uuid4().hex[:8]}"
     }
     
     host = get_identity_service_host()
-    response = make_request("POST", "/auth/test-session", host, json_data=test_payload)
+    
+    try:
+        response = make_request("POST", "/auth/test-session", host, json_data=test_payload)
+    except Exception as e:
+        print(f"❌ Request failed with exception: {e}")
+        return False
     
     if response.status_code != 200:
         print(f"❌ Failed to create session: {response.status_code}")
+        try:
+            error_detail = response.json()
+            print(f"❌ Error details: {error_detail}")
+        except:
+            print(f"❌ Response text: {response.text}")
         return False
     
     response_data = response.json()
