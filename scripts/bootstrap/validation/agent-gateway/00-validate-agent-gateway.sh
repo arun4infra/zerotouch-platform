@@ -51,17 +51,17 @@ else
 fi
 echo ""
 
-# CHECKPOINT 3: Complete Authentication Flow Working (future implementation)
-# echo -e "${BLUE}Running: CHECKPOINT 3 - Complete Authentication Flow${NC}"
-# TOTAL_VALIDATIONS=$((TOTAL_VALIDATIONS + 1))
-# if "$SCRIPT_DIR/04-run-platform-auth-validation.sh"; then
-#     echo -e "${GREEN}✓ CHECKPOINT 3 PASSED${NC}"
-#     PASSED_VALIDATIONS=$((PASSED_VALIDATIONS + 1))
-# else
-#     echo -e "${RED}✗ CHECKPOINT 3 FAILED${NC}"
-#     FAILED_VALIDATIONS=$((FAILED_VALIDATIONS + 1))
-# fi
-# echo ""
+# CHECKPOINT 3: Complete Authentication Flow Working
+echo -e "${BLUE}Running: CHECKPOINT 3 - Complete Authentication Flow${NC}"
+TOTAL_VALIDATIONS=$((TOTAL_VALIDATIONS + 1))
+if "$SCRIPT_DIR/04-run-platform-auth-validation.sh"; then
+    echo -e "${GREEN}✓ CHECKPOINT 3 PASSED${NC}"
+    PASSED_VALIDATIONS=$((PASSED_VALIDATIONS + 1))
+else
+    echo -e "${RED}✗ CHECKPOINT 3 FAILED${NC}"
+    FAILED_VALIDATIONS=$((FAILED_VALIDATIONS + 1))
+fi
+echo ""
 
 # CHECKPOINT 4: Validation Suite Complete (future implementation)
 # echo -e "${BLUE}Running: CHECKPOINT 4 - Validation Suite Complete${NC}"

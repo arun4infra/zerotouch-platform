@@ -38,18 +38,23 @@ data:
                   - path: 
                       pathPrefix: "/api"
                 policies:
-                  # Step A: Delegate to Identity Service via HTTP extAuthz
                   extAuthz:
                     host: "identity-service.platform-identity.svc.cluster.local:3000"
-                    includeRequestHeaders: ["cookie", "authorization"]
+                    timeout: "1s"
+                    includeRequestHeaders:
+                      - cookie
+                      - authorization
                     protocol:
                       http:
                         path: '"/internal/validate"'
-                        includeResponseHeaders: ["Authorization", "X-Auth-User-Id", "X-Auth-Org-Id", "X-Auth-Role"]
-                  
-                  # Step B: Strip the session cookie to ensure downstream only sees the JWT
+                        addRequestHeaders:
+                          x-forwarded-host: request.host
+                        includeResponseHeaders:
+                          - Authorization
+                          - X-Auth-User-Id
+                          - X-Auth-Org-Id
+                          - X-Auth-Role
                   requestHeaderModifier:
                     remove: ["Cookie"]
-                
                 backends:
-                  - host: "ide-orchestrator.intelligence-orchestrator.svc.cluster.local:8080"
+                  - host: "identity-service.platform-identity.svc.cluster.local:3000"

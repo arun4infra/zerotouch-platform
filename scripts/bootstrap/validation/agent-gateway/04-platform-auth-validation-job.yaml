@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: validate-platform-auth
+  namespace: platform-agent-gateway
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: platform-auth-validator
+      restartPolicy: Never
+      containers:
+      - name: validator
+        image: validation-platform-auth:latest
+        imagePullPolicy: Never
+        command: ["python3", "/app/04-validate-platform-auth.py"]
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: GATEWAY_HOST
+          value: "agentgateway.platform-agent-gateway.svc.cluster.local:3000"
+        - name: IDENTITY_HOST
+          value: "identity-service.platform-identity.svc.cluster.local:3000"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: platform-auth-validator
+  namespace: platform-agent-gateway
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: platform-auth-validator
+rules:
+- apiGroups: [""]
+  resources: ["services", "pods", "configmaps"]
+  verbs: ["get", "list"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: platform-auth-validator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: platform-auth-validator
+subjects:
+- kind: ServiceAccount
+  name: platform-auth-validator
+  namespace: platform-agent-gateway
