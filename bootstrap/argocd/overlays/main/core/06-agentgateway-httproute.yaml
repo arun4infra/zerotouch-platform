@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: agentgateway-httproute
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/arun4infra/zerotouch-platform.git
+    targetRevision: main
+    path: bootstrap/argocd/overlays/main/core/agentgateway-httproute
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: platform-agent-gateway
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

@@ -14,3 +14,5 @@ resources:
 - 04-gateway-config.yaml
 # Hetzner DNS webhook for cert-manager DNS-01 challenges
 - 01-cert-manager-webhook-hetzner.yaml
+# AgentGateway HTTPRoute (main environment only, Wave 6 - after gateway-config)
+- 06-agentgateway-httproute.yaml
