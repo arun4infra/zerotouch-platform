@@ -180,3 +180,16 @@ patches:
               enableGatewayAPI: false
               featureGates:
                 ExperimentalGatewayAPISupport: false
+
+# 6. Configure agentgateway for preview mode (no HTTPRoute dependency)
+- target:
+    kind: Application
+    name: agentgateway
+  patch: |-
+    apiVersion: argoproj.io/v1alpha1
+    kind: Application
+    metadata:
+      name: agentgateway
+    spec:
+      source:
+        path: platform/agentgateway
