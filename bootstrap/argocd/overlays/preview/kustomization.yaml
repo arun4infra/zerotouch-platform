@@ -191,6 +191,5 @@ patches:
     metadata:
       name: agentgateway
     spec:
-      source:
-        path: platform/agentgateway
-        kustomize: {}
+      syncPolicy:
+        automated: null
