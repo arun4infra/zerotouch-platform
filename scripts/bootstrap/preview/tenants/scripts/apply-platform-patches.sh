@@ -65,20 +65,22 @@ main() {
     # PATCHES_DIR="$(dirname "$0")/../../patches"
     # CONDITIONAL_PATCH_SCRIPT="$PATCHES_DIR/02-disable-undeclared-services.sh"
     
-    if [[ -f "$CONDITIONAL_PATCH_SCRIPT" ]]; then
-        log_info "Running conditional services patch: $CONDITIONAL_PATCH_SCRIPT"
-        bash "$CONDITIONAL_PATCH_SCRIPT"
-        
-        if [[ $? -eq 0 ]]; then
-            log_success "✓ Conditional services patch completed successfully"
-        else
-            log_error "✗ Conditional services patch failed"
-            exit 1
-        fi
-    else
-        log_error "Conditional services patch script not found: $CONDITIONAL_PATCH_SCRIPT"
-        exit 1
-    fi
+    # if [[ -f "$CONDITIONAL_PATCH_SCRIPT" ]]; then
+    #     log_info "Running conditional services patch: $CONDITIONAL_PATCH_SCRIPT"
+    #     bash "$CONDITIONAL_PATCH_SCRIPT"
+    #     
+    #     if [[ $? -eq 0 ]]; then
+    #         log_success "✓ Conditional services patch completed successfully"
+    #     else
+    #         log_error "✗ Conditional services patch failed"
+    #         exit 1
+    #     fi
+    # else
+    #     log_error "Conditional services patch script not found: $CONDITIONAL_PATCH_SCRIPT"
+    #     exit 1
+    # fi
+    
+    log_info "✓ Conditional services patch skipped (disabled)"
     
     # Final summary
     log_success "Platform patches applied successfully"
