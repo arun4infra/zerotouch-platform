@@ -13,7 +13,6 @@ spec:
     path: platform/agentgateway
     directory:
       recurse: true
-      exclude: '**/kustomization.yaml'
   destination:
     server: https://kubernetes.default.svc
     namespace: platform-agent-gateway
