@@ -180,6 +180,3 @@ patches:
               enableGatewayAPI: false
               featureGates:
                 ExperimentalGatewayAPISupport: false
-
-# 6. Configure agentgateway for preview mode (no HTTPRoute dependency)
-# Note: HTTPRoute is now handled separately in main/core, no special config needed for preview
