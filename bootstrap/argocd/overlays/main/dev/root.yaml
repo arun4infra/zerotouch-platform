@@ -20,3 +20,8 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+  ignoreDifferences:
+    - group: argoproj.io
+      kind: ApplicationSet
+      jsonPointers:
+        - /status
