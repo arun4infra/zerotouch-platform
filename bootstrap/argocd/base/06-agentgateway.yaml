@@ -11,7 +11,9 @@ spec:
     repoURL: https://github.com/arun4infra/zerotouch-platform.git
     targetRevision: main
     path: platform/agentgateway
-    kustomize: {}
+    directory:
+      recurse: true
+      exclude: '**/kustomization.yaml'
   destination:
     server: https://kubernetes.default.svc
     namespace: platform-agent-gateway
