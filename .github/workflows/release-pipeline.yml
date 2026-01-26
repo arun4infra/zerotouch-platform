@@ -36,15 +36,9 @@ on:
       BOT_GITHUB_USERNAME:
         description: 'GitHub username for bot account'
         required: true
-      AWS_ACCESS_KEY_ID:
-        description: 'AWS Access Key ID for platform operations'
+      AWS_ROLE_ARN:
+        description: 'AWS IAM Role ARN for OIDC authentication'
         required: true
-      AWS_SECRET_ACCESS_KEY:
-        description: 'AWS Secret Access Key for platform operations'
-        required: true
-      AWS_SESSION_TOKEN:
-        description: 'AWS Session Token (for OIDC)'
-        required: false
 
 env:
   SERVICE_NAME: ${{ inputs.service_name }}
@@ -53,6 +47,9 @@ env:
 jobs:
   deploy-dev:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout Platform Scripts
         uses: actions/checkout@v4
@@ -63,9 +60,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ap-south-1
 
       - name: Sync Dev Secrets to SSM
@@ -90,6 +85,9 @@ jobs:
     needs: deploy-dev
     runs-on: ubuntu-latest
     environment: staging
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout Platform Scripts
         uses: actions/checkout@v4
@@ -100,9 +98,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ap-south-1
 
       - name: Sync Staging Secrets to SSM
@@ -127,6 +123,9 @@ jobs:
     needs: deploy-staging
     runs-on: ubuntu-latest
     environment: production
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout Platform Scripts
         uses: actions/checkout@v4
@@ -137,9 +136,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ap-south-1
 
       - name: Sync Production Secrets to SSM
