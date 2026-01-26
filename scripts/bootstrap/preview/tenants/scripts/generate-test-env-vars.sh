@@ -33,15 +33,15 @@ generate_env_vars() {
     if [[ -n "$ALL_DEPS" ]]; then
         # PostgreSQL environment variables (check both internal and external deps)
         if echo "$ALL_DEPS" | grep -qE "(postgres|neon-db)"; then
-            # Check if secret has POSTGRES_URI or individual keys
-            POSTGRES_URI_CHECK=$(kubectl get secret "$SERVICE_NAME-db-conn" -n "$NAMESPACE" -o jsonpath='{.data.POSTGRES_URI}' 2>/dev/null || echo "")
-            if [[ -n "$POSTGRES_URI_CHECK" ]]; then
-                # Use POSTGRES_URI (for services like deepagents-runtime)
-                env_vars+="        - name: POSTGRES_URI
+            # Check if secret has DATABASE_URL or individual keys
+            DATABASE_URL_CHECK=$(kubectl get secret "$SERVICE_NAME-db-conn" -n "$NAMESPACE" -o jsonpath='{.data.DATABASE_URL}' 2>/dev/null || echo "")
+            if [[ -n "$DATABASE_URL_CHECK" ]]; then
+                # Use DATABASE_URL (for services like ide-orchestrator with external Neon DB)
+                env_vars+="        - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
               name: \"$SERVICE_NAME-db-conn\"
-              key: POSTGRES_URI
+              key: DATABASE_URL
 "
             else
                 # Use individual keys (for services like identity-service, ide-orchestrator)
