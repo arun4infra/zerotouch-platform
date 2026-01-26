@@ -17,6 +17,18 @@ on:
         required: false
         type: string
         default: 'https://github.com/arun4infra/zerotouch-tenants.git'
+      dev_secrets:
+        description: 'Dev environment secrets as KEY=VALUE newline-separated'
+        required: false
+        type: string
+      staging_secrets:
+        description: 'Staging environment secrets as KEY=VALUE newline-separated'
+        required: false
+        type: string
+      prod_secrets:
+        description: 'Production environment secrets as KEY=VALUE newline-separated'
+        required: false
+        type: string
     secrets:
       BOT_GITHUB_TOKEN:
         description: 'GitHub token for tenant repository access'
@@ -48,6 +60,23 @@ jobs:
           repository: arun4infra/zerotouch-platform
           ref: main
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ap-south-1
+
+      - name: Sync Dev Secrets to SSM
+        if: inputs.dev_secrets != ''
+        run: |
+          chmod +x ./scripts/release/template/sync-secrets-to-ssm.sh
+          ./scripts/release/template/sync-secrets-to-ssm.sh \
+            "${{ inputs.service_name }}" \
+            "dev" \
+            "${{ inputs.dev_secrets }}"
+
       - name: Deploy to Dev (Automatic)
         run: ./scripts/release/deploy-direct.sh dev
         env:
@@ -60,13 +89,30 @@ jobs:
   deploy-staging:
     needs: deploy-dev
     runs-on: ubuntu-latest
-    environment: staging  # GitHub Environment Gate - Pauses for Manual Approval
+    environment: staging
     steps:
       - name: Checkout Platform Scripts
         uses: actions/checkout@v4
         with:
           repository: arun4infra/zerotouch-platform
           ref: main
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ap-south-1
+
+      - name: Sync Staging Secrets to SSM
+        if: inputs.staging_secrets != ''
+        run: |
+          chmod +x ./scripts/release/template/sync-secrets-to-ssm.sh
+          ./scripts/release/template/sync-secrets-to-ssm.sh \
+            "${{ inputs.service_name }}" \
+            "staging" \
+            "${{ inputs.staging_secrets }}"
 
       - name: Deploy to Staging (Manual Approval Required)
         run: ./scripts/release/deploy-direct.sh staging
@@ -80,13 +126,30 @@ jobs:
   deploy-production:
     needs: deploy-staging
     runs-on: ubuntu-latest
-    environment: production  # GitHub Environment Gate - Pauses for Manual Approval
+    environment: production
     steps:
       - name: Checkout Platform Scripts
         uses: actions/checkout@v4
         with:
           repository: arun4infra/zerotouch-platform
           ref: main
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ap-south-1
+
+      - name: Sync Production Secrets to SSM
+        if: inputs.prod_secrets != ''
+        run: |
+          chmod +x ./scripts/release/template/sync-secrets-to-ssm.sh
+          ./scripts/release/template/sync-secrets-to-ssm.sh \
+            "${{ inputs.service_name }}" \
+            "production" \
+            "${{ inputs.prod_secrets }}"
 
       - name: Deploy to Production (Manual Approval Required)
         run: ./scripts/release/deploy-direct.sh production
