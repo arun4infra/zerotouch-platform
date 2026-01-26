@@ -94,20 +94,15 @@ echo "✅ Mock landing zone '${NAMESPACE}' created"
 
 # Apply platform claims and manifests
 echo "📋 Applying platform claims..."
-echo "🔍 Checking for platform claims in: ${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/"
+CLAIMS_DIR="${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/"
 
-if [[ ! -d "${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/" ]]; then
-    echo "❌ No platform claims directory found"
-    exit 1
-fi
-
-# Check if directory has any YAML files
-if ! ls "${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/"*.{yaml,yml} 1> /dev/null 2>&1; then
+if [[ ! -d "$CLAIMS_DIR" ]]; then
+    echo "ℹ️  No platform claims directory found, skipping..."
+elif ! ls "$CLAIMS_DIR"*.{yaml,yml} 1> /dev/null 2>&1; then
     echo "ℹ️  No platform claims files found (directory is empty), skipping..."
 else
-    echo "✅ Found platform claims directory"
-    # Apply platform claims for the namespace (recursive to include subdirectories)
-    kubectl apply -f "${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/" -n "${NAMESPACE}" --recursive
+    echo "✅ Found platform claims, applying..."
+    kubectl apply -f "$CLAIMS_DIR" -n "${NAMESPACE}" --recursive
     echo "✅ Platform claims applied"
 fi
 

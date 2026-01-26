@@ -11,8 +11,27 @@ set -euo pipefail
 TEST_PATH="${1:-./tests/integration}"
 TEST_NAME="${2:-integration-tests}"
 TIMEOUT="${3:-600}"
-NAMESPACE="${4:-intelligence-deepagents}"
-IMAGE_TAG="${5:-ci-test}"
+IMAGE_TAG="${4:-ci-test}"
+
+# Read service name and namespace from config
+CONFIG_FILE="${SERVICE_ROOT:-$(pwd)}/ci/config.yaml"
+if [[ ! -f "$CONFIG_FILE" ]]; then
+    echo "Config file not found: $CONFIG_FILE" >&2
+    exit 1
+fi
+
+SERVICE_NAME=$(yq eval '.service.name' "$CONFIG_FILE")
+NAMESPACE=$(yq eval '.service.namespace' "$CONFIG_FILE")
+
+if [[ -z "$SERVICE_NAME" || "$SERVICE_NAME" == "null" ]]; then
+    echo "Service name not found in config" >&2
+    exit 1
+fi
+
+if [[ -z "$NAMESPACE" || "$NAMESPACE" == "null" ]]; then
+    echo "Namespace not found in config" >&2
+    exit 1
+fi
 
 # Color codes
 RED='\033[0;31m'

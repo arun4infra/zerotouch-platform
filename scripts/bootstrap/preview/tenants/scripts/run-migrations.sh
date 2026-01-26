@@ -8,8 +8,6 @@ set -euo pipefail
 # Used by both local testing and CI workflows
 # ==============================================================================
 
-NAMESPACE="${1:-intelligence-deepagents}"
-
 # Color codes
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -23,7 +21,7 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 main() {
     log_info "Running database migrations..."
     
-    # Read service name from config
+    # Read service name and namespace from config
     CONFIG_FILE="${SERVICE_ROOT:-$(pwd)}/ci/config.yaml"
     if [[ ! -f "$CONFIG_FILE" ]]; then
         log_error "Config file not found: $CONFIG_FILE"
@@ -31,12 +29,20 @@ main() {
     fi
     
     SERVICE_NAME=$(yq eval '.service.name' "$CONFIG_FILE")
+    NAMESPACE=$(yq eval '.service.namespace' "$CONFIG_FILE")
+    
     if [[ -z "$SERVICE_NAME" || "$SERVICE_NAME" == "null" ]]; then
         log_error "Service name not found in config"
         return 1
     fi
     
+    if [[ -z "$NAMESPACE" || "$NAMESPACE" == "null" ]]; then
+        log_error "Namespace not found in config"
+        return 1
+    fi
+    
     log_info "Using service: $SERVICE_NAME"
+    log_info "Using namespace: $NAMESPACE"
     
     # Create ConfigMap with migration files
     kubectl create configmap migration-files -n $NAMESPACE \
@@ -58,20 +64,20 @@ spec:
       - name: migrate
         image: postgres:15
         env:
-        - name: POSTGRES_URI
+        - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
               name: ${SERVICE_NAME}-db-conn
-              key: POSTGRES_URI
+              key: DATABASE_URL
         command: ["/bin/bash"]
         args:
         - -c
         - |
           echo "Waiting for PostgreSQL to be ready..."
-          # Extract connection details from POSTGRES_URI
-          POSTGRES_USER=\$(echo "\$POSTGRES_URI" | sed -n 's|.*://\([^:]*\):.*|\1|p')
-          POSTGRES_HOST=\$(echo "\$POSTGRES_URI" | sed -n 's|.*@\([^:/]*\).*|\1|p')
-          POSTGRES_PORT=\$(echo "\$POSTGRES_URI" | sed -n 's|.*:\([0-9]*\)/.*|\1|p')
+          # Extract connection details from DATABASE_URL
+          POSTGRES_USER=\$(echo "\$DATABASE_URL" | sed -n 's|.*://\([^:]*\):.*|\1|p')
+          POSTGRES_HOST=\$(echo "\$DATABASE_URL" | sed -n 's|.*@\([^:/]*\).*|\1|p')
+          POSTGRES_PORT=\$(echo "\$DATABASE_URL" | sed -n 's|.*:\([0-9]*\)/.*|\1|p')
           
           until pg_isready -h "\$POSTGRES_HOST" -p "\$POSTGRES_PORT" -U "\$POSTGRES_USER"; do
             echo "PostgreSQL not ready, waiting..."
@@ -83,7 +89,7 @@ spec:
           for migration in /migrations/*.up.sql; do
             if [ -f "\$migration" ]; then
               echo "Running migration: \$(basename \$migration)"
-              psql "\$POSTGRES_URI" -f "\$migration"
+              psql "\$DATABASE_URL" -f "\$migration"
             fi
           done
           
