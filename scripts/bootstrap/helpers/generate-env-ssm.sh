@@ -75,6 +75,7 @@ PARAM_LIST="/zerotouch/prod/openai_api_key=
 /zerotouch/prod/argocd/repos/zerotouch-tenants/password=
 /zerotouch/prod/ide-orchestrator/jwt-secret=
 /zerotouch/prod/ide-orchestrator/spec-engine-url=
+/zerotouch/prod/ide-orchestrator/database_url=
 /zerotouch/prod/identity-service/node_env=
 /zerotouch/prod/identity-service/neon_auth_url=
 /zerotouch/prod/identity-service/database_url=
@@ -128,6 +129,7 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
             # IDE Orchestrator service secrets
             /zerotouch/prod/ide-orchestrator/jwt-secret) env_var="IDEO_JWT_SECRET" ;;
             /zerotouch/prod/ide-orchestrator/spec-engine-url) env_var="IDEO_SPEC_ENGINE_URL" ;;
+            /zerotouch/prod/ide-orchestrator/database_url) env_var="IDEO_DATABASE_URL" ;;
             # Identity Service secrets
             /zerotouch/prod/identity-service/node_env) env_var="IDENTITY_NODE_ENV" ;;
             /zerotouch/prod/identity-service/neon_auth_url) env_var="IDENTITY_NEON_AUTH_URL" ;;
