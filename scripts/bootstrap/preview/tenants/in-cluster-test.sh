@@ -324,6 +324,7 @@ main() {
     log_info "Platform root: $PLATFORM_ROOT"
     
     # Step 3: Detect environment (PR vs main)
+    # NOTE: Always returns 'pr' for CI testing (Kind cluster uses pr overlays)
     ENVIRONMENT=$(detect_environment)
     log_info "Detected environment: $ENVIRONMENT"
     
@@ -503,8 +504,8 @@ trap cleanup EXIT
         fi
     fi
 
-    # Step 3c: Checkout PR claims (if in PR environment)
-    log_info "Forcing PR claims checkout for CI testing (environment: $ENVIRONMENT -> pr)"
+    # Step 3c: Checkout PR claims
+    log_info "Checking out PR claims for CI testing"
     CHECKOUT_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/checkout-pr-claims.sh"
     
     if [[ -f "$CHECKOUT_SCRIPT" ]]; then

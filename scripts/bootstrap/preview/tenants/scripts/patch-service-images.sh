@@ -51,11 +51,8 @@ main() {
     local count=0
     local files_found=0
 
-    # Map build mode to overlay directory
-    local overlay_env="$BUILD_MODE"
-    if [[ "$BUILD_MODE" == "test" ]]; then
-        overlay_env="pr"
-    fi
+    # Use ENVIRONMENT variable for overlay directory (defaults to pr for CI testing)
+    local overlay_env="${ENVIRONMENT:-pr}"
     
     # Check if platform/SERVICE_NAME/overlays/overlay_env directory exists
     local claims_dir="platform/${SERVICE_NAME}/overlays/${overlay_env}"
