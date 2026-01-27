@@ -600,7 +600,7 @@ trap cleanup EXIT
             chmod +x "$TEST_JOB_SCRIPT"
             # Use the final image tag (either from build or override)
             FINAL_IMAGE_TAG="${OVERRIDE_IMAGE_TAG:-$IMAGE_TAG}"
-            if "$TEST_JOB_SCRIPT" "${TEST_PATH}" "${TEST_NAME}" "${TIMEOUT}" "${NAMESPACE}" "${FINAL_IMAGE_TAG}"; then
+            if "$TEST_JOB_SCRIPT" "${TEST_PATH}" "${TEST_NAME}" "${TIMEOUT}" "${FINAL_IMAGE_TAG}"; then
                 log_success "✅ In-cluster tests completed successfully!"
             else
                 log_error "❌ In-cluster tests failed!"
