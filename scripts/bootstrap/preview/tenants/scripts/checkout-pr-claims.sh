@@ -121,7 +121,7 @@ checkout_pr_claims() {
         
         # Path to service directory
         local service_path="$tenants_dir/tenants/$service_name"
-        local target_path="$service_root/platform/$service_name"
+        local target_path="${service_root}/platform/${service_name}"
         
         log_info "Looking for service directory at: $service_path"
         
@@ -129,8 +129,8 @@ checkout_pr_claims() {
             log_success "Found service directory at: $service_path"
             
             # Create platform directory if it doesn't exist
-            mkdir -p "$service_root/platform"
-            log_info "Created service platform directory: $service_root/platform"
+            mkdir -p "${service_root}/platform"
+            log_info "Created service platform directory: ${service_root}/platform"
             
             # Copy only the service directory to platform/
             if [[ -d "$target_path" ]]; then
