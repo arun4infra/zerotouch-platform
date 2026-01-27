@@ -1,0 +1,12 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: agentsandbox-storage
+spec:
+  resources:
+    - name: workspace-pvc
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"

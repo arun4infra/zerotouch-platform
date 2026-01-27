@@ -5,6 +5,7 @@ resources:
 - ../../base
 - 06-postgres.yaml
 - gateway-api-crds.yaml
+- storage-composition-patch.yaml
 
 # URL patching is handled by 01-patch-urls.sh script (applied before ArgoCD sync)
 
