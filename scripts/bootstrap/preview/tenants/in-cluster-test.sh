@@ -314,7 +314,14 @@ main() {
         log_error "Platform directory not found. Expected ../zerotouch-platform or ./zerotouch-platform"
         exit 1
     fi
+    
+    # Set service root path early (needed for all stages)
+    SERVICE_ROOT="$(pwd)"
+    export SERVICE_ROOT
     export PLATFORM_ROOT
+
+    log_info "Service root: $SERVICE_ROOT"
+    log_info "Platform root: $PLATFORM_ROOT"
     
     # Step 3: Detect environment (PR vs main)
     ENVIRONMENT=$(detect_environment)
@@ -642,12 +649,6 @@ setup_cluster_environment() {
         exit 1
     fi
     
-    # Set service root path - current working directory where ci/config.yaml is located
-    SERVICE_ROOT="$(pwd)"
-    
-    # Export both paths so all child scripts can use them
-    export PLATFORM_ROOT
-    export SERVICE_ROOT
     log_success "Using platform checkout at: $PLATFORM_ROOT"
     log_success "Using service root at: $SERVICE_ROOT"
 
