@@ -51,7 +51,7 @@ init_stage_cache() {
     
     if [[ ! -f "$STAGE_CACHE_FILE" ]]; then
         log_info "Initializing stage cache: $STAGE_CACHE_FILE"
-        echo '{"stages":{},"cluster":"","image":""}' > "$STAGE_CACHE_FILE"
+        echo '{"stages":{}}' > "$STAGE_CACHE_FILE"
     fi
 }
 
@@ -86,36 +86,6 @@ is_stage_complete() {
     fi
     
     return 1
-}
-
-save_cluster_info() {
-    local cluster_name="$1"
-    if command -v jq &> /dev/null; then
-        local temp_file=$(mktemp)
-        jq --arg cluster "$cluster_name" '.cluster = $cluster' "$STAGE_CACHE_FILE" > "$temp_file"
-        mv "$temp_file" "$STAGE_CACHE_FILE"
-    fi
-}
-
-save_image_info() {
-    local image_tag="$1"
-    if command -v jq &> /dev/null; then
-        local temp_file=$(mktemp)
-        jq --arg image "$image_tag" '.image = $image' "$STAGE_CACHE_FILE" > "$temp_file"
-        mv "$temp_file" "$STAGE_CACHE_FILE"
-    fi
-}
-
-get_cached_cluster() {
-    if [[ -f "$STAGE_CACHE_FILE" ]] && command -v jq &> /dev/null; then
-        jq -r '.cluster // empty' "$STAGE_CACHE_FILE"
-    fi
-}
-
-get_cached_image() {
-    if [[ -f "$STAGE_CACHE_FILE" ]] && command -v jq &> /dev/null; then
-        jq -r '.image // empty' "$STAGE_CACHE_FILE"
-    fi
 }
 
 clear_stage_cache() {
@@ -417,12 +387,21 @@ trap 'error_handler $LINENO' ERR
 trap cleanup EXIT
 
     # Infrastructure Setup (CI Environment Only)
-    if is_stage_complete "infrastructure"; then
-        log_info "Skipping Infrastructure Setup (cached)"
+    if is_stage_complete "cluster_setup"; then
+        log_info "Skipping Cluster Setup (cached)"
     else
-        log_info "Infrastructure Setup: Checkout and bootstrap platform"
-        setup_ci_infrastructure
-        mark_stage_complete "infrastructure"
+        log_info "Cluster Setup: Create Kind cluster and setup platform environment"
+        setup_cluster_environment
+        mark_stage_complete "cluster_setup"
+    fi
+    
+    # Platform Bootstrap
+    if is_stage_complete "platform_bootstrap"; then
+        log_info "Skipping Platform Bootstrap (cached)"
+    else
+        log_info "Platform Bootstrap: Bootstrap platform and wait for sync"
+        bootstrap_platform
+        mark_stage_complete "platform_bootstrap"
     fi
     
     # Stage 1: Platform Readiness
@@ -651,7 +630,7 @@ trap cleanup EXIT
 }
 
 # Infrastructure setup for CI environment
-setup_ci_infrastructure() {
+setup_cluster_environment() {
     # Step 1: Checkout repository (simulated - we're already in the repo)
     log_info "Checkout repository (already in repository)"
 
@@ -706,7 +685,10 @@ setup_ci_infrastructure() {
         log_error "Platform setup script not found: $PLATFORM_SETUP_SCRIPT"
         exit 1
     fi
+}
 
+# Bootstrap platform and wait for sync
+bootstrap_platform() {
     # Step 6: Bootstrap platform
     log_info "Bootstrap platform"
     cd "${PLATFORM_ROOT}"
@@ -750,7 +732,7 @@ setup_ci_infrastructure() {
     # Step 9: Additional settling time for ArgoCD operations
     log_info "Allowing additional time for ArgoCD operations to settle..."
     sleep 15
-    log_success "Infrastructure setup completed - ArgoCD operations have settled"
+    log_success "Platform bootstrap completed - ArgoCD operations have settled"
 }
 
 # Call main function with all arguments
