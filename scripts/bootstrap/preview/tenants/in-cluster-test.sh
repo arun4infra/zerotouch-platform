@@ -17,6 +17,10 @@ set -euo pipefail
 
 # Configuration
 CLEANUP_CLUSTER=${CLEANUP_CLUSTER:-true}   # Default: always cleanup cluster
+SKIP_CACHE=${SKIP_CACHE:-false}            # Set to true to ignore cache and run full workflow
+
+# Stage cache file location (at service root)
+STAGE_CACHE_FILE=".ci-stage-cache"
 
 # Default values - preserve environment variables if already set
 SERVICE_NAME="${SERVICE_NAME:-}"
@@ -37,6 +41,89 @@ log_info() { echo -e "${BLUE}[IN-CLUSTER-TEST]${NC} $*"; }
 log_success() { echo -e "${GREEN}[IN-CLUSTER-TEST]${NC} $*"; }
 log_error() { echo -e "${RED}[IN-CLUSTER-TEST]${NC} $*"; }
 log_warn() { echo -e "${YELLOW}[IN-CLUSTER-TEST]${NC} $*"; }
+
+# Stage cache management functions
+init_stage_cache() {
+    if [[ "$SKIP_CACHE" == "true" ]]; then
+        log_info "Cache disabled, removing existing cache file"
+        rm -f "$STAGE_CACHE_FILE"
+    fi
+    
+    if [[ ! -f "$STAGE_CACHE_FILE" ]]; then
+        log_info "Initializing stage cache: $STAGE_CACHE_FILE"
+        echo '{"stages":{},"cluster":"","image":""}' > "$STAGE_CACHE_FILE"
+    fi
+}
+
+mark_stage_complete() {
+    local stage_name="$1"
+    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    
+    if command -v jq &> /dev/null; then
+        local temp_file=$(mktemp)
+        jq --arg stage "$stage_name" --arg ts "$timestamp" \
+           '.stages[$stage] = $ts' "$STAGE_CACHE_FILE" > "$temp_file"
+        mv "$temp_file" "$STAGE_CACHE_FILE"
+        log_success "Stage '$stage_name' marked complete"
+    else
+        log_warn "jq not available, skipping cache update"
+    fi
+}
+
+is_stage_complete() {
+    local stage_name="$1"
+    
+    if [[ ! -f "$STAGE_CACHE_FILE" ]] || [[ "$SKIP_CACHE" == "true" ]]; then
+        return 1
+    fi
+    
+    if command -v jq &> /dev/null; then
+        local completed=$(jq -r --arg stage "$stage_name" '.stages[$stage] // empty' "$STAGE_CACHE_FILE")
+        if [[ -n "$completed" ]]; then
+            log_info "Stage '$stage_name' already complete (cached: $completed)"
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+save_cluster_info() {
+    local cluster_name="$1"
+    if command -v jq &> /dev/null; then
+        local temp_file=$(mktemp)
+        jq --arg cluster "$cluster_name" '.cluster = $cluster' "$STAGE_CACHE_FILE" > "$temp_file"
+        mv "$temp_file" "$STAGE_CACHE_FILE"
+    fi
+}
+
+save_image_info() {
+    local image_tag="$1"
+    if command -v jq &> /dev/null; then
+        local temp_file=$(mktemp)
+        jq --arg image "$image_tag" '.image = $image' "$STAGE_CACHE_FILE" > "$temp_file"
+        mv "$temp_file" "$STAGE_CACHE_FILE"
+    fi
+}
+
+get_cached_cluster() {
+    if [[ -f "$STAGE_CACHE_FILE" ]] && command -v jq &> /dev/null; then
+        jq -r '.cluster // empty' "$STAGE_CACHE_FILE"
+    fi
+}
+
+get_cached_image() {
+    if [[ -f "$STAGE_CACHE_FILE" ]] && command -v jq &> /dev/null; then
+        jq -r '.image // empty' "$STAGE_CACHE_FILE"
+    fi
+}
+
+clear_stage_cache() {
+    if [[ -f "$STAGE_CACHE_FILE" ]]; then
+        log_info "Clearing stage cache"
+        rm -f "$STAGE_CACHE_FILE"
+    fi
+}
 
 # Filesystem contract discovery functions
 load_service_config() {
@@ -235,6 +322,9 @@ PLATFORM_ROOT=""
 
 # Main execution flow
 main() {
+    # Initialize stage cache
+    init_stage_cache
+    
     # Step 1: Parse arguments (legacy support) or use filesystem contract
     parse_legacy_arguments "$@"
     
@@ -290,6 +380,12 @@ run_ci_workflow() {
 
 # Cleanup function (matches workflow cleanup step)
 cleanup() {
+    # Clear cache on failure
+    if [[ $? -ne 0 ]]; then
+        log_warn "Clearing stage cache due to failure"
+        clear_stage_cache
+    fi
+    
     # Use dedicated cleanup script for better modularity
     CLEANUP_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/cleanup-failed-pods.sh"
     if [[ -f "$CLEANUP_SCRIPT" ]]; then
@@ -302,6 +398,7 @@ cleanup() {
         if [[ "${CLEANUP_CLUSTER:-true}" == "true" ]]; then
             log_info "Cleaning up Kind cluster..."
             kind delete cluster --name zerotouch-preview || true
+            clear_stage_cache
         fi
     fi
 }
@@ -320,43 +417,59 @@ trap 'error_handler $LINENO' ERR
 trap cleanup EXIT
 
     # Infrastructure Setup (CI Environment Only)
-    log_info "Infrastructure Setup: Checkout and bootstrap platform"
-    setup_ci_infrastructure
+    if is_stage_complete "infrastructure"; then
+        log_info "Skipping Infrastructure Setup (cached)"
+    else
+        log_info "Infrastructure Setup: Checkout and bootstrap platform"
+        setup_ci_infrastructure
+        mark_stage_complete "infrastructure"
+    fi
     
     # Stage 1: Platform Readiness
-    log_info "Stage 1: Platform Readiness - Validate platform components service needs"
-    PLATFORM_READINESS_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/validation/check-platform-readiness.sh"
-    if [[ -f "$PLATFORM_READINESS_SCRIPT" ]]; then
-        chmod +x "$PLATFORM_READINESS_SCRIPT"
-        "$PLATFORM_READINESS_SCRIPT" --wait --timeout 300
+    if is_stage_complete "platform_readiness"; then
+        log_info "Skipping Stage 1: Platform Readiness (cached)"
     else
-        log_error "Platform readiness script not found: $PLATFORM_READINESS_SCRIPT"
-        exit 1
+        log_info "Stage 1: Platform Readiness - Validate platform components service needs"
+        PLATFORM_READINESS_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/validation/check-platform-readiness.sh"
+        if [[ -f "$PLATFORM_READINESS_SCRIPT" ]]; then
+            chmod +x "$PLATFORM_READINESS_SCRIPT"
+            "$PLATFORM_READINESS_SCRIPT" --wait --timeout 300
+        else
+            log_error "Platform readiness script not found: $PLATFORM_READINESS_SCRIPT"
+            exit 1
+        fi
+        mark_stage_complete "platform_readiness"
     fi
 
     # Stage 2: External Dependencies
-    log_info "Stage 2: External Dependencies - Deploy other services this service depends on"
-    EXTERNAL_DEPS_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/setup-external-dependencies.sh"
-    if [[ -f "$EXTERNAL_DEPS_SCRIPT" ]]; then
-        chmod +x "$EXTERNAL_DEPS_SCRIPT"
-        "$EXTERNAL_DEPS_SCRIPT"
+    if is_stage_complete "external_dependencies"; then
+        log_info "Skipping Stage 2: External Dependencies (cached)"
     else
-        log_error "External dependencies script not found: $EXTERNAL_DEPS_SCRIPT"
-        exit 1
-    fi
+        log_info "Stage 2: External Dependencies - Deploy other services this service depends on"
+        EXTERNAL_DEPS_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/setup-external-dependencies.sh"
+        if [[ -f "$EXTERNAL_DEPS_SCRIPT" ]]; then
+            chmod +x "$EXTERNAL_DEPS_SCRIPT"
+            "$EXTERNAL_DEPS_SCRIPT"
+        else
+            log_error "External dependencies script not found: $EXTERNAL_DEPS_SCRIPT"
+            exit 1
+        fi
 
-    # Pre-deploy diagnostics
-    log_info "Pre-deploy diagnostics: Validate external dependencies"
-    PRE_DEPLOY_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/validation/pre-deploy-diagnostics.sh"
-    if [[ -f "$PRE_DEPLOY_SCRIPT" ]]; then
-        chmod +x "$PRE_DEPLOY_SCRIPT"
-        "$PRE_DEPLOY_SCRIPT"
-    else
-        log_error "Pre-deploy diagnostics script not found: $PRE_DEPLOY_SCRIPT"
-        exit 1
+        # Pre-deploy diagnostics
+        log_info "Pre-deploy diagnostics: Validate external dependencies"
+        PRE_DEPLOY_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/validation/pre-deploy-diagnostics.sh"
+        if [[ -f "$PRE_DEPLOY_SCRIPT" ]]; then
+            chmod +x "$PRE_DEPLOY_SCRIPT"
+            "$PRE_DEPLOY_SCRIPT"
+        else
+            log_error "Pre-deploy diagnostics script not found: $PRE_DEPLOY_SCRIPT"
+            exit 1
+        fi
+        mark_stage_complete "external_dependencies"
     fi
 
     # Stage 3: Service Deployment
+    # Always run deployment stage (code changes require redeployment)
     log_info "Stage 3: Service Deployment - Build, patch, and deploy the service"
     
     # Step 3a: Docker Registry Authentication (if in CI mode)
@@ -483,8 +596,11 @@ trap cleanup EXIT
     else
         log_info "No migrations/ directory found, skipping database migrations"
     fi
+    
+    mark_stage_complete "service_deployment"
 
     # Stage 4: Internal Validation
+    # Always run validation and tests (verify current state)
     log_info "Stage 4: Internal Validation - Test service's own infrastructure and health"
     POST_DEPLOY_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/validation/post-deploy-diagnostics.sh"
     if [[ -f "$POST_DEPLOY_SCRIPT" ]]; then
@@ -516,6 +632,8 @@ trap cleanup EXIT
     else
         log_info "No tests configured, skipping in-cluster tests"
     fi
+    
+    mark_stage_complete "validation"
 
     echo ""
     echo "================================================================================"
@@ -527,6 +645,8 @@ trap cleanup EXIT
     echo "  Result:     PASSED"
     echo ""
     echo "This script used the filesystem contract for service discovery."
+    echo "Stage cache saved to: $STAGE_CACHE_FILE"
+    echo "To force full run: SKIP_CACHE=true ./in-cluster-test.sh"
     echo "================================================================================"
 }
 
