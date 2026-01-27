@@ -195,7 +195,7 @@ patches:
       - group: apiextensions.crossplane.io
         kind: Composition
         jsonPointers:
-        - /metadata/labels/crossplane.io~1composite
-      - /metadata/labels/crossplane.io~1claim-name
-      - /metadata/labels/crossplane.io~1claim-namespace
-      - /spec/resources
+          - /metadata/labels/crossplane.io~1composite
+          - /metadata/labels/crossplane.io~1claim-name
+          - /metadata/labels/crossplane.io~1claim-namespace
+          - /spec/resources
