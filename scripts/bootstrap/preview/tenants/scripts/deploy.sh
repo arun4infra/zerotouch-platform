@@ -98,7 +98,7 @@ CLAIMS_DIR="${PROJECT_ROOT}/platform/${SERVICE_NAME}/base/claims/"
 
 if [[ ! -d "$CLAIMS_DIR" ]]; then
     echo "ℹ️  No platform claims directory found, skipping..."
-elif ! ls "$CLAIMS_DIR"*.{yaml,yml} 1> /dev/null 2>&1; then
+elif [ -z "$(find "$CLAIMS_DIR" -maxdepth 1 \( -name '*.yaml' -o -name '*.yml' \) 2>/dev/null)" ]; then
     echo "ℹ️  No platform claims files found (directory is empty), skipping..."
 else
     echo "✅ Found platform claims, applying..."
