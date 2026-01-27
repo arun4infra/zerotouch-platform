@@ -119,6 +119,38 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
                         echo -e "      - $CHILD_KIND: $child"
                     fi
                 done
+                
+                # Debug storage component specifically if it's the blocker
+                if [[ "$COMPOSITE_MESSAGE" == *"storage-component"* ]]; then
+                    echo -e "    ${YELLOW}=== STORAGE COMPONENT DEBUG ===${NC}"
+                    STORAGE_NAME=$(kubectl get xagentsandboxservice "$COMPOSITE_NAME" -o jsonpath='{.spec.resourceRefs[?(@.kind=="XAgentSandboxStorage")].name}' 2>/dev/null || echo "")
+                    if [[ -n "$STORAGE_NAME" ]]; then
+                        echo -e "    ${YELLOW}Storage resource: $STORAGE_NAME${NC}"
+                        STORAGE_READY=$(kubectl get xagentsandboxstorage "$STORAGE_NAME" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "Unknown")
+                        STORAGE_MESSAGE=$(kubectl get xagentsandboxstorage "$STORAGE_NAME" -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}' 2>/dev/null || echo "")
+                        echo -e "    ${YELLOW}Storage Ready: $STORAGE_READY${NC}"
+                        if [[ -n "$STORAGE_MESSAGE" ]]; then
+                            echo -e "    ${YELLOW}Storage Message: $STORAGE_MESSAGE${NC}"
+                        fi
+                        
+                        # Show storage's child objects
+                        echo -e "    ${YELLOW}Storage child objects:${NC}"
+                        kubectl get xagentsandboxstorage "$STORAGE_NAME" -o jsonpath='{.spec.resourceRefs[*].name}' 2>/dev/null | tr ' ' '\n' | while read -r obj; do
+                            if [[ -n "$obj" ]]; then
+                                OBJ_KIND=$(kubectl get xagentsandboxstorage "$STORAGE_NAME" -o jsonpath="{.spec.resourceRefs[?(@.name=='$obj')].kind}" 2>/dev/null || echo "Unknown")
+                                OBJ_READY=$(kubectl get object "$obj" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "Unknown")
+                                echo -e "      - $OBJ_KIND: $obj (Ready: $OBJ_READY)"
+                                if [[ "$OBJ_READY" != "True" ]]; then
+                                    OBJ_MESSAGE=$(kubectl get object "$obj" -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}' 2>/dev/null || echo "")
+                                    if [[ -n "$OBJ_MESSAGE" ]]; then
+                                        echo -e "        Message: $OBJ_MESSAGE"
+                                    fi
+                                fi
+                            fi
+                        done
+                    fi
+                    echo -e "    ${YELLOW}=== END STORAGE DEBUG ===${NC}"
+                fi
             fi
             
             sleep $INTERVAL
