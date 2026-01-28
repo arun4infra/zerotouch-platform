@@ -15,10 +15,10 @@ platform/intelligence
 platform/observability
 
 # Scripts
-scripts/bootstrap/helpers
-scripts/bootstrap/preview
-scripts/bootstrap/validation
-scripts/bootstrap/wait
+# scripts/bootstrap/helpers
+# scripts/bootstrap/preview
+# scripts/bootstrap/validation
+# scripts/bootstrap/wait
 
 # Temporary files
 .github
@@ -32,3 +32,4 @@ artifacts
 codebase.md
 temp-docs
 sa-signer-dev.key
+uv.lock
