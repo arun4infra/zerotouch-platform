@@ -26,31 +26,7 @@ on:
         required: false
         type: boolean
         default: false
-    secrets:
-      BOT_GITHUB_TOKEN:
-        description: 'GitHub token for platform access'
-        required: true
-      BOT_GITHUB_USERNAME:
-        description: 'GitHub username for platform access'
-        required: false
-      AWS_ROLE_ARN:
-        description: 'AWS role ARN for OIDC authentication'
-        required: true
-      OPENAI_API_KEY:
-        description: 'OpenAI API key for LLM tests'
-        required: false
-      ANTHROPIC_API_KEY:
-        description: 'Anthropic API key for LLM tests'
-        required: false
-      TENANTS_REPO_NAME:
-        description: 'Tenant repository name for platform operations'
-        required: false
-      IDEO_JWT_SECRET:
-        description: 'JWT secret for ide-orchestrator service'
-        required: false
-      IDEO_SPEC_ENGINE_URL:
-        description: 'Spec Engine URL for ide-orchestrator service'
-        required: false
+    secrets: inherit
 
 permissions:
   id-token: write      # Required for AWS OIDC authentication
@@ -83,6 +59,12 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ap-south-1
           mask-aws-account-id: true
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -127,18 +109,16 @@ jobs:
 
       - name: Run Integration Tests
         working-directory: service-code
-        env:
-          BOT_GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
-          BOT_GITHUB_USERNAME: ${{ secrets.BOT_GITHUB_USERNAME }}
-          TENANTS_REPO_NAME: ${{ secrets.TENANTS_REPO_NAME }}
-          TEST_PATH: ${{ inputs.test_suite }}
-          TEST_NAME: ${{ inputs.test_name }}
-          USE_REAL_LLM: ${{ inputs.use_real_llm }}
-          IDEO_JWT_SECRET: ${{ secrets.IDEO_JWT_SECRET }}
-          IDEO_SPEC_ENGINE_URL: ${{ secrets.IDEO_SPEC_ENGINE_URL }}
-          # Override image for in-cluster testing
-          OVERRIDE_IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
+          # Export all secrets as environment variables
+          echo '${{ toJSON(secrets) }}' | jq -r 'to_entries[] | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
+          
+          # Export inputs as environment variables
+          export TEST_PATH="${{ inputs.test_suite }}"
+          export TEST_NAME="${{ inputs.test_name }}"
+          export USE_REAL_LLM="${{ inputs.use_real_llm }}"
+          export OVERRIDE_IMAGE_TAG="${{ inputs.image_tag }}"
+          
           echo "🧪 Running test suite: ${{ inputs.test_suite }}"
           echo "📦 Using image: ${{ inputs.image_tag }}"
           echo "🏷️  Test name: ${{ inputs.test_name }}"
