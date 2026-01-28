@@ -41,7 +41,7 @@ spec:
                     storage: "10Gi"
                 storageClassName: "local-path"
           # Live status probing - forces Crossplane to verify actual K8s state
-          # FIX: Evaluate 'status.phase' against the PVC manifest itself
+          # This drives the Object's Ready condition
           readinessChecks:
             - type: MatchString
               fieldPath: "status.phase"
@@ -72,11 +72,14 @@ spec:
                 fmt: "%dGi"
           policy:
             fromFieldPath: Optional
+      # FIX: Only check if the Object is Ready.
+      # The inner readinessChecks (above) ensure it only becomes Ready when the PVC is Bound.
+      # Removed the redundant and flaky 'status.atProvider.manifest.status.phase' check.
       readinessChecks:
         - type: MatchCondition
           matchCondition:
             type: Ready
             status: "True"
-        - type: MatchString
-          fieldPath: "status.atProvider.manifest.status.phase"
-          matchString: "Bound"  # Re-creation triggers if state is not 'Bound' (e.g., missing)
+        # - type: MatchString
+        #   fieldPath: "status.atProvider.manifest.status.phase"
+        #   matchString: "Bound"  # Re-creation triggers if state is not 'Bound' (e.g., missing)
