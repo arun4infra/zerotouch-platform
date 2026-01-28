@@ -350,7 +350,7 @@ main() {
     export TIMEOUT="${TIMEOUT}"
     export JWT_SECRET="test-secret-key-for-ci-testing"
     export BOT_GITHUB_TOKEN="${BOT_GITHUB_TOKEN:-}"
-    export BOT_GITHUB_USERNAME="${BOT_GITHUB_USERNAME:-}"
+    export BOT_GITHUB_USERNAME="${BOT_GITHUB_USERNAME:-${GITHUB_REPOSITORY_OWNER:-}}"
     
     # Continue with existing workflow steps...
     run_ci_workflow
@@ -457,9 +457,10 @@ trap cleanup EXIT
     log_info "Stage 3: Service Deployment - Build, patch, and deploy the service"
     
     # Step 3a: Docker Registry Authentication (if in CI mode)
-    if [[ "${GITHUB_ACTIONS:-}" == "true" && -n "${BOT_GITHUB_TOKEN:-}" && -n "${BOT_GITHUB_USERNAME:-}" ]]; then
+    GITHUB_USERNAME="${BOT_GITHUB_USERNAME:-${GITHUB_REPOSITORY_OWNER:-}}"
+    if [[ "${GITHUB_ACTIONS:-}" == "true" && -n "${BOT_GITHUB_TOKEN:-}" && -n "${GITHUB_USERNAME}" ]]; then
         log_info "Authenticating with GitHub Container Registry..."
-        if echo "$BOT_GITHUB_TOKEN" | docker login ghcr.io -u "$BOT_GITHUB_USERNAME" --password-stdin; then
+        if echo "$BOT_GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_USERNAME" --password-stdin; then
             log_success "Successfully authenticated with GHCR"
         else
             log_error "Failed to authenticate with GitHub Container Registry"

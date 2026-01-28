@@ -21,14 +21,16 @@ CACHE_DIR="$REPO_ROOT/.tenants-cache"
 ENV_FILE="$CACHE_DIR/environments/$ENV/talos-values.yaml"
 
 # Get tenant repo credentials from environment variables
-if [[ -n "$BOT_GITHUB_USERNAME" && -n "$BOT_GITHUB_TOKEN" && -n "$TENANTS_REPO_NAME" ]]; then
-    TENANT_USERNAME="$BOT_GITHUB_USERNAME"
+GITHUB_USERNAME="${BOT_GITHUB_USERNAME:-${GITHUB_REPOSITORY_OWNER:-arun4infra}}"
+if [[ -n "$GITHUB_USERNAME" && -n "$BOT_GITHUB_TOKEN" && -n "$TENANTS_REPO_NAME" ]]; then
+    TENANT_USERNAME="$GITHUB_USERNAME"
     TENANT_PASSWORD="$BOT_GITHUB_TOKEN"
-    TENANT_REPO_URL="https://github.com/${BOT_GITHUB_USERNAME}/${TENANTS_REPO_NAME}.git"
+    TENANT_REPO_URL="https://github.com/${GITHUB_USERNAME}/${TENANTS_REPO_NAME}.git"
     echo "✓ Using tenant repo credentials from environment variables" >&2
 else
     echo "Error: Tenant repository credentials not available" >&2
-    echo "Set environment variables: BOT_GITHUB_USERNAME, BOT_GITHUB_TOKEN, TENANTS_REPO_NAME" >&2
+    echo "Set environment variables: BOT_GITHUB_TOKEN, TENANTS_REPO_NAME" >&2
+    echo "Optional: BOT_GITHUB_USERNAME (defaults to GITHUB_REPOSITORY_OWNER)" >&2
     exit 1
 fi
 
@@ -60,7 +62,7 @@ else
     git clone --filter=blob:none --no-checkout --depth 1 --branch main \
         "$TENANT_REPO_AUTH_URL" "$CACHE_DIR" --quiet 2>/dev/null || {
         echo "Error: Failed to clone tenant repository" >&2
-        echo "Check credentials: BOT_GITHUB_USERNAME, BOT_GITHUB_TOKEN, TENANTS_REPO_NAME" >&2
+        echo "Check credentials: BOT_GITHUB_TOKEN, TENANTS_REPO_NAME" >&2
         exit 1
     }
     

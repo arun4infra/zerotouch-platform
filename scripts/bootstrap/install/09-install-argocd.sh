@@ -145,12 +145,9 @@ log_info ""
 log_step "Step 3/7: Configuring repository credentials..."
 
 # GitHub credentials - use BOT_GITHUB_* environment variables
-if [[ -z "$BOT_GITHUB_USERNAME" ]]; then
-    log_error "BOT_GITHUB_USERNAME environment variable is required"
-    exit 1
-fi
-GITHUB_REPO_URL="https://github.com/${BOT_GITHUB_USERNAME}/zerotouch-platform.git"
-GITHUB_USERNAME="${BOT_GITHUB_USERNAME}"
+# Extract username from GITHUB_REPOSITORY or default to current repo owner
+GITHUB_USERNAME="${BOT_GITHUB_USERNAME:-${GITHUB_REPOSITORY_OWNER:-bizmatters}}"
+GITHUB_REPO_URL="https://github.com/${GITHUB_USERNAME}/zerotouch-platform.git"
 GITHUB_TOKEN="${BOT_GITHUB_TOKEN:-}"
 
 if kubectl get secret repo-credentials -n "$ARGOCD_NAMESPACE" &>/dev/null; then
@@ -171,7 +168,8 @@ else
 fi
 
 # Create tenant repository credentials
-TENANT_REPO_URL="https://github.com/${BOT_GITHUB_USERNAME}/zerotouch-tenants.git"
+GITHUB_USERNAME="${BOT_GITHUB_USERNAME:-${GITHUB_REPOSITORY_OWNER:-arun4infra}}"
+TENANT_REPO_URL="https://github.com/${GITHUB_USERNAME}/zerotouch-tenants.git"
 if kubectl get secret tenant-repo-credentials -n "$ARGOCD_NAMESPACE" &>/dev/null; then
     log_warn "Tenant repository credentials already exist, skipping..."
 else

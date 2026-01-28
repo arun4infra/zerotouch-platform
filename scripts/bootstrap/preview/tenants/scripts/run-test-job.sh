@@ -58,7 +58,7 @@ else
     # CI mode - construct full registry path
     # Get registry and org from environment or use defaults
     REGISTRY="${CONTAINER_REGISTRY:-ghcr.io}"
-    GITHUB_REPOSITORY_OWNER="${BOT_GITHUB_USERNAME:-arun4infra}"
+    GITHUB_REPOSITORY_OWNER="${BOT_GITHUB_USERNAME:-${GITHUB_REPOSITORY_OWNER:-arun4infra}}"
     FULL_IMAGE="${REGISTRY}/${GITHUB_REPOSITORY_OWNER}/SERVICE_NAME_PLACEHOLDER:${IMAGE_TAG}"
 fi
 

@@ -169,8 +169,8 @@ if [ -z "$OPENAI_API_KEY" ]; then
     MISSING_VARS+=("OPENAI_API_KEY")
 fi
 
-if [ -z "$BOT_GITHUB_USERNAME" ]; then
-    MISSING_VARS+=("BOT_GITHUB_USERNAME")
+if [ -z "$BOT_GITHUB_TOKEN" ]; then
+    MISSING_VARS+=("BOT_GITHUB_TOKEN")
 fi
 
 if [ -z "$BOT_GITHUB_TOKEN" ]; then

@@ -29,7 +29,8 @@ if [ ! -f "$CONFIG_FILE" ]; then
     echo -e "${YELLOW}⚠️  Config file not found: $CONFIG_FILE${NC}"
     echo "Creating default config..."
     # Get repo URL from environment or use placeholder
-    PLATFORM_REPO_URL="${PLATFORM_REPO_URL:-https://github.com/\${BOT_GITHUB_USERNAME}/zerotouch-platform.git}"
+    GITHUB_USERNAME="${BOT_GITHUB_USERNAME:-${GITHUB_REPOSITORY_OWNER:-arun4infra}}"
+    PLATFORM_REPO_URL="${PLATFORM_REPO_URL:-https://github.com/${GITHUB_USERNAME}/zerotouch-platform.git}"
     cat > "$CONFIG_FILE" << EOF
 # Bootstrap Configuration
 # This file contains global configuration for the bootstrap process
