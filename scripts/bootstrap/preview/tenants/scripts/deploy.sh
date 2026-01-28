@@ -64,11 +64,11 @@ cd "${PROJECT_ROOT}"
 
 # Validate environment
 case "${ENVIRONMENT}" in
-    ci|staging|production)
+    pr|dev|staging|production)
         echo "✅ Valid environment: ${ENVIRONMENT}"
         ;;
     *)
-        echo "❌ Invalid environment: ${ENVIRONMENT}. Must be ci, staging, or production"
+        echo "❌ Invalid environment: ${ENVIRONMENT}. Must be pr, dev, staging, or production"
         exit 1
         ;;
 esac

@@ -564,7 +564,7 @@ trap cleanup EXIT
         chmod +x "$DEPLOY_SCRIPT"
         # CHANGE: Explicitly pass the calculated tag to deploy.sh
         # deploy.sh accepts: $1=ENVIRONMENT, $2=IMAGE_TAG
-        "$DEPLOY_SCRIPT" "ci" "$FINAL_IMAGE_TAG"
+        "$DEPLOY_SCRIPT" "pr" "$FINAL_IMAGE_TAG"
     else
         log_error "Deploy script not found: $DEPLOY_SCRIPT"
         exit 1
