@@ -181,21 +181,21 @@ patches:
               featureGates:
                 ExperimentalGatewayAPISupport: false
 
-# 6. Allow preview patches to modify Composition readiness checks
-- target:
-    kind: Application
-    name: apis
-  patch: |-
-    apiVersion: argoproj.io/v1alpha1
-    kind: Application
-    metadata:
-      name: apis
-    spec:
-      ignoreDifferences:
-      - group: apiextensions.crossplane.io
-        kind: Composition
-        jsonPointers:
-          - /metadata/labels/crossplane.io~1composite
-          - /metadata/labels/crossplane.io~1claim-name
-          - /metadata/labels/crossplane.io~1claim-namespace
-          - /spec/resources
+# # 6. Allow preview patches to modify Composition readiness checks
+# - target:
+#     kind: Application
+#     name: apis
+#   patch: |-
+#     apiVersion: argoproj.io/v1alpha1
+#     kind: Application
+#     metadata:
+#       name: apis
+#     spec:
+#       ignoreDifferences:
+#       - group: apiextensions.crossplane.io
+#         kind: Composition
+#         jsonPointers:
+#           - /metadata/labels/crossplane.io~1composite
+#           - /metadata/labels/crossplane.io~1claim-name
+#           - /metadata/labels/crossplane.io~1claim-namespace
+#           - /spec/resources

@@ -41,10 +41,12 @@ spec:
                     storage: "10Gi"
                 storageClassName: "local-path"
           # Live status probing - forces Crossplane to verify actual K8s state
+          # FIX: Evaluate 'status.phase' against the PVC manifest itself
           readinessChecks:
             - type: MatchString
-              fieldPath: "status.atProvider.manifest.status.phase"
-              matchString: "Bound"  # Re-creation triggers if not Bound (missing/corrupted)
+              fieldPath: "status.phase"
+              # fieldPath: "status.atProvider.manifest.status.phase"
+              matchString: "Bound"
       patches:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
