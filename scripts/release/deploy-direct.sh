@@ -24,7 +24,7 @@ ENVIRONMENT=""
 SERVICE_NAME="${SERVICE_NAME:-}"
 IMAGE_TAG="${IMAGE_TAG:-}"
 TENANT_REPO_TOKEN="${TENANT_REPO_TOKEN:-}"
-TENANT_REPO_URL="${TENANT_REPO_URL:-https://github.com/arun4infra/zerotouch-tenants.git}"
+TENANTS_REPO_NAME="${TENANTS_REPO_NAME}"
 
 # Usage information
 usage() {
@@ -41,7 +41,7 @@ Environment Variables:
   SERVICE_NAME          Service name (required, from GitHub repo name)
   IMAGE_TAG            Container image tag to deploy (required)
   TENANT_REPO_TOKEN    GitHub token for tenant repo access (required)
-  TENANT_REPO_URL      Tenant repository URL (default: zerotouch-tenants)
+  TENANTS_REPO_NAME    Tenant repository name (required)
 
 Examples:
   SERVICE_NAME=deepagents-runtime IMAGE_TAG=ghcr.io/org/service:main-abc123 ./deploy-direct.sh dev
@@ -100,19 +100,20 @@ validate_environment() {
 clone_tenant_repo() {
     log_info "Cloning tenant repository"
     
+    # Define variables first
+    local github_username="${BOT_GITHUB_USERNAME:-${GITHUB_REPOSITORY_OWNER}}"
+    local tenants_repo_name="${TENANTS_REPO_NAME:-${GITHUB_VARS_TENANTS_REPO_NAME}}"
+    local tenants_repo_url="https://github.com/${github_username}/${tenants_repo_name}.git"
+    
     local temp_dir
     temp_dir=$(mktemp -d)
-    export TENANT_REPO_DIR="$temp_dir/zerotouch-tenants"
+    export TENANT_REPO_DIR="$temp_dir/${tenants_repo_name}"
     
-    # Clone with authentication - extract org from TENANT_REPO_URL or default to current repo owner
-    local repo_org="${GITHUB_REPOSITORY_OWNER:-arun4infra}"
-    if [[ -n "${TENANT_REPO_URL:-}" ]]; then
-        repo_org=$(echo "$TENANT_REPO_URL" | sed -n 's|.*github.com[:/]\([^/]*\)/.*|\1|p')
-    fi
+    # Extract repo path and construct HTTPS URL with token (same as checkout-pr-claims.sh)
+    local repo_path="${github_username}/${tenants_repo_name}"
+    local https_repo="https://x-access-token:${BOT_GITHUB_TOKEN}@github.com/${repo_path}.git"
     
-    local auth_url="https://${BOT_GITHUB_TOKEN}@github.com/${repo_org}/zerotouch-tenants.git"
-    
-    if git clone "$auth_url" "$TENANT_REPO_DIR"; then
+    if git clone "$https_repo" "$TENANT_REPO_DIR"; then
         log_success "Tenant repository cloned to: $TENANT_REPO_DIR"
     else
         log_error "Failed to clone tenant repository"
