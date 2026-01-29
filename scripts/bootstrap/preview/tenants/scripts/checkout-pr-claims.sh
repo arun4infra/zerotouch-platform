@@ -86,27 +86,27 @@ checkout_pr_claims() {
         local github_token="${GITHUB_TOKEN:-${BOT_GITHUB_TOKEN:-}}"
         
         log_info "Attempting SSH clone with branch: $current_branch"
-        if git clone -b "$current_branch" "$tenants_repo" "$tenants_dir" 2>/dev/null; then
+        if git clone -b "$current_branch" "$tenants_repo" "$tenants_dir" 2>&1 | grep -v "Cloning into"; then
             log_success "SSH clone successful, checked out branch: $current_branch"
             clone_success=true
         elif [[ -n "$github_token" ]]; then
             log_info "SSH failed, trying HTTPS with GitHub token..."
             # Extract org/repo from SSH URL and construct HTTPS URL
             local repo_path=$(echo "$tenants_repo" | sed 's|git@github.com:||' | sed 's|\.git$||')
-            local https_repo="https://${github_token}@github.com/${repo_path}.git"
-            if git clone -b "$current_branch" "$https_repo" "$tenants_dir" 2>/dev/null; then
+            local https_repo="https://x-access-token:${github_token}@github.com/${repo_path}.git"
+            if git clone -b "$current_branch" "$https_repo" "$tenants_dir" 2>&1 | grep -v "Cloning into"; then
                 log_success "HTTPS clone successful, checked out branch: $current_branch"
                 clone_success=true
             else
                 log_warn "Branch $current_branch not found in tenants repo, falling back to main"
-                if git clone -b main "$https_repo" "$tenants_dir" 2>/dev/null; then
+                if git clone -b main "$https_repo" "$tenants_dir" 2>&1 | grep -v "Cloning into"; then
                     log_success "HTTPS clone successful, checked out main branch"
                     clone_success=true
                 fi
             fi
         else
             log_info "SSH failed and no GitHub token available, trying branch fallback with SSH..."
-            if git clone -b main "$tenants_repo" "$tenants_dir" 2>/dev/null; then
+            if git clone -b main "$tenants_repo" "$tenants_dir" 2>&1 | grep -v "Cloning into"; then
                 log_success "SSH clone successful with main branch"
                 clone_success=true
             fi
