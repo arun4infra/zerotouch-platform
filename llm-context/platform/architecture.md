@@ -26,6 +26,20 @@
 - Application Secrets: ExternalSecrets Operator syncs from AWS SSM
 - Overlays: Kustomize handles environment-specific configuration
 
+---
+
+## Platform Service Technology Standards
+
+| Service | Language | Framework | Database | Cache | Notes |
+|---------|----------|-----------|----------|-------|-------|
+| **Identity Service** | Node.js 20 + TypeScript | Fastify 4.x | Neon PostgreSQL | Dragonfly | Exception: Uses Node.js for performance |
+| **IDE Orchestrator** | Python 3.11+ | FastAPI | Neon PostgreSQL | Dragonfly | Standard platform language |
+| **Deepagents runtime** | Python 3.11+ | FastAPI | Neon PostgreSQL | Dragonfly | Standard platform language |
+
+**Platform Standard:** Python 3.11+ with FastAPI for all services except Identity Service (Node.js for authentication performance requirements).
+
+**AgentGateway:** External framework (not platform-developed), language-agnostic from platform perspective.
+
 ## Resource Flow
 
 1. **Platform Initialization** (one-time):

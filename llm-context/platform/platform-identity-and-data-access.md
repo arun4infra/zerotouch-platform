@@ -252,19 +252,45 @@ Platform automatically provisions databases and injects connection strings:
 
 **Platform Provisioning Flow:**
 1. User provides Neon API key once (stored in AWS SSM: `/zerotouch/platform/neon_api_key`)
-2. When service deploys, platform calls Neon API to create database
+2. When service deploys, platform provisioning service (Python) calls Neon API to create database
 3. Platform stores generated `DATABASE_URL` in AWS SSM at `/zerotouch/{env}/service-name/database_url`
 4. ExternalSecrets syncs from SSM to Kubernetes Secret
 5. Service reads connection string from environment variable
 
-**Service Connection Code:**
+**Service Connection Code (Python Example):**
+```python
+# Initialize pool once at startup (src/infrastructure/database.py)
+import os
+from sqlalchemy import create_engine
+from sqlalchemy.pool import QueuePool
+
+# DATABASE_URL injected from ExternalSecret (platform-provisioned via Neon API)
+engine = create_engine(
+    os.environ['DATABASE_URL'],
+    poolclass=QueuePool,
+    pool_size=3,              # Fixed pool size for HPA safety
+    pool_timeout=5,           # Connection timeout
+    pool_recycle=600,         # Recycle connections every 10 minutes
+)
+
+# In your route handler - pool handles connection reuse
+async def get_data(org_id: str):
+    with engine.connect() as conn:
+        result = conn.execute(
+            "SELECT * FROM my_table WHERE org_id = %s",
+            (org_id,)
+        )
+        return result.fetchall()
+```
+
+**Service Connection Code (Node.js - Identity Service Only):**
 ```javascript
 // Initialize pool once at startup (src/infrastructure/database.ts)
 import { Pool } from 'pg';
 
 // DATABASE_URL injected from ExternalSecret (platform-provisioned via Neon API)
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,  // Full Neon connection string
+  connectionString: process.env.DATABASE_URL,
   max: 3,                          // Fixed pool size for HPA safety
   idleTimeoutMillis: 10000,        // Aggressive for serverless
   connectionTimeoutMillis: 5000,
@@ -280,10 +306,11 @@ try {
 ```
 
 **Important:** 
-- Platform provisions databases automatically via Neon API
+- Platform provisions databases automatically via Neon API (Python service)
 - Single Neon API key provisions all service databases
 - Each service gets isolated database in shared Neon project
 - Connection strings stored in AWS SSM, synced via ExternalSecrets
+- **Python standard for all services except Identity Service (Node.js)**
 
 ### C. Service Account Tokens (Machine-to-Machine)
 For background jobs, cron tasks, and queue workers that don't have user sessions:

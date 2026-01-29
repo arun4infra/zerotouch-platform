@@ -21,11 +21,11 @@ The Platform's primary role is **Connectivity Injection**, not just hosting. It 
 
 | Resource Category | Hosting Strategy | Provider Examples | Rationale |
 | :--- | :--- | :--- | :--- |
-| **User Identity** | **Managed** | AWS Cognito, Auth0 | Security critical. Identity is hard to secure; vendor manages compliance (SOC2/GDPR) and attack mitigation. |
+| **User Identity** | **Managed** | Neon Auth, Auth0 | Security critical. Identity is hard to secure; vendor manages compliance (SOC2/GDPR) and attack mitigation. |
 | **Primary Database** | **Managed** | Neon Tech, AWS RDS | Data loss is fatal. We need vendor-guaranteed backups, HA, and Point-in-Time Recovery (PITR) without manual DBA work. |
 | **Blob Storage** | **Managed** | AWS S3, Hetzner object storage | Durability guarantees (99.999999999%) are impossible to replicate on self-hosted disks reliably. |
-| **Application Logic** | **Internal** | Node.js/Python on K8s | High churn code. We need instant deployments and full control over the runtime environment. |
-| **Ingress/Routing** | **Internal** | AgentGateway (Cilium) | Critical path for performance. Low maintenance overhead once configured. |
+| **Application Logic** | **Internal** | Python 3.11+ on K8s (Node.js for Identity Service) | High churn code. We need instant deployments and full control over the runtime environment. Python standard for platform services. |
+| **Ingress/Routing** | **Internal** | AgentGateway (external framework) | Critical path for performance. Low maintenance overhead once configured. |
 | **Ephemeral Cache** | **Internal** | Dragonfly/Redis | Data is reconstructable. If the cache crashes, the app slows down but doesn't break. Acceptable operational risk. |
 
 ## 3. The "Solo Founder" Rationale
@@ -52,7 +52,7 @@ While Managed Services (like RDS or Neon) carry a premium cost compared to raw V
 ### The Connectivity Layer
 Since the Platform does not *host* the data, it acts as a **Connectivity Engine**.
 
-1.  **Provisioning:** The "Provisioning Worker" (Node.js) calls Vendor APIs (e.g., Neon API) to create resources on demand.
+1.  **Provisioning:** Platform provisioning service (Python) calls Vendor APIs (e.g., Neon API) to create resources on demand.
 2.  **Secret Management:** Credentials are encrypted and stored in the Platform's Meta-DB, then injected into Application Pods at runtime.
 3.  **Isolation:** Logic ensures Tenant A's compute container is injected *only* with Tenant A's managed database credentials.
 
