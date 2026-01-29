@@ -131,10 +131,14 @@ fi
 log_info "Checking pod status..."
 kubectl get pods -n "${NAMESPACE}" -l "app.kubernetes.io/name=${SERVICE_NAME}" -o wide
 
-failed_pods=$(kubectl get pods -n "${NAMESPACE}" -l "app.kubernetes.io/name=${SERVICE_NAME}" --field-selector=status.phase!=Running --no-headers 2>/dev/null | wc -l || echo "0")
+# Check running pods (exclude Jobs with Succeeded status)
+failed_pods=$(kubectl get pods -n "${NAMESPACE}" \
+  -l "app.kubernetes.io/name=${SERVICE_NAME}" \
+  --field-selector=status.phase!=Running,status.phase!=Succeeded \
+  --no-headers 2>/dev/null | wc -l || echo "0")
 if [[ "${failed_pods}" -gt 0 ]]; then
     log_error "Found ${failed_pods} failed pods"
-    kubectl get pods -n "${NAMESPACE}" -l "app.kubernetes.io/name=${SERVICE_NAME}" --field-selector=status.phase!=Running
+    kubectl get pods -n "${NAMESPACE}" -l "app.kubernetes.io/name=${SERVICE_NAME}" --field-selector=status.phase!=Running,status.phase!=Succeeded
     exit 1
 fi
 
