@@ -34,6 +34,7 @@ ENV_PREFIX=$(echo "$ENV" | tr '[:lower:]' '[:upper:]')
 SECRETS_BLOB=""
 
 # Dynamically detect all environment variables with ENV_PREFIX
+echo "🔍 Scanning for ${ENV_PREFIX}_* environment variables..."
 for var in $(compgen -e); do
     # Check if variable starts with ENV_PREFIX_
     if [[ "$var" == "${ENV_PREFIX}_"* ]]; then
@@ -41,8 +42,13 @@ for var in $(compgen -e); do
         KEY="${var#${ENV_PREFIX}_}"
         VALUE="${!var}"
         
+        echo "   Found: $var"
+        
         # Skip empty values
-        [[ -z "$VALUE" ]] && continue
+        if [[ -z "$VALUE" ]]; then
+            echo "   ⚠️  Skipping $var (empty value)"
+            continue
+        fi
         
         # Add to secrets blob
         SECRETS_BLOB+="${KEY}=${VALUE}"$'\n'
