@@ -1,0 +1,15 @@
+PyJWT[crypto]>=2.8.0
+cryptography>=41.0.0
+fastapi>=0.104.0
+starlette>=0.27.0
+
+[dev]
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-mock>=3.12.0
+httpx>=0.25.0
+hypothesis>=6.92.0
+
+[otel]
+opentelemetry-api>=1.21.0
+opentelemetry-sdk>=1.21.0

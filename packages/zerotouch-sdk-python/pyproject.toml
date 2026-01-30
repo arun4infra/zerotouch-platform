@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zerotouch-sdk-python"
+version = "1.0.0"
+description = "Centralized JWT validation SDK for ZeroTouch platform services"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "ZeroTouch Platform Team"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: FastAPI",
+]
+dependencies = [
+    "PyJWT[crypto]>=2.8.0",
+    "cryptography>=41.0.0",
+    "fastapi>=0.104.0",
+    "starlette>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.12.0",
+    "pytest-cov>=4.1.0",
+    "httpx>=0.25.0",
+    "hypothesis>=6.92.0",
+]
+otel = [
+    "opentelemetry-api>=1.21.0",
+    "opentelemetry-sdk>=1.21.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+zerotouch_sdk = ["py.typed"]
+
+[project.scripts]
+
+[tool.uv]
+dev-dependencies = [
+    "build>=1.0.0",
+    "twine>=4.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
