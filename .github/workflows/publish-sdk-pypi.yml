@@ -20,7 +20,6 @@ permissions:
 jobs:
   publish-sdk:
     runs-on: ubuntu-latest
-    environment: pypi
     
     steps:
     - name: Checkout code
