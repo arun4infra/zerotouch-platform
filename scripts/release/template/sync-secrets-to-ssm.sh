@@ -33,21 +33,26 @@ ENV_PREFIX=$(echo "$ENV" | tr '[:lower:]' '[:upper:]')
 # Build secrets blob from environment variables
 SECRETS_BLOB=""
 
-# Check for DATABASE_URL
-DB_VAR="${ENV_PREFIX}_DATABASE_URL"
-if [[ -n "${!DB_VAR:-}" ]]; then
-    SECRETS_BLOB+="DATABASE_URL=${!DB_VAR}"$'\n'
-fi
+# Dynamically detect all environment variables with ENV_PREFIX
+for var in $(compgen -e); do
+    # Check if variable starts with ENV_PREFIX_
+    if [[ "$var" == "${ENV_PREFIX}_"* ]]; then
+        # Extract the key name (remove ENV_PREFIX_)
+        KEY="${var#${ENV_PREFIX}_}"
+        VALUE="${!var}"
+        
+        # Skip empty values
+        [[ -z "$VALUE" ]] && continue
+        
+        # Add to secrets blob
+        SECRETS_BLOB+="${KEY}=${VALUE}"$'\n'
+    fi
+done
 
-# Check for OPENAI_API_KEY
-OPENAI_VAR="${ENV_PREFIX}_OPENAI_API_KEY"
-if [[ -n "${!OPENAI_VAR:-}" ]]; then
-    SECRETS_BLOB+="OPENAI_API_KEY=${!OPENAI_VAR}"$'\n'
-fi
 
 if [[ -z "$SECRETS_BLOB" ]]; then
-    echo "❌ No secrets found for $ENV. Expected ${ENV_PREFIX}_DATABASE_URL or ${ENV_PREFIX}_OPENAI_API_KEY."
-    exit 1
+    echo "⚠️  No secrets found for $ENV. Skipping (no ${ENV_PREFIX}_* environment variables found)."
+    exit 0
 fi
 
 # Process Secrets
