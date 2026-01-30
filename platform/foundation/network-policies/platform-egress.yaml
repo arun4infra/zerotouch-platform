@@ -1,0 +1,42 @@
+---
+# Platform HTTPS Egress Policy
+# Allows services to access external HTTPS endpoints (e.g., JWKS, external APIs)
+#
+# Rationale:
+# - JWKS endpoints (Neon, Auth0, etc.) use dynamic AWS IPs
+# - IP-based policies require constant maintenance as cloud providers rotate IPs
+# - HTTPS egress is necessary for JWT validation, external API calls
+# - DNS resolution required for domain-based access
+#
+# Security:
+# - Limited to port 443 (HTTPS only)
+# - DNS queries allowed for name resolution
+# - No HTTP (port 80) access
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-platform-https-egress
+  namespace: kube-system
+spec:
+  description: "Allow HTTPS egress for platform services (JWKS, external APIs)"
+  endpointSelector: {}  # Applies to all pods in cluster
+  egress:
+  # Allow HTTPS to any destination
+  - toEntities:
+    - world
+    toPorts:
+    - ports:
+      - port: "443"
+        protocol: TCP
+  
+  # Allow DNS resolution
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: kube-system
+        k8s-app: kube-dns
+    toPorts:
+    - ports:
+      - port: "53"
+        protocol: UDP
+      - port: "53"
+        protocol: TCP
