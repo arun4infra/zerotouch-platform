@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-repo-server
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  template:
+    spec:
+      containers:
+      - name: ksops
+        image: viaductoss/ksops:v4.4.0
+        command:
+          - /var/run/argocd/argocd-cmp-server
+        env:
+          - name: SOPS_AGE_KEY_FILE
+            value: /home/argocd/.config/sops/age/keys.txt
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+            ephemeral-storage: 1Gi
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+            ephemeral-storage: 2Gi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 999
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+          - name: var-files
+            mountPath: /var/run/argocd
+          - name: cmp-plugin
+            mountPath: /home/argocd/cmp-server/config
+          - name: cmp-plugins
+            mountPath: /home/argocd/cmp-server/plugins
+          - name: cmp-tmp
+            mountPath: /tmp
+          - name: sops-age-key
+            mountPath: /home/argocd/.config/sops/age
+            readOnly: true
+      volumes:
+      - name: var-files
+        emptyDir: {}
+      - name: cmp-plugin
+        configMap:
+          name: cmp-plugin
+      - name: cmp-plugins
+        emptyDir: {}
+      - name: cmp-tmp
+        emptyDir: {}
+      - name: sops-age-key
+        secret:
+          secretName: sops-age
+          optional: true

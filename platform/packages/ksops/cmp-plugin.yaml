@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cmp-plugin
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  plugin.yaml: |
+    apiVersion: argoproj.io/v1alpha1
+    kind: ConfigManagementPlugin
+    metadata:
+      name: ksops
+    spec:
+      version: v1.0
+      discover:
+        find:
+          command: [sh, -c, 'test -f .sops.yaml']
+      generate:
+        command: [sh, -c, 'ksops exec kustomize build .']
+      lockRepo: false
