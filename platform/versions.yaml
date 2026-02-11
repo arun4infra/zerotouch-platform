@@ -53,6 +53,23 @@ components:
   
   ksops:
     image: "viaductoss/ksops:v4.4.0"
+  
+  # Infrastructure Adapters (Network & Storage)
+  external_dns:
+    chart_version: "1.15.0"
+    webhook_image: "docker.io/hetzner/external-dns-hetzner-webhook:v0.3.2"
+  
+  hcloud_ccm:
+    chart_version: "1.20.0"
+    repo: "https://charts.hetzner.cloud"
+  
+  cert_manager_webhook_hetzner:
+    chart_version: "0.6.3"
+    repo: "https://charts.hetzner.cloud"
+  
+  local_path_provisioner:
+    version: "v0.0.28"
+    repo: "https://github.com/rancher/local-path-provisioner.git"
 
   # CLI Tools (synced to both preview cache and production install scripts)
   cli_tools:

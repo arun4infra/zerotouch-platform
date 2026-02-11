@@ -179,5 +179,46 @@ else
     echo "✓ helm -> $HELM_VER (updated)"
 fi
 
+# 13. Update External DNS
+VER=$(yq '.components.external_dns.chart_version' $VERSIONS_FILE)
+WEBHOOK_IMG=$(yq '.components.external_dns.webhook_image' $VERSIONS_FILE)
+if update_if_changed "${REPO_ROOT}/bootstrap/argocd/overlays/main/core/01-external-dns.yaml" ".spec.source.targetRevision" "$VER"; then
+    echo "✓ External DNS -> $VER (updated, webhook: $WEBHOOK_IMG)"
+else
+    echo "✓ External DNS -> $VER (unchanged)"
+fi
+# Update webhook image in helm values
+CURRENT_WEBHOOK=$(yq '.spec.source.helm.values' "${REPO_ROOT}/bootstrap/argocd/overlays/main/core/01-external-dns.yaml" | yq '.provider.webhook.image.repository + ":" + .provider.webhook.image.tag')
+if [ "$CURRENT_WEBHOOK" != "$WEBHOOK_IMG" ]; then
+    WEBHOOK_REPO=$(echo "$WEBHOOK_IMG" | cut -d':' -f1)
+    WEBHOOK_TAG=$(echo "$WEBHOOK_IMG" | cut -d':' -f2)
+    yq -i ".spec.source.helm.values |= (. | from_yaml | .provider.webhook.image.repository = \"$WEBHOOK_REPO\" | .provider.webhook.image.tag = \"$WEBHOOK_TAG\" | to_yaml)" "${REPO_ROOT}/bootstrap/argocd/overlays/main/core/01-external-dns.yaml"
+    echo "  ✓ Webhook image updated"
+fi
+
+# 14. Update HCloud CCM
+VER=$(yq '.components.hcloud_ccm.chart_version' $VERSIONS_FILE)
+if update_if_changed "${REPO_ROOT}/bootstrap/argocd/overlays/main/core/01-hcloud-ccm.yaml" ".spec.source.targetRevision" "$VER"; then
+    echo "✓ HCloud CCM -> $VER (updated)"
+else
+    echo "✓ HCloud CCM -> $VER (unchanged)"
+fi
+
+# 15. Update Cert-Manager Webhook Hetzner
+VER=$(yq '.components.cert_manager_webhook_hetzner.chart_version' $VERSIONS_FILE)
+if update_if_changed "${REPO_ROOT}/bootstrap/argocd/overlays/main/core/01-cert-manager-webhook-hetzner.yaml" ".spec.source.targetRevision" "$VER"; then
+    echo "✓ Cert-Manager Webhook Hetzner -> $VER (updated)"
+else
+    echo "✓ Cert-Manager Webhook Hetzner -> $VER (unchanged)"
+fi
+
+# 16. Update Local Path Provisioner
+VER=$(yq '.components.local_path_provisioner.version' $VERSIONS_FILE)
+if update_if_changed "${REPO_ROOT}/bootstrap/argocd/overlays/main/core/00-local-path-provisioner.yaml" ".spec.source.targetRevision" "$VER"; then
+    echo "✓ Local Path Provisioner -> $VER (updated)"
+else
+    echo "✓ Local Path Provisioner -> $VER (unchanged)"
+fi
+
 echo ""
-echo "Sync complete. Commit changes to bootstrap/argocd/base/ and scripts/."
+echo "Sync complete. Commit changes to bootstrap/argocd/ and scripts/."
