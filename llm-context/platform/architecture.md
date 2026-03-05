@@ -17,13 +17,13 @@
 **External Services:**
 - Databases: Managed Neon PostgreSQL (external to cluster)
 - Identity: Neon Auth (OAuth provider, external to cluster)
-- Storage: AWS S3 or Hetzner Object Storage (external to cluster)
+- Storage: Hetzner Object Storage (external to cluster)
 
 **Platform Abstraction:**
 - Ephemeral Cache: Crossplane Claims (DragonflyInstance only)
 - Applications: Standard Kubernetes manifests (Deployment, Service)
-- Database Secrets: Services inject via CI workflows, synced from AWS SSM
-- Application Secrets: ExternalSecrets Operator syncs from AWS SSM
+- Database Secrets: Services inject via CI workflows, synced from KSOPS
+- Application Secrets: ExternalSecrets Operator syncs from KSOPS
 - Overlays: Kustomize handles environment-specific configuration
 
 ---
@@ -45,7 +45,7 @@
 1. **Platform Initialization** (one-time):
    ```bash
    # User provides Neon API key during platform setup
-   # Stored in AWS SSM: /zerotouch/platform/neon_api_key
+   # Stored as KSOPS encrypted: neon_api_key
    ```
 
 2. **Service Deployment** triggers database provisioning:
@@ -54,11 +54,6 @@
    curl -X POST "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/databases" \
      -H "Authorization: Bearer ${NEON_API_KEY}" \
      -d '{"name": "identity-service-dev"}'
-   
-   # Platform stores connection string in SSM
-   aws ssm put-parameter \
-     --name "/zerotouch/dev/identity-service/database_url" \
-     --value "postgres://user:pass@ep-xxx.neon.tech/identity-service-dev"
    ```
 
 3. **ArgoCD** deploys application resources:
@@ -85,7 +80,7 @@
            - secretRef:
                name: identity-cache-conn      # From Crossplane
            - secretRef:
-               name: identity-service-jwt     # From ExternalSecret (SSM)
+               name: identity-service-jwt     # From KSOPS
    ```
 
 4. **Crossplane** provisions ephemeral cache:
@@ -93,7 +88,7 @@
    - Generates cache connection secrets (identity-cache-conn)
    - Does NOT provision databases
 
-5. **External Secrets Operator** syncs from AWS SSM:
+5. **Secrets Operator** syncs from KSOPS:
    - Database connection strings (platform-provisioned via Neon API)
    - JWT keys (jwt_private_key, jwt_public_key)
    - API keys (openai_api_key, anthropic_api_key)

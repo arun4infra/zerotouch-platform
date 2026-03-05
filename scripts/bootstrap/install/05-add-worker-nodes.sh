@@ -195,8 +195,8 @@ add_single_worker() {
         mark_stage_complete "$WORKER_INSTALL_STAGE"
 
         # Step 4: Wait for Talos to boot
-        log_info "Step 3: Waiting 3 minutes for Talos to boot..."
-        sleep 180
+        log_info "Step 3: Waiting 1.5 minutes for Talos to boot..."
+        sleep 90
     fi
 
     # Check if worker configuration already complete
